@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getsentry/sentry-go"
+	"github.com/Conceptual-Machines/grammar-school-go/gs"
 	"github.com/Conceptual-Machines/magda-agents-go/models"
+	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/ssestream"
 	"github.com/openai/openai-go/responses"
 	"github.com/openai/openai-go/shared"
-	"github.com/Conceptual-Machines/grammar-school-go/gs"
 )
 
 const (
@@ -528,7 +528,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 		cleaned = strings.TrimPrefix(cleaned, "```")
 		cleaned = strings.TrimSuffix(cleaned, "```")
 		cleaned = strings.TrimSpace(cleaned)
-		
+
 		// If we cleaned something, use the cleaned version
 		if cleaned != textOutput {
 			log.Printf("🧹 Stripped markdown code blocks from output: %d -> %d chars", len(textOutput), len(cleaned))
