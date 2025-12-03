@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/Conceptual-Machines/magda-agents-go/models"
+	"github.com/getsentry/sentry-go"
 	"google.golang.org/genai"
 )
 
