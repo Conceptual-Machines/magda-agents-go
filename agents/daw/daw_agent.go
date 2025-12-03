@@ -297,6 +297,7 @@ func (a *DawAgent) GenerateActionsStream(
 			ToolName: "magda_dsl",
 			Description: "Executes REAPER operations using the MAGDA DSL. " +
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
+				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
 				"Use functional methods for collections: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
