@@ -106,7 +106,7 @@ func (a *DawAgent) GenerateActions(
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
 				"If no track is specified in a chain, it applies to the track created by track(). " +
 				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: llm.GetMagdaDSLGrammar(),
+			Grammar: GetMagdaDSLGrammarForFunctional(),
 			Syntax:  "lark",
 		}
 		log.Printf("🔧 Using DSL mode (CFG grammar)")
@@ -303,7 +303,7 @@ func (a *DawAgent) GenerateActionsStream(
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
 				"If no track is specified in a chain, it applies to the track created by track(). " +
 				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: llm.GetMagdaDSLGrammar(),
+			Grammar: GetMagdaDSLGrammarForFunctional(),
 			Syntax:  "lark",
 		}
 		log.Printf("🔧 Using DSL mode (CFG grammar) for streaming")

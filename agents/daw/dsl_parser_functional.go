@@ -40,7 +40,7 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 	parser.reaperDSL.parser = parser
 
 	// Get MAGDA DSL grammar
-	grammar := getMagdaDSLGrammarForFunctional()
+	grammar := GetMagdaDSLGrammarForFunctional()
 
 	// Create Engine with ReaperDSL instance
 	engine, err := gs.NewEngine(grammar, parser.reaperDSL, nil)
@@ -703,8 +703,9 @@ func compareValues(a interface{}, b gs.Value) int {
 	}
 }
 
-// getMagdaDSLGrammarForFunctional returns the grammar with functional methods added.
-func getMagdaDSLGrammarForFunctional() string {
+// GetMagdaDSLGrammarForFunctional returns the grammar with functional methods added.
+// This is the grammar used for CFG generation to allow the LLM to generate functional DSL code.
+func GetMagdaDSLGrammarForFunctional() string {
 	// Start with base grammar
 	baseGrammar := `
 // MAGDA DSL Grammar - Functional scripting for REAPER operations
@@ -748,19 +749,25 @@ solo_chain: ".set_solo" "(" "solo" "=" BOOLEAN ")"
 name_chain: ".set_name" "(" "name" "=" STRING ")"
 
 // Functional operations
-functional_call: filter_call | map_call | store_call | get_tracks_call | get_fx_chain_call
+functional_call: filter_call | map_call | for_each_call
 
-filter_call: "filter" "(" filter_params ")"
-filter_params: IDENTIFIER "," IDENTIFIER "=" STRING "," IDENTIFIER "=" STRING "," IDENTIFIER "=" value
+filter_call: "filter" "(" IDENTIFIER "," filter_predicate ")"
+filter_predicate: property_access comparison_op value
+                | property_access comparison_op BOOLEAN
+                | property_access "==" STRING
+                | property_access "!=" STRING
+                | property_access "==" BOOLEAN
 
-map_call: "map" "(" map_params ")"
-map_params: IDENTIFIER "," IDENTIFIER "=" IDENTIFIER
+map_call: "map" "(" function_ref "," IDENTIFIER ")"
 
-store_call: "store" "(" store_params ")"
-store_params: "name" "=" STRING "," "value" "=" value
+for_each_call: "for_each" "(" IDENTIFIER "," function_ref ")"
 
-get_tracks_call: "get_tracks" "(" ")"
-get_fx_chain_call: "get_fx_chain" "(" ")"
+property_access: IDENTIFIER "." IDENTIFIER
+               | IDENTIFIER "." IDENTIFIER "[" NUMBER "]"
+
+comparison_op: "==" | "!=" | "<" | ">" | "<=" | ">="
+
+function_ref: "@" IDENTIFIER
 
 array: "[" (value ("," SP value)*)? "]"
 value: STRING | NUMBER | BOOLEAN | array
