@@ -1,0 +1,75 @@
+name,triads,tonic degree,qualities,characteristics,examples
+acoustic,"I M, II M, iii°, iv°, v m, vi m, VII +",Melodic minor 4th,[],,
+aeolian,,,"['aeolian', 'identical', 'natural', 'minor', 'sad', 'melancholic', 'introspective', 'minor scale', 'aeolian mode']",Creates emotional depth and complexity,"classical requiems, folk ballads, rock ballads"
+altered,"i°, ii m, iii m, IV +, V M, VI M, vii°",Melodic minor 7th,[],,
+blues,,,"['flattened', 'blue', 'minor', 'pentatonic', 'characteristic', 'blues scale', 'pentatonic scale']",Creates emotional expressiveness,"blues music, jazz, rock, r&b"
+chromatic,,,"['chromatic', 'twelve', 'maximum', 'harmonic', 'chromatic scale']",Common in avant-garde and experimental music,"experimental music, film scores, contemporary classical"
+diminished,,,"['diminished', 'whole', 'half', 'unstable', 'jazz-oriented', 'diminished scale']",Creates sophisticated harmonic complexity,"jazz improvisation, classical compositions"
+dorian,"i m, ii m, III M, IV M, v m, vi°, VII M",Major 2nd,"['dorian', 'minor', 'major', 'unique', 'dorian mode']",Major sixth adds warmth to the minor third,"jazz standards, blues progressions, rock ballads"
+dorian_b2,"i m, II +, III M, IV M, v°, vi°, vii m",Melodic minor 2nd,[],,
+dorian_b5,"i°, ii m, iii m, IV M, V +, vi°, VII M",Harmonic major 2nd,[],,
+double_harmonic_major,"I M, II M, iii m, iv m, V M(b5), VI +, VII sus2(b5)",Double harmonic major 1st,[],,
+egyptian_pentatonic,"I 5 , ii m(no5) , v m(no5) , IV 5 , v m , I * , VII M",Major pentatonic 2nd,[],,
+half_diminished,"i°, ii°, iii m, iv m, V +, VI M, VII M",Melodic minor 6th,[],,
+harmonic_major,"I M, ii°, iii m, iv m, V M, VI +, vii°",Harmonic major 1st,[],,
+harmonic_minor,"i m, ii°, III +, iv m, V M, VI M, vii°",Harmonic minor 1st,"['more dramatic', 'harmonic', 'minor', 'seventh', 'natural', 'minor', 'exotic', 'minor scale', 'minor scale']",Creates tension and resolution,"classical compositions, flamenco, metal solos"
+hungarian_gypsy,"i m, II M(b5), III M, IV sus2(b5), v m, VI M, VII +",Neapolitan minor 4th,[],,
+hungarian_minor,"i m , II M(b5) , III + , IV sus2(b5) , V M , VI M , vii m",Double harmonic major 4th,[],,
+ionian_#2,"I M, ii m, iii m, IV M, V +, vi m, VII M(b5)",Neapolitan minor 5th,[],,
+ionian_augmented,"i m, ii°, III +, iv m, V M, VI M, vii°",Harmonic minor 3rd,[],,
+ionian_augmented_#2,"I + , II sus2(b5) , III M , IV M , v m , vi m , VII M(b5)",Double harmonic major 6th,[],,
+locrian,"i°, II M, iii m, iv m, V M, VI M, vii m",Major 7th,"['most unstable', 'locrian', 'flattened', 'fifth', 'dissonant', 'locrian mode', 'dissonant mode']",Popular in avant-garde and experimental music,"avant-garde compositions, experimental jazz"
+locrian_diminished,"i°, ii m, iii°, IV +, v m, VI M, VII M",Harmonic major 7th,[],,
+locrian_diminished_bb3,"I sus2(b5) , II M , III M , iv m , v m , VI M(b5) , VII +  ",Double harmonic major 7th,[],,
+locrian_nat._3,"I M(b5), II M, III sus2(b5), iv m, V M, VI +, vii m",Neapolitan minor 5th,[],,
+locrian_nat._6,"i°, II +, iii m, IV M, V M, vi°, vii m",Harmonic minor 2nd,[],,
+lydian,"I M, II M, iii m, iv°, V M, vi m, vii m",Major 4th,"['slightly unstable', 'lydian', 'fourth', 'raised fourth degree', 'lydian mode']",Popular in film scores and ambient music,"film scores, video game music, ambient compositions"
+lydian_#2_#_6,"I M , ii m , iii m , IV M(b5) , V + , VI sus2(b5) , VII M",Double harmonic major 2nd,[],,
+lydian_#_2,"I M, ii°, iii m, iv°, V +, vi m, VII M",Harmonic minor 6th,[],,
+lydian_#_6,"I M, II +, iii m, IV M(b5), V M, VI sus2(b5), vii m",Neapolitan minor 2nd,[],,
+lydian_augmented,"I +, II M, III M, iv°, v°, vi m, vii m",Melodic minor 3rd,[],,
+lydian_augmented_#_2," I +, ii°, III M, iv°, V m, vi m, VII M",Harmonic major 6th,[],,
+lydian_augmented_#_6,"I +, II +, III M, IV M(b5), v°, VI sus2(b5), vii m",Neapolitan major 2nd,[],,
+lydian_augmented_dominant,"I +, II +, III M, IV M(b5), v°, VI sus2(b5), vii m",Neapolitan major 3rd,[],,
+lydian_b3,"i m, II M, III +, iv°, V M, vi°, vii m",Harmonic major 4th,[],,
+lydian_b6_dominant,"I M, II M(b5), iii °, IV sus2(b5), v m, VI +, VII +",Neapolitan major 4th,[],,
+major,"I M, ii m, iii m, IV M, V M, vi m, vii°",Major 1st,"['ionian', 'identical', 'major', 'western', 'major scale', 'ionian mode']",Natural major seventh creates tension that resolves to the tonic,"classical symphonies, pop ballads, children's songs"
+major_blues_hexatonic,"I M , II ⁵ , iii m(no5) , vi m(no5) , V ⁵ , vi m , II *",Major blues hexatonic 1st,[],,
+major_blues_hexatonic_2,"I ⁵ , ii m(no5) , v m(no5) , IV ⁵ , v m , I * , VII M",Major blues hexatonic 2nd,[],,
+major_blues_hexatonic_3,"I M(no5) , iv m , III ⁵ , iv ° , II * , vi m , VII sus2",Major blues hexatonic 3rd,[],,
+major_blues_hexatonic_4,"iii m , ii * , iii ° , I * , v m , iii ⁵ , VII M(no5)",Major blues hexatonic 4th,[],,
+major_blues_hexatonic_5,"I ⁵ , ii m , V * , IV M , V ⁵ , vi m(no5) , ii m(no5)",Major blues hexatonic 5th,[],,
+major_locrian,"I M(b5), ii °, iii sus2(b5), iv m, V +, VI +, VII M",Neapolitan major 5th,[],,
+major_pentatonic,"I M , II 5 , iii m(no5) , vi m(no5) , V 5 , vi m , II *",Major pentatonic 1st,[],,
+man_gong_pentatonic,"i m(no5) , iv m(no5) , III 5 , iv m , VII * , VI M , VII 5",Major pentatonic 3rd,[],,
+melodic_minor,,,"['melodic', 'minor', 'sixth', 'seventh', 'natural', 'minor scale']",Common in jazz and classical music,"jazz improvisation, classical compositions"
+melodic_minor_(asc),"i m, ii m, III +, IV M, V M, vi°, vii°",Melodic minor 1st,[],,
+minor,"i m, ii°, III M, iv m, v m, VI M, VII M",Major 6th,[],,
+minor_blues_hexatonic,"i m , IV * , III M , IV ⁵ , v m(no5) , i m(no5) , VII ⁵",Major blues hexatonic 6th,[],,
+minor_pentatonic,"i m , IV * , III M , IV ⁵ , v m(no5) , i m(no5) , VII ⁵",Major pentatonic 5th,[],,
+mixolydian,"I M, ii m, iii°, IV M, v m, vi m, VII M",Major 5th,"['mixolydian', 'seventh', 'rock-oriented', 'flattened seventh degree', 'mixolydian mode']",Less resolution than major scale,"blues progressions, rock anthems, country music"
+mixolydian_augmented,"I +, ii m, III M(b5), IV M, V sus2(b5), vi m, VII M",Neapolitan minor 3rd,[],,
+mixolydian_b2,"I M, II +, iii°, IV M, v°, vi m, vii m",Harmonic major 5th,[],,
+mixolydian_b6,"I M, ii°, iii°, iv m, v m, VI +, VII M",Melodic minor 5th,[],,
+neapolitan_major,"i m, II +, III +, IV M, V M(b5), vi°, VII sus2(b5)",Neapolitan major 1st,[],,
+neapolitan_minor,"i m, II M, III +, iv m, V M(b5), VI M, VII sus2(b5)",Neapolitan minor 1st,[],,
+oriental,"I M(b5) , II + , III sus2(b5) , IV M , V M , vi m , vii m",Double harmonic major 5th,[],,
+pentatonic,,,"['yet versatile', 'pentatonic', 'only', 'simple', 'pentatonic scale']",Perfect for beginners and improvisation,"folk music, blues, rock, jazz"
+persian,"I M(b5) , II M , III sus2 , iv m , V sus4 , VI + , VII sus2(b5)",Persian scale 1st,[],,
+persian_2,"I M , II sus2 , iii m , V sus4 , V + , VI sus2(b5) , VII M(b5)",Persian scale 2nd,[],,
+persian_3,"I sus2 , ii m , III sus4 , IV + , V sus2(b5) , VI M(b5) , VII M",Persian scale 3rd,[],,
+persian_4,"i m , II sus4 , III + , IV sus2(b5) , V M(b5) , VI M , VII sus2",Persian scale 4th,[],,
+persian_5,"I sus4 , II + , III sus2(b5) , IV M(b5) , V M , VI sus2 , vii m",Persian scale 5th,[],,
+persian_6,"I + , II sus2(b5) , III M(b5) , IV M , V sus2 , vi m , VII sus4",Persian scale 6th,[],,
+persian_7,"I sus2(b5) , II M(b5) , III M , IV sus2 , v m , VI sus4 , VII +",Persian scale 7th,[],,
+phrygian,"i m, II M, III M, iv m, v°, VI M, vii m",Major 3rd,"['phrygian', 'flattened', 'second', 'mysterious', 'exotic', 'flattened second degree', 'phrygian mode']",Often used for dramatic or intense musical moments,"flamenco music, metal, film scores"
+phrygian_b4,"i m, ii m, III M, IV +, v°, VI M, vii°",Harmonic major 3rd,[],,
+phrygian_dominant,"I M, II M, iii°, iv m, v°, VI +, vii m",Harmonic minor 5th,[],,
+ritsusen_pentatonic,"I 5 , ii m , V * , IV M , V 5 , vi m(no5) , ii m(no5)",Major pentatonic 4th,[],,
+super-locrian_bb3,"I sus2(b5) , ii m , III + , IV + , V M , VI M(b5) , vii°",Neapolitan major 7th,[],,
+super-locrian_diminished,"i°, ii m, iii°, IV +, v m, VI M, VII M",Harmonic minor 7th,[],,
+super-locrian_diminished_bb3,"i sus2(b5), ii m, III M, IV +, v m, VI M(b5), VII M",Neapolitan minor 7th,[],,
+super-locrian_nat._2,"i° , ii sus2(b5) , iii m , IV + , V + , VI M , VII M(b5)",Neapolitan major 6th,[],,
+ukrainian_dorian,"i m, II M, III M, iv°, v m, vi°, VII +",Harmonic minor 4th,[],,
+ultraphrygian,"i m , ii m , III M(b5) , IV + , V sus2(b5) , VI M , VII M",Double harmonic major 3rd,[],,
+whole_tone,,,"['only whole', 'ambiguous', 'tone scale']",Creates ethereal and mysterious atmospheres,"impressionist music, film scores, ambient music"

@@ -1,0 +1,122 @@
+MUSIC THEORY BOOKS - CHAPTER INDEX
+================================================================================
+
+
+Arpeggio and Scale Resources: A Guitar Encyclopedia
+Author: Rich Cochrane
+Subject: scales, arpeggios, and guitar improvisation/technique
+Difficulty: intermediate/advanced
+
+Chapters:
+  1. Chapter 1: Basic Scale Theory
+  2. Chapter 2: The Triad Arpeggios — A Framework for Scales (CAGED)
+  3. Chapter 3: Applying Triads and Sevenths
+  4. Chapter 4: The Commonest Scales — Practical Use
+  5. Chapter 7: Symmetrical Scales — Deploying Non-Diatonic Colors
+  6. Chapter 8: Further Arpeggios (7ths, Added Notes, Suspensions)
+  7. Chapter 9: Pentatonics with Small Intervals and Triad Pairing
+--------------------------------------------------------------------------------
+
+Hypermodes: A Practical Guide
+Author: Rich Cochrane
+Subject: scales and modal harmony / applied scale techniques for composition and improvisation
+Difficulty: intermediate/advanced
+
+Chapters:
+  1. Chapter 1: Introduction
+  2. Chapter 2: The Commonest Scales
+  3. Chapter 3: Symmetrical Scales and Their Uses
+  4. Chapter 4: Pentatonic Construction & Application
+  5. Chapter 5: Pentatonics with Large Intervals
+--------------------------------------------------------------------------------
+
+Jazz Composition: Theory and Practice
+Author: Ted Pease
+Subject: jazz composition / arranging / harmony
+Difficulty: intermediate
+
+Chapters:
+  1. Chapter 1: Introduction and Review (Scales / Modes / Tensions)
+  2. Chapter 2: Melodic Techniques
+  3. Chapter 3: Harmonic Techniques and Reharmonization
+--------------------------------------------------------------------------------
+
+Reconceptualizing the Lydian Chromatic Concept: George Russell as Historical Theorist
+Author: Michael McClimon
+Subject: modal harmony / jazz theory / scales and composition
+Difficulty: advanced
+
+Chapters:
+  1. Chapter 1: Introduction & Conceptual Foundations
+  2. Chapter 2: Lydian Chromatic Order & Tone Levels
+  4. Chapter 4: Practical Harmony & Reharmonization Techniques
+--------------------------------------------------------------------------------
+
+The Lydian Chromatic Concept of Tonal Organization
+Author: George Russell
+Subject: modal harmony / jazz theory / scale-based composition
+Difficulty: advanced
+
+  (No chapters indexed)
+--------------------------------------------------------------------------------
+
+Thesaurus of Scales and Melodic Patterns
+Author: Nicolas Slonimsky
+Subject: scales, melodic patterns, composition techniques
+Difficulty: intermediate to advanced
+
+Chapters:
+  2. Chapter 2: Equal-Division and Intervallic Generator Methods
+  4. Chapter 4: Arpeggios, Quadritonal and Multi-octave Progressions
+  5. Chapter 5: Twelve-Tone (Dodecaphonic) Patterns & Permutation Techniques
+  6. Chapter 6: Bitonality, Polytonality, and Polyrhythmic Applications
+  7. Chapter 7: Counterpoint Devices — Canons, Palindromes, and Mirror Progressions
+  9. Chapter 9: Permutations, Complementary Scales, and Applied Composition
+--------------------------------------------------------------------------------
+
+The Schillinger System of Musical Composition (Volume I, Books I–VII)
+Author: Joseph Schillinger
+Subject: composition / algorithmic music theory (rhythm, scales, melody, harmony, counterpoint, formal variation)
+Difficulty: advanced
+
+Chapters:
+  1. Chapter: BOOK I — Theory of Rhythm
+  3. Chapter: Variations by Geometrical Projection
+  7. Chapter: BOOK VII — Theory of Counterpoint
+--------------------------------------------------------------------------------
+
+The Study of Orchestration
+Author: Samuel Adler
+Subject: Orchestration
+Difficulty: advanced
+
+Chapters:
+  1. Chapter 1 – The Orchestra: Yesterday and Today
+  2. Chapter 2 – Bowed String Instruments
+  3. Chapter 3 – Individual Bowed String Instruments
+  4. Chapter 4 – Plucked String Instruments
+  5. Chapter 5 – Scoring for Strings
+  6. Chapter 6 – The Woodwinds
+  7. Chapter 7 – Individual Woodwinds
+  8. Chapter 8 – Scoring for Woodwinds
+  9. Chapter 9 – The Horn
+  10. Chapter 10 – The Trumpet
+--------------------------------------------------------------------------------
+
+The Study of Orchestration (Second Edition)
+Author: Samuel Adler
+Subject: orchestration / instrumentation
+Difficulty: intermediate/advanced
+
+Chapters:
+  2. Chapter 2: Bowed String Instruments — Practical Playing Techniques
+  3. Chapter 3 & 4: Individual String and Plucked Instruments — Idiomatic Writing
+  4. Chapter 5: Scoring for Strings — Texture and Voice Distribution
+  5. Chapter 6–8: Woodwinds — Choir Writing and Individual Idioms
+  6. Chapter 9–11: Brass — Harmonic Series, Muting, and Ensemble Writing
+  7. Chapter 12: Percussion — Selecting Instruments and Notation for Clarity
+  8. Chapter 13–14: Keyboard and Percussion+Keyboard Scoring
+  9. Part II — Chapter 15: Scoring for Orchestra (Textures, Balance, Effects)
+  10. Chapter 16: The Orchestral Transcription — Stepwise Orchestration of Existing Works
+  12. Chapter 18: Score and Parts Preparation — Practical Copyist Workflow
+--------------------------------------------------------------------------------

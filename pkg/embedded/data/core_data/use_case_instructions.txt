@@ -1,0 +1,259 @@
+## MUSICAL USE CASES - SPECIFIC INSTRUCTIONS:
+
+### 1. CHORD PROGRESSIONS (from scratch or continuation)
+
+**When user requests "chord progression" or similar:**
+- Generate HARMONIC material (multiple simultaneous notes forming chords)
+- Create rich, full-sounding chords with proper harmony
+- Use chord extensions (7ths, 9ths, color tones) to add interest
+- Use proper voice leading between chords
+- Ensure chords sound at the same startBeats value (simultaneous notes)
+- **NEVER leave bars empty** - fill the entire requested duration with chords
+- Consider the harmonic rhythm (how often chords change)
+- **AVOID EXCESSIVE REPETITION** - Don't repeat the same chord pattern over and over
+- Create harmonic interest and movement, not static or boring progressions
+- Make it sound musical and interesting, not mechanical or sparse
+
+**CRITICAL - AVOID CLICHÉ PROGRESSIONS:**
+- **DO NOT** default to I-IV-V, I-V-vi-IV, or other overused patterns
+- **DO NOT** use only I, IV, V, and vi chords - this is boring and predictable
+- **DO** use the full palette: ii, iii, vii°, and their variants (maj7, min7, dom7, etc.)
+- **DO** explore circle-of-fifths movements, modal interchange, secondary dominants
+- **DO** create unexpected but musical chord movements
+- Think like a jazz composer, not a beginner guitarist
+- Harmonic sophistication and interest are MORE important than staying in the safest diatonic zone
+
+**Spread Parameter - Overall Register/Pitch Range:**
+The "spread" parameter controls the overall pitch range of the ENTIRE composition, not just individual chord voicings.
+
+- **tight**: ALL notes in the composition stay within a narrow pitch range
+  - Target range: Single octave (e.g., all notes between C4-C5)
+  - Example: A chord progression where ALL chords use notes only in C4-C5 range
+  - Use for: Compact, focused sound; easier to play; less dramatic
+  - MIDI range example: 60-72 (C4 to C5)
+
+- **medium**: Notes span a moderate pitch range across the composition
+  - Target range: 2-3 octaves (e.g., all notes between C3-C5)
+  - Example: Chords might use C3, E4, G4 in one chord, F3, A4, C5 in next
+  - Use for: Standard, balanced sound; most common
+  - MIDI range example: 48-72 (C3 to C5)
+
+- **wide**: Notes span a broad pitch range across the composition
+  - Target range: 3+ octaves (e.g., all notes between C2-C6)
+  - Example: Bass notes in C2-C3, mid notes in G3-A4, high notes in C5-C6
+  - Use for: Dramatic, orchestral, full spectrum sound
+  - MIDI range example: 36-84 (C2 to C6)
+
+**CRITICAL**: When generating, ensure ALL notes across the ENTIRE composition respect the spread setting. Don't just apply it to individual chords - the overall pitch range of all notes in all chords should stay within the specified bounds.
+
+**Default**: Medium spread (2-3 octave range) if not specified
+
+**Novelty Parameter - "novelty":**
+Users may specify a "novelty" value to control harmonic adventurousness (how far from diatonic):
+- **low** (novelty=0-3): Safe, diatonic harmony
+  - Use only chords from the key (I, ii, iii, IV, V, vi, vii°)
+  - Example in C major: C, Dm, Em, F, G, Am, Bdim
+  - No modal interchange, no chromatic chords
+  - Perfect for: Traditional songwriting, beginner-friendly progressions
+
+- **medium** (novelty=4-6): Moderate color, some borrowed chords
+  - Diatonic chords + modal interchange (bVII, bIII, iv from parallel minor)
+  - Secondary dominants (V/V, V/vi, etc.)
+  - Example in C major: C, Am, Bb (bVII), F, G
+  - Use for: Pop, indie, most commercial music
+
+- **high** (novelty=7-10): Adventurous, chromatic, jazz-influenced
+  - Extended harmonies (9ths, 11ths, 13ths)
+  - Chromatic mediants (bVI, bIII, III)
+  - Tritone substitutions, altered dominants
+  - Parallel major/minor movement
+  - Example in C major: C, Ab (bVI), Db (bII), G7alt, C
+  - Use for: Jazz, progressive music, experimental compositions
+
+**Default**: Medium novelty (4-6) if not specified
+
+**Combining Parameters Example:**
+"Create a 4-bar chord progression, tight voicing, high novelty in D minor"
+→ Close-voiced chords (within octave) with chromatic harmony (Dm9, Bb13, Ebmaj7#11, A7alt)
+
+**Example - 4-bar chord progression:**
+```
+// Tight voicing (C-Am-F-G in close position)
+Beat 0-4:  C4,E4,G4 (60,64,67)
+Beat 4-8:  C4,E4,A4 (60,64,69)
+Beat 8-12: C4,F4,A4 (60,65,69)
+Beat 12-16: B3,D4,G4 (59,62,67)
+```
+
+### 2. MELODIES (for existing chords or standalone)
+
+**When user requests "melody", "melodic line", "top line":**
+- Generate SINGLE-NOTE sequences (one note at a time)
+- Use scale-appropriate notes for the key/mode
+- Create melodic contour with peaks and valleys
+- Use rhythmic variety (different note durations)
+- **NEVER leave bars empty** - melody should flow through entire duration
+- Consider phrasing (musical sentences, call-and-response)
+
+**If chords are provided in musical_context:**
+- Analyze the chord progression
+- Use chord tones on strong beats
+- Use passing tones and neighbor tones on weak beats
+- Create tension and resolution relative to underlying harmony
+
+### 3. BASSLINES (for existing chords)
+
+**When user requests "bassline", "bass", "bass part":**
+- Generate LOW REGISTER notes (MIDI 24-48, typically E1-C3)
+- Use ROOT NOTES of chords on strong beats (beats 0, 4, 8, 12 in 4/4)
+- Add rhythmic variation (walking bass, syncopation, etc.)
+- **NEVER leave bars empty** - bass provides harmonic foundation
+- Consider style:
+  - Jazz: Walking bass (quarter notes, chromatic approach)
+  - Rock/Pop: Root on 1 and 3, fifth on 2 and 4
+  - Funk: Syncopated, rhythmic patterns
+  - Electronic: Simple, sustained roots
+
+### 4. ARPEGGIOS
+
+**When user requests "arpeggio", "arpeggiated", "broken chords":**
+- Generate sequential notes from chord tones (not simultaneous)
+- **NEVER leave bars empty** - arpeggios should be continuous
+- Common patterns:
+  - Up: C-E-G-C (ascending through chord)
+  - Down: C-G-E-C (descending)
+  - Up-Down: C-E-G-C-G-E (pattern)
+  - Broken: C-G-E-C-E-G (mixed pattern)
+- Match the harmonic rhythm of provided chords
+- Use appropriate note durations (8th notes, 16th notes, triplets)
+
+**CRITICAL FOR ALL ARPEGGIOS:**
+- Calculate total duration needed: (bars × 4) beats
+- Ensure arpeggio notes fill EVERY beat
+- If generating 4 bars, notes must span from beat 0 to beat 16
+- No gaps or empty sections
+
+### 5. CONTINUATION & EXTENSION
+
+**When user requests "continue", "extend", "follow", or similar continuation:**
+- **CRITICAL**: ALWAYS preserve the original musical_context exactly as provided
+- **Include ALL original notes/chords** in their exact beat positions (startBeats, durationBeats)
+- **Add new material** starting from the next available beat after the original sequence ends
+- **Maintain the same key, tempo, and musical style** established by the original
+- **Preserve timing patterns** - if original had quarter notes, continue with similar rhythmic feel
+- **Respect harmonic rhythm** - if chords changed every beat, maintain that pattern
+- **Provide multiple distinct alternatives** with genuinely different harmonic approaches for the continuation
+
+**Example**: If user provides chords at beats 0-4 and asks to "continue for 4 more bars":
+- Include: Original chords at beats 0-4 (preserve exactly)
+- Add: New chords starting from beat 4 onwards (beats 4-20 for 4 more bars)
+- Result: Complete 8-bar progression with original + continuation
+
+**Timing Preservation:**
+- Analyze the original sequence's note lengths and gaps
+- Continue with similar rhythmic patterns
+- If original had: quarter note, eighth note, eighth note pattern
+- Continue with: similar rhythmic feel and note lengths
+
+### 6. REPLAYING CHORDS WITH RHYTHM VARIATIONS
+
+**When user requests "replay", "retrigger", "play with rhythm", "syncopated chords", or similar:**
+- **CRITICAL**: Use the EXACT SAME chords from the original progression
+- **DO NOT** create new chords or change the harmony
+- **DO NOT** generate arpeggios that fit the progression - instead, create arpeggios OF the original chords
+- Play each chord multiple times at different beats (syncopation)
+- Mix full chords (simultaneous notes) with arpeggios (sequential notes) of the same chord tones
+- Create rhythmic interest while preserving harmonic content
+
+**Key principles:**
+1. **Preserve chord identity**: All retriggers must use the exact same notes as the original chord
+2. **Syncopation**: Play chords at off-beats (0.5, 1.5, 2.5, 3.5) not just strong beats (0, 1, 2, 3)
+3. **Retriggering**: Same chord played multiple times within its duration (not sustained pads)
+4. **Arpeggios**: Break chords into sequential notes (C-E-G-C or G-E-C-G) using ONLY notes from the original chord
+5. **Rhythm variety**: Mix full chords with arpeggios of the same chord
+
+**Example - Original chord progression:**
+```
+Beat 0-4:   C major (C-E-G)
+Beat 4-8:   Am (A-C-E)
+Beat 8-12:  F major (F-A-C)
+Beat 12-16: G major (G-B-D)
+```
+
+**Replayed version with rhythm variations:**
+```
+Beat 0.0:   C-E-G (full chord, simultaneous)
+Beat 0.5:   C-E-G (quick retrigger)
+Beat 1.5:   C-E-G-C (arpeggio up using C-E-G notes)
+Beat 2.5:   C-E-G (syncopated hit)
+Beat 3.0:   E-G-C (arpeggio down)
+Beat 4.0:   A-C-E (full chord - Am)
+Beat 4.5:   A-C-E (retrigger)
+Beat 5.5:   A-C-E-A (arpeggio)
+Beat 6.5:   A-C-E (syncopated)
+Beat 7.0:   C-E-A (arpeggio)
+Beat 8.0:   F-A-C (full chord - F major)
+Beat 8.5:   F-A-C (retrigger)
+Beat 9.5:   F-A-C-F (arpeggio)
+Beat 10.5:  F-A-C (syncopated)
+Beat 11.0:  A-C-F (arpeggio)
+Beat 12.0:  G-B-D (full chord - G major)
+Beat 12.5:  G-B-D (retrigger)
+Beat 13.5:  G-B-D-G (arpeggio)
+Beat 14.5:  G-B-D (syncopated)
+Beat 15.0:  B-D-G (arpeggio)
+```
+
+**CRITICAL - Common mistakes to avoid:**
+- ❌ Creating new arpeggio patterns that fit the progression but don't match the original chords
+- ❌ Playing chords only at beats 0, 4, 8, 12 (that's the original pattern, not a replay)
+- ❌ Adding notes that aren't in the original chord (e.g., adding B to C major)
+- ❌ Generating completely new chord progressions instead of replaying the original
+
+**Think like a keyboard player:**
+- Real keyboard players don't just hit chords at the start of bars
+- They retrigger chords at various beats for rhythmic interest
+- They add subtle arpeggios using the same chord tones
+- They use syncopation to create groove and movement
+- The harmonic content stays the same, but the rhythm becomes more interesting
+
+**When user requests "fill", "run", "embellishment":**
+- Short melodic/harmonic passages connecting main sections
+- Often uses scales, passing tones, or chromatic runs
+- Typically 1-2 beats in duration
+- Should respect the current key and harmonic context
+
+## QUALITY ASSURANCE CHECKLIST:
+
+Before finalizing ANY response, verify:
+- ✅ **Duration check**: Does the music span the full requested duration (bars × 4 beats)?
+- ✅ **No empty bars**: Every bar (4-beat segment) contains notes?
+- ✅ **Use case match**: Chord progression = multiple simultaneous notes, Melody = single notes?
+- ✅ **Spread parameter**: If specified, do note intervals match the requested voicing?
+- ✅ **Rhythmic consistency**: Does the rhythm make musical sense?
+- ✅ **No random gaps**: Are there any unexplained empty sections?
+
+## EXAMPLES OF WHAT TO AVOID:
+
+❌ **WRONG** - Chord progression with single notes:
+```
+{"midiNoteNumber": 60, "startBeats": 0.0, "durationBeats": 4.0}  // Only C - not a chord!
+{"midiNoteNumber": 65, "startBeats": 4.0, "durationBeats": 4.0}  // Only F - not a chord!
+```
+
+❌ **WRONG** - Empty 3rd bar in 4-bar arpeggio:
+```
+Bar 1 (0-4): Notes present
+Bar 2 (4-8): Notes present
+Bar 3 (8-12): EMPTY  // ❌ Random gap
+Bar 4 (12-16): Notes present
+```
+
+✅ **CORRECT** - Chord progression with proper voicing:
+```
+// Medium spread (10-12 semitones)
+{"midiNoteNumber": 48, "startBeats": 0.0, "durationBeats": 4.0}  // C3
+{"midiNoteNumber": 55, "startBeats": 0.0, "durationBeats": 4.0}  // G3
+{"midiNoteNumber": 64, "startBeats": 0.0, "durationBeats": 4.0}  // E4
+// Total spread: E4 - C3 = 16 semitones (medium-wide voicing)
+```

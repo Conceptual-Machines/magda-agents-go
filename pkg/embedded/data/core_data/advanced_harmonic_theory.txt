@@ -1,0 +1,93 @@
+**ADVANCED HARMONIC THEORY — REVISED GUIDELINES**
+
+**GENERAL PRINCIPLES**
+- Treat harmony as a flow of *function and color*, not a rigid system.
+- Voice-lead smoothly; retain common tones between chords.
+- Prefer **tension–release phrasing** across 4–8 beat arcs.
+- Always contextualize harmony within mood, style, and rhythm.
+
+---
+
+**HARMONIC MOTION**
+- Use **functional motion** (Tonic → Subdominant → Dominant → Tonic) as the baseline.
+- Insert **secondary dominants** and **modal interchange** for tension and surprise.
+- Resolve leading tones with intent—either **conventionally (V→I)** or **deceptively (V→vi, V→♭VI)**.
+- For longer phrases:
+  - *4 bars:* establish key
+  - *8 bars:* reach peak tension at bar 6–7, release by bar 8
+  - *16 bars:* mid-point modulation or modal color change
+
+---
+
+**CHORD EXTENSIONS & COLOR**
+- 7ths, 9ths, 11ths, 13ths add emotion—use to shape the tension curve:
+  - 7th = mild tension
+  - 9th/11th = moderate tension
+  - 13th or altered (♭9, ♯11) = strong tension
+- Drop extensions gradually during release or cadence.
+- In sparse textures, emphasize 3rd + 7th for function clarity.
+
+---
+
+**MODAL & TONAL NUANCE**
+| Mode | Core Character | Harmonic Tendency | Example Usage |
+|------|----------------|-------------------|----------------|
+| Ionian | stable, bright | avoid ♭7 | pop, folk |
+| Dorian | soulful, ambiguous | favor ii–IV or I–VII | funk, neo-soul |
+| Phrygian | tense, dark | use ♭2 (avoid 4–5 motion) | cinematic, metal |
+| Lydian | ethereal, open | emphasize ♯4 | film, fusion |
+| Mixolydian | bluesy, relaxed | use ♭VII, avoid leading tone | rock, groove |
+| Aeolian | melancholic | ii°–V deceptive | ballad, soundtrack |
+| Locrian | unstable | use for color, not tonic | jazz tension inserts |
+
+---
+
+**MODAL INTERCHANGE (BORROWED CHORDS)**
+- Borrow from **parallel minor/major** to alter color:
+  - I → i
+  - IV → iv
+  - V → ♭VII
+  - ii → ii°
+- Use borrowed chords to shift emotional direction mid-phrase (hope → nostalgia, etc.).
+- Borrow *sparingly*—one borrowed chord per 4–8 beats keeps clarity.
+
+---
+
+**GENRE MAPPINGS**
+| Style | Typical Harmony | Recommended Devices |
+|--------|-----------------|---------------------|
+| Pop | diatonic, simple IV–V–I | add secondary dominant or ♭VII |
+| Jazz | extended chords, ii–V–I | tritone subs, modal interchange |
+| R&B | rich color, modal mixture | IVmaj7–iii7–vi7 loops |
+| EDM | static, modal | pedal bass + color chords |
+| Cinematic | evolving, chromatic | mediant moves, non-functional modulations |
+| Rock | Mixolydian, power chords | use ♭VII and IV–I cadences |
+| Classical | strict functional | tonic–dominant polarity, modulation to V or relative minor |
+
+---
+
+**TENSION–RELEASE DESIGN**
+- Plan harmonic energy intentionally:
+  - *Low tension:* diatonic triads, perfect intervals, smooth voice leading.
+  - *Medium tension:* added 7ths/9ths, secondary dominants.
+  - *High tension:* chromatic mediants, altered dominants, tritone substitutions.
+- Always **release tension** with resolution, silence, or return to stable chord tones.
+- The best sequences *breathe* — avoid constant intensity.
+
+---
+
+**MELODIC-HARMONIC CONNECTION**
+- Emphasize chord tones on downbeats.
+- Use non-chord tones (passing, neighbor, suspension) for melodic movement but **resolve by step**.
+- Maintain pitch-center gravity (resolve to 1, 3, or 5 of the tonic key).
+
+---
+
+**PHRASING & CADENCE**
+- Cadences every 4, 8, or 16 beats.
+- Choose cadences by mood:
+  - Perfect (V–I): closure
+  - Plagal (IV–I): warmth
+  - Deceptive (V–vi): surprise
+  - Half (…–V): suspension
+- For open-ended styles, replace cadences with pedal points or sustained tensions.

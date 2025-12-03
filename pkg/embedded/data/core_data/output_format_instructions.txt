@@ -1,0 +1,78 @@
+**OUTPUT FORMAT:**
+You must respond with a JSON object matching the MusicalSequenceResponse schema. Provide MULTIPLE DISTINCT ALTERNATIVES in the "choices" array (1-4 choices). Each choice should have:
+- "description": Detailed explanation of the musical approach (5-1000 characters). **IMPORTANT: Use only ASCII characters (no special Unicode symbols, emojis, or fancy quotes).** Include:
+  - What musical theory inspired this composition
+  - What scales, modes, or harmonic concepts were used
+  - What style or genre influenced the approach
+  - How the musical elements work together
+- "notes": Array of note objects with:
+  - "midiNoteNumber": MIDI note number (0-127, where 60=C4)
+  - "velocity": Note velocity (0-127, where 100 is standard, use 80-120 for musical expression)
+  - "startBeats": Start time in beats from sequence beginning (≥0)
+  - "durationBeats": Duration in beats (must be positive)
+
+**CRITICAL: BARS vs BEATS:**
+- All timing values (startBeats, durationBeats) are measured in BEATS, not bars
+- Standard time signature is 4/4 (4 beats per bar)
+- **If user requests N bars, generate N × 4 beats of music**
+- Examples:
+  - "4 bars" = 16 beats total (0.0 to 16.0)
+  - "8 bars" = 32 beats total (0.0 to 32.0)
+  - "2 bars" = 8 beats total (0.0 to 8.0)
+- Ensure your composition spans the full requested duration
+- For a 4-bar progression, notes should extend from beat 0 to beat 16
+
+**CRITICAL: BAR LENGTH REQUIREMENTS:**
+- **ALWAYS create compositions that are multiples of 4, 8, 16, or 32 bars (MAXIMUM: 32 bars)**
+- Standard bar lengths: 4 bars (16 beats), 8 bars (32 beats), 16 bars (64 beats), 32 bars (128 beats)
+- **MAXIMUM LENGTH: 32 bars (128 beats)** - Never exceed this limit
+- If the user doesn't specify a length, default to 16 bars (64 beats) or the nearest standard multiple
+- If the user requests more than 32 bars, create 32 bars (128 beats) maximum
+- The last note's (startBeats + durationBeats) must end exactly at a bar boundary (multiples of 4 beats: 16, 32, 64, 128)
+- Never end a composition mid-bar or at non-standard lengths (e.g., 5 bars, 7 bars, 10 bars)
+- Always round up to the next standard bar length if needed (e.g., if user asks for "6 bars", create 8 bars)
+- Never create compositions longer than 32 bars (128 beats)
+- This ensures compositions loop cleanly and align with standard musical structures
+
+**CRITICAL - VARIETY IN CHOICES:**
+Each choice should be a GENUINELY DIFFERENT musical approach, not just slight variations of the same idea:
+- Use different harmonic progressions (not just I-IV-V with small tweaks)
+- Use different rhythmic feels (e.g., straight vs syncopated, slow vs fast harmonic rhythm)
+- Use different chord voicings or registers
+- Explore different styles or genres (e.g., classical, jazz, pop, ambient)
+- One might be simple and diatonic, another more complex and chromatic
+- **DO NOT** provide 3-4 nearly identical progressions with minor note changes
+- Think: "What are 3-4 completely different ways to approach this musical request?"
+
+Example format:
+```json
+{
+  "choices": [
+    {
+      "description": "Gentle arpeggiated melody in C major using the I-vi-IV-V progression. Inspired by classical piano technique, this uses the C major scale (C-D-E-F-G-A-B) with smooth voice leading between chord tones. The arpeggiation creates a flowing, lyrical quality while the progression follows traditional functional harmony principles.",
+      "notes": [
+        {"midiNoteNumber": 60, "velocity": 100, "startBeats": 0.0, "durationBeats": 1.0},
+        {"midiNoteNumber": 64, "velocity": 100, "startBeats": 0.0, "durationBeats": 1.0},
+        {"midiNoteNumber": 67, "velocity": 100, "startBeats": 0.0, "durationBeats": 1.0},
+        {"midiNoteNumber": 64, "velocity": 95, "startBeats": 1.0, "durationBeats": 1.0},
+        {"midiNoteNumber": 67, "velocity": 105, "startBeats": 2.0, "durationBeats": 2.0},
+        {"midiNoteNumber": 72, "velocity": 100, "startBeats": 2.0, "durationBeats": 2.0}
+      ]
+    },
+    {
+      "description": "Rhythmic chord progression using the Dorian mode on D. This jazz-inspired approach uses ii-V-I movement with extended harmonies (Dm9, G13, CMaj7). The syncopated rhythm creates tension, while the modal interchange from C major to D Dorian adds sophisticated color. Chromatic passing tones (F#) create smooth voice leading.",
+      "notes": [
+        {"midiNoteNumber": 60, "velocity": 110, "startBeats": 0.0, "durationBeats": 0.5},
+        {"midiNoteNumber": 64, "velocity": 100, "startBeats": 0.0, "durationBeats": 0.5},
+        {"midiNoteNumber": 67, "velocity": 90, "startBeats": 0.0, "durationBeats": 0.5},
+        {"midiNoteNumber": 62, "velocity": 105, "startBeats": 0.5, "durationBeats": 0.5},
+        {"midiNoteNumber": 65, "velocity": 95, "startBeats": 0.5, "durationBeats": 0.5},
+        {"midiNoteNumber": 69, "velocity": 100, "startBeats": 0.5, "durationBeats": 0.5},
+        {"midiNoteNumber": 64, "velocity": 100, "startBeats": 1.0, "durationBeats": 1.0},
+        {"midiNoteNumber": 67, "velocity": 100, "startBeats": 1.0, "durationBeats": 1.0},
+        {"midiNoteNumber": 71, "velocity": 100, "startBeats": 1.0, "durationBeats": 1.0}
+      ]
+    }
+  ]
+}
+```

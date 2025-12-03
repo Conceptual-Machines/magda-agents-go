@@ -1,0 +1,127 @@
+{
+  "styles": {
+    "pop": {
+      "progressions": [
+        "I-V-vi-IV", "I-vi-IV-V", "vi-IV-I-V", "I-V-IV-V",
+        "I-V-vi-iii-IV", "I-iii-IV-V", "I-V-vi-IV-I", "I-IV-I-V",
+        "I-V-ii-IV", "I-vi-ii-V", "I-IV-vi-V"
+      ],
+      "cadences": ["V-I", "IV-I", "ii-V-I"]
+    },
+    "rock": {
+      "progressions": [
+        "I-IV-V", "I-bVII-IV", "i-bVII-bVI-V", "I-bVII-I-IV",
+        "I-bVII-IV-I", "IV-I-bVII-IV", "i-bVI-bVII-i", "I-V-bVII-IV",
+        "I-IV-bVII-IV", "I-VI-bVII-IV"
+      ],
+      "cadences": ["V-I", "bVII-I"]
+    },
+    "blues": {
+      "progressions": [
+        "12bar: I7-I7-I7-I7 | IV7-IV7-I7-I7 | V7-IV7-I7-V7",
+        "quick-change: I7-IV7-I7-I7 | IV7-IV7-I7-I7 | V7-IV7-I7-V7",
+        "jazz-blues: I7-IV7-I7-I7 | IV7-iv7-I7-vi7 | ii7-V7-I7-V7",
+        "bird-blues: Imaj7-ivm7-bVII7-III7 | vi7-ii7-V7-Imaj7"
+      ],
+      "cadences": ["V7-IV7-I7", "ii7-V7-I7"]
+    },
+    "jazz": {
+      "major": {
+        "progressions": [
+          "ii7-V7-Imaj7", "Imaj7-vi7-ii7-V7", "iii7-vi7-ii7-V7",
+          "ii7-V7/ii-ii7-V7-Imaj7", "ii7-bII7-Imaj7", "ivm7-bVII7-Imaj7",
+          "Imaj7-IVmaj7-iii7-vi7-ii7-V7", "ii7-V7-Imaj7-vi7-ii7-V7"
+        ],
+        "subs": ["tritone: ii7-bII7-Imaj7", "backdoor: ivm7-bVII7-Imaj7"],
+        "cadences": ["ii-V-I", "backdoor (iv-bVII-I)"]
+      },
+      "minor": {
+        "progressions": [
+          "iiø7-V7-i", "i-viø7-iiø7-V7", "V/ii-iiø7-V7-i",
+          "i-ivm6-V7-i", "bVImaj7-V7-i", "iiø7-bII7-i"
+        ],
+        "cadences": ["iiø-V-i", "V-i"]
+      }
+    },
+    "rnb_soul": {
+      "progressions": [
+        "I-vi-ii-V", "I-V-vi-IV", "ii-V-I", "IV-V-iii-vi",
+        "vi-IV-I-V", "I-iii-vi-ii-V", "ii-V-iii-vi"
+      ],
+      "cadences": ["ii-V-I", "V-I"]
+    },
+    "hiphop": {
+      "progressions": [
+        "vi-IV-I-V", "vi-V-IV-V", "i-bVII-bVI-V", "i-VI-iv-V",
+        "i-v-VI-VII", "i-bVII-IV-V", "i-VII-VI-VII"
+      ],
+      "cadences": ["V-i (minor)", "bVII-i"]
+    },
+    "trap": {
+      "progressions": [
+        "i-VI-III-VII", "i-VII-VI-V", "i-VI-VII-i",
+        "i-bVII-bVI-V", "i-bVII-bVI-bV", "i-v-VI-VII"
+      ],
+      "cadences": ["VI-VII-i", "V-i"]
+    },
+    "edm": {
+      "progressions": [
+        "i-VI-III-VII", "i-VII-VI-V", "I-V-vi-IV",
+        "i-iv-VI-VII", "i-VI-VII-III", "I-vi-IV-V"
+      ],
+      "cadences": ["VI-VII-i", "V-I"]
+    },
+    "latin": {
+      "progressions": [
+        "ii-V-I", "ii-V/ii-ii-V-I", "I-V/V-V/II-ii-V-I",
+        "i-bII7-i (Phrygian)", "ii-V-i (minor)", "I-IV-V-IV (bolero)"
+      ],
+      "cadences": ["ii-V-I", "V-i"]
+    },
+    "flamenco": {
+      "progressions": [
+        "i-bVII-bVI-V (Andalusian)", "i-bII-i", "i-bVII-i",
+        "i-bII-bIII-bII-i"
+      ],
+      "cadences": ["V-i", "bII-i (Phrygian)"]
+    },
+    "country": {
+      "progressions": [
+        "I-IV-V", "I-V-vi-IV", "I-IV-I-V",
+        "I-vi-ii-V", "I-V-IV-I", "I-IV-ii-V"
+      ],
+      "cadences": ["V-I", "IV-I"]
+    },
+    "funk": {
+      "progressions": [
+        "I7-IV7 (vamp)", "ii7-V7-I7", "bVII7-IV7-I7",
+        "I7-bVII7-IV7-I7", "ii7-V7 (loop)", "I7-IV7-V7-IV7"
+      ],
+      "cadences": ["V7-I7", "bVII7-I7"]
+    },
+    "classical": {
+      "progressions": [
+        "I-IV-vii°-iii-vi-ii-V-I (circle)",
+        "i-bVII-bVI-V (lament bass)",
+        "i-iv-V-i",
+        "Passamezzo Antico: i-bVII-i-V-III-bVII-i-V-i",
+        "Romanesca: I-V-vi-III-IV-I-IV-V"
+      ],
+      "cadences": ["PAC: V-I", "HC: I-V", "Phrygian (minor): iv6-V"]
+    },
+    "metal": {
+      "progressions": [
+        "i-VI-VII-VI", "i-VII-VI-VII", "i-bII-i-bII (Phrygian)",
+        "i-bVII-bVI-V", "i-v-VI-VII", "i-bVI-bVII-i"
+      ],
+      "cadences": ["V-i", "bVII-i"]
+    },
+    "lofi_chill": {
+      "progressions": [
+        "ii7-V7-Imaj7", "IVmaj7-iii7-vi7-ii7-V7-Imaj7",
+        "ii7-V7-iii7-vi7", "Imaj7-vi7-ii7-V7", "iii7-vi7-ii7-V7"
+      ],
+      "cadences": ["ii-V-I", "V-I"]
+    }
+  }
+}

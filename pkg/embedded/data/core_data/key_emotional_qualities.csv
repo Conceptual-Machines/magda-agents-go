@@ -1,0 +1,25 @@
+key,qualities,description,intensity,mood_category
+C,"['innocence', 'happiness with a spiritual feeling']","Innocence, happiness with a spiritual feeling.",0.05,positive
+Cm,"['innocence', 'sadness', 'heartbroken', 'evokes yearning']","Innocence, sadness, heartbroken and evokes yearning.",0.275,mixed
+C#m,"['passionate', 'deep', 'evoking sorrow', 'grief', 'despair', 'self-punishment']","Passionate and deep, evoking sorrow, grief, despair, and self-punishment.",0.5333333333333333,negative
+Db,"['depressive masked by an air of happiness. grief', 'despair']",Depressive masked by an air of happiness. Evokes feelings of grief and despair.,0.7,negative
+D,"['triumphant', 'victorious. war marches or holiday songs']",Triumphant and victorious. Feels like war marches or holiday songs.,0.9,positive
+Dm,"['serious', 'melancholic. brings on feelings of concerns', 'contemplation']",serious and melancholic. Brings on feelings of concerns and contemplation.,0.16666666666666666,neutral
+D#m,"['deep', 'anxious', 'evoking feelings of distress', 'terror', 'darkness', 'hesitation']","Deep and anxious, evoking feelings of distress, terror, darkness, and hesitation.",0.45,negative
+Eb,"['cruelty', 'devoted love', 'openness', 'intimacy']","This key brings on feelings of cruelty, but also devoted love, openness, and intimacy.",0.125,positive
+E,"['dissatisfaction', 'a ready-to-fight feeling –', 'joy', 'delight']",Dissatisfaction and a ready-to-fight feeling – but also joy and delight.,0.125,positive
+Em,"['restless love', 'grief', 'mournfulness']","Restless love, grief, and mournfulness.",0.3333333333333333,mixed
+F,"['optimism', 'the will to explode']",Optimism and the will to explode.,0.7,positive
+Fm,"['dark', 'funereal', 'evoking feelings of the deepest depression', 'death', 'loss', 'misery']","Dark and funereal, evoking feelings of the deepest depression, death, loss, and misery.",0.45,negative
+F#,"['conquest', 'relief', 'triumph', 'victory', 'clarity']","Conquest, relief, triumph, victory, and clarity.",0.36,positive
+F#m,"['resentment', 'discontentment', 'lamentation', 'but with a touch of hope']","Resentment, discontentment, and lamentation, but with a touch of hope.",0.125,negative
+G,"['happy', 'but with serious overtones', 'idyllic', 'poetic. calm', 'satisfaction', 'tenderness', 'gratitude', 'peace']","Happy, but with serious overtones, idyllic, and poetic. This evokes calm, satisfaction, tenderness, gratitude and peace.",0.1875,positive
+Gm,"['discontent', 'uneasiness', 'failure', 'concern', 'struggling']","Feelings of discontent, uneasiness, failure, concern, and struggling.",0.0,neutral
+Ab,"['death', 'eternity', 'judgment', 'darkness']","Death, eternity, judgment, darkness.",0.225,negative
+Abm,"['wailing', 'suffocation', 'lamentation', 'struggle', 'negativity']","related to wailing, suffocation, lamentation, struggle, and negativity.",0.0,negative
+A,"['joy', 'reciprocated love', 'satisfaction', 'optimistic', 'trust', 'spirituality']","Brings feelings of joy, reciprocated love, satisfaction, optimistic, trust, and spirituality.",0.16666666666666666,positive
+Am,"['sad', 'but with tenderness']","Sad, but with tenderness.",0.25,mixed
+Bb,"['joyful', 'cheerful', 'with feelings of love', 'consciousness', 'hope', 'optimism', 'peace']","Joyful and cheerful, with feelings of love, consciousness, hope, optimism, and peace.",0.35714285714285715,positive
+Bbm,"['the night', 'darkness', 'blasphemy', 'death', 'destiny']","Feels like the night, darkness, blasphemy, death, and destiny.",0.18,negative
+B,"['strength', 'wildness', 'passion', 'jealousy', 'fury', 'negativity', 'the will to fight']","Feelings of strength, wildness, passion, jealousy, fury, negativity, and the will to fight.",0.5142857142857143,mixed
+Bm,"['solitude', 'melancholy', 'patience', 'calm', 'submission', 'acceptance']","Solitude, melancholy, patience, calm, submission, and acceptance.",0.16666666666666666,positive

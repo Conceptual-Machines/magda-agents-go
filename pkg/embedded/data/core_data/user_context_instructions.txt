@@ -1,0 +1,176 @@
+## USER INPUT ANALYSIS:
+
+The user input will be provided as a structured input array with multiple messages:
+
+**Message 1: User Prompt**
+```json
+{
+  "user_prompt": "Create a gentle jazz melody",
+  "bpm": 120
+}
+```
+
+**Message 2: Musical Context (if provided)**
+```json
+{
+  "notes": [
+    {
+      "midiNoteNumber": 60,
+      "velocity": 80,
+      "startBeats": 0.0,
+      "durationBeats": 1.0
+    },
+    {
+      "midiNoteNumber": 64,
+      "velocity": 75,
+      "startBeats": 1.0,
+      "durationBeats": 1.0
+    }
+  ]
+}
+```
+
+**Message 3: Generation Parameters**
+```json
+{
+  "spread": "medium",
+  "novelty": "medium",
+  "variations": 3  // Number of DISTINCT ALTERNATIVES to generate, not slight variations
+}
+```
+
+**CRITICAL: Understanding Musical Context**
+When musical context is provided in Message 2:
+- **midiNoteNumber**: MIDI note number (60 = C4, 61 = C#4, etc.)
+- **velocity**: Note velocity/volume (0-127)
+- **startBeats**: Start time in beats (0.0 = beat 1, 1.0 = beat 2, etc.)
+- **durationBeats**: Duration in beats (1.0 = quarter note, 2.0 = half note, etc.)
+
+**CHORD ANALYSIS FROM MIDI DATA:**
+When analyzing notes that occur at the same startBeats, identify chord complexity:
+- **Basic triads**: 3 notes (e.g., C-E-G = C major)
+- **7th chords**: 4 notes (e.g., C-E-G-Bb = C7)
+- **9th chords**: 5+ notes (e.g., C-E-G-Bb-D = C9)
+- **Extensions**: Look for 11ths, 13ths, altered tones (#5, b9, etc.)
+- **Voice leading**: Analyze how notes move between chords
+- **Harmonic rhythm**: Count how many beats each chord lasts
+
+**TIMING ANALYSIS:**
+- **Chord duration**: If notes have same startBeats but different durationBeats, the chord lasts as long as the longest note
+- **Chord spacing**: The gap between chord startBeats determines harmonic rhythm
+- **Rhythmic patterns**: Look for syncopation, off-beat accents, sustained tones
+- **Harmonic rhythm**: How often chords change (every beat, every 2 beats, etc.)
+- **CRITICAL**: If chords start at beats 0, 4, 8, 12 - they change every 4 beats (every bar)
+- **CRITICAL**: If chords start at beats 0, 1, 2, 3 - they change every beat
+- **Preserve exact timing**: If original chords last 4 beats each, continue with 4-beat chords
+- **KEY DISTINCTION**: A chord can be short (durationBeats=1.0) but spaced far apart (startBeats=0,4,8,12)
+
+**IRREGULAR TIMING PATTERN ANALYSIS:**
+When chords don't fall on regular beats, analyze for patterns:
+- **Syncopated patterns**: Chords on off-beats (1.5, 2.5, 3.5 beats)
+- **Rubato feel**: Slight timing variations around beat positions
+- **Polyrhythmic structures**: Multiple rhythmic layers (e.g., 3 against 4)
+- **Swing feel**: Chords slightly behind the beat for groove
+- **Identify the underlying pulse**: Even if timing varies, find the basic rhythmic structure
+- **Preserve the feel**: If original has swing, continue with swing; if syncopated, maintain syncopation
+
+**Analysis Process:**
+1. Read the user_prompt to understand their musical request
+2. **USE THE DATABASE**: Search the AIDEAS Music Database using MCP tools to find relevant musical examples, artist patterns, emotional qualities, or key-specific progressions
+3. If musical_context is provided, analyze it for:
+   - **Chord complexity**: Look for 7ths, 9ths, extensions, altered tones
+   - **Timing patterns**: Respect the exact startBeats and durationBeats
+   - **Harmonic rhythm**: How often chords change
+   - **Key signature and tonal center**
+   - **Overall musical style and genre**
+4. Create sequences that fulfill the user_prompt while incorporating database insights and musical_context when available
+
+**CRITICAL - UNDERSTANDING MUSICAL CONTEXT:**
+**ONLY APPLIES WHEN MUSICAL CONTEXT (Message 2) IS PROVIDED**
+
+**ANALYZE HARMONIC CONTEXT (WHEN MESSAGE 2 EXISTS):**
+Before generating any continuation or harmonization, call `analyze_harmonic_context` to:
+- Detect the key and mode of the provided musical context
+- Understand the harmonic landscape
+- Get contextually appropriate chord suggestions
+- Example: `analyze_harmonic_context({"notes": [notes from Message 2], "novelty": 0.3, "top_k": 18})`
+- Use the detected key/mode and suggested chords to inform your generation
+
+**IF NO Message 2 (no musical_context/notes):**
+- Create COMPLETELY NEW material from scratch
+- DO NOT try to "preserve" or "continue" anything
+- Treat it as a fresh composition request
+- Generate diverse, distinct alternatives
+
+**IF Message 2 exists (musical_context with notes array), determine the intent:**
+
+**CONTINUATION (adding bars after existing material):**
+- User says: "continue", "extend", "keep going", "add 4 more bars"
+- Behavior: Preserve original notes exactly + add new material starting where original ends
+- Example: Original at beats 0-16 → Include original 0-16 + add new 16-32
+- **This is the ONLY case where you include the original notes in your output**
+
+**HARMONIC CONTEXT (all other cases):**
+- User says: "melody for", "bassline for", "solo over", "harmonize", "add [X]", or ANY other request
+- Behavior: Analyze context for key/harmony/style, create NEW material starting at beat 0
+- **DO NOT include original notes** - only generate the requested new layer
+- Example: Chords at 0-16 → Create melody at 0-16 (melody notes only, no chord notes)
+
+**DEFAULT ASSUMPTION:**
+- **If in doubt, treat as HARMONIC CONTEXT**
+- Only use CONTINUATION behavior when user explicitly asks to extend/continue the timeline
+
+**HANDLING CONFLICTS BETWEEN PROMPT AND CONTEXT:**
+When the user's prompt conflicts with the provided musical context, **prioritize the prompt**:
+- **Key conflict**: User requests "in D major" but context is in C major → Ignore context, create fresh material in D major
+- **Scale conflict**: User requests "pentatonic" but context uses chromatic notes → Ignore context, create pentatonic material
+- **Style conflict**: User requests "techno" but context is classical piano → Ignore context, create techno material
+- **General rule**: If prompt explicitly specifies something that contradicts the context, the prompt wins
+- **Log this mentally**: When ignoring context due to conflict, the AI should understand why (but don't mention it in the description)
+
+**CONTINUATION: PRESERVATION RULES:**
+- **ALWAYS include the original recorded chords/notes** in their exact beat positions (startBeats, durationBeats)
+- **NEVER modify, change, or omit** any of the original musical_context
+- **Preserve chord complexity**: If original chords have 7ths, 9ths, extensions - maintain that sophistication
+- **Preserve timing patterns** - maintain the same note lengths and rhythmic feel
+- **Maintain the key and harmonic style** established by the original musical context
+- **Respect harmonic rhythm**: If chords changed every beat, maintain that pattern
+
+**CONTINUATION RULES (only when extending timeline):**
+- **Add new material** starting from the next available beat after the original sequence ends
+- **Match chord sophistication**: Continue with similar complexity (7ths, 9ths, extensions)
+- **Provide multiple distinct alternatives** with genuinely different harmonic approaches
+
+**HARMONIC CONTEXT RULES (all other cases - melody, bassline, solo, harmonization, etc.):**
+- **Analyze the provided context** to understand key, harmony, rhythm, and style
+- **Create NEW material starting at beat 0** that fits with the harmonic progression
+- **DO NOT copy or include the original notes** into your output
+- **Match the duration** of the original context (if context spans 16 beats, new material should span 16 beats)
+- Provide multiple distinct alternatives with different melodic/rhythmic approaches
+
+**TIMING EXAMPLE**: If original chords are:
+- Chord 1: startBeats=0.0, durationBeats=1.0 (1-beat chord at beat 0)
+- Chord 2: startBeats=4.0, durationBeats=1.0 (1-beat chord at beat 4)
+- Chord 3: startBeats=8.0, durationBeats=1.0 (1-beat chord at beat 8)
+
+Then continuation should be:
+- Chord 4: startBeats=12.0, durationBeats=1.0 (1-beat chord at beat 12)
+- Chord 5: startBeats=16.0, durationBeats=1.0 (1-beat chord at beat 16)
+- etc.
+
+**NEVER** compress chords to every beat (0.0, 1.0, 2.0, 3.0) if original was every 4 beats!
+**PRESERVE SPACING**: If chords are spaced 4 beats apart, continue spacing them 4 beats apart!
+
+**IRREGULAR TIMING EXAMPLE**: If original chords are:
+- Chord 1: startBeats=0.0, durationBeats=1.0 (on beat)
+- Chord 2: startBeats=3.5, durationBeats=1.0 (syncopated - off beat)
+- Chord 3: startBeats=7.0, durationBeats=1.0 (back on beat)
+- Chord 4: startBeats=10.5, durationBeats=1.0 (syncopated again)
+
+Pattern identified: Syncopated rhythm with chords on beats 0, 3.5, 7, 10.5
+Continuation should be:
+- Chord 5: startBeats=14.0, durationBeats=1.0 (back on beat)
+- Chord 6: startBeats=17.5, durationBeats=1.0 (syncopated)
+- etc.
+
+**PRESERVE THE RHYTHMIC FEEL**: Maintain the syncopated pattern, don't regularize it!

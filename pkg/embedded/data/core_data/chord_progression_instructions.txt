@@ -1,0 +1,254 @@
+# CHORD PROGRESSION GENERATION - COMPREHENSIVE GUIDE
+
+## OVERVIEW
+When generating chord progressions, your goal is to create musically interesting, harmonically rich sequences that avoid clichés and demonstrate sophisticated harmonic thinking.
+
+## CORE PRINCIPLES
+
+### 1. HARMONIC STRUCTURE
+- Generate HARMONIC material (multiple simultaneous notes forming chords)
+- Create rich, full-sounding chords with proper harmony
+- Use chord extensions (7ths, 9ths, 11ths, 13ths) to add color and interest
+- Ensure chords sound at the same startBeats value (simultaneous notes)
+- Use proper voice leading between chords for smooth transitions
+
+### 2. HARMONIC VARIETY & SOPHISTICATION
+
+**COMMON PATTERNS TO USE SPARINGLY:**
+- I-IV-V, I-V-vi-IV, I-vi-IV-V are valid but overused
+- Don't default to these patterns automatically
+- They work fine but explore other options too
+- Progressions using ONLY I, IV, V, vi lack variety
+
+**EXPAND YOUR HARMONIC PALETTE:**
+- ii chords (supertonic) - creates gentle stepwise motion
+- iii chords (mediant) - adds color and unexpected movement
+- vii° chords (leading tone diminished) - creates tension
+- Extended chords (maj7, min7, dom7, 9ths, etc.)
+- Modal interchange (borrowing from parallel modes)
+- Secondary dominants (V/ii, V/iii, V/vi, etc.)
+- Circle of fifths progressions (I-IV-vii°-iii-vi-ii-V-I)
+- Chromatic mediants (bVI, bIII, III)
+
+**BALANCE:**
+- Familiar progressions (I-IV-V) are fine when appropriate
+- But also explore the full harmonic palette available
+- Mix common and less common chord movements
+- The goal is musical interest, not just avoiding patterns
+
+### 3. HARMONIC SOPHISTICATION
+
+**GOOD HARMONIC CHOICES:**
+- I-ii-iii-IV (stepwise motion)
+- vi-IV-ii-V (circle of fifths fragment)
+- I-bVII-IV-I (modal interchange)
+- Imaj7-iii7-vi7-ii7-V7 (jazz turnaround)
+- I-V/vi-vi-IV (secondary dominant)
+- I-bVI-bVII-I (chromatic mediants)
+- ii-V-I (strongest resolution in music)
+
+**VOICE LEADING:**
+- Move notes by the smallest possible interval between chords
+- Aim for smooth, connected motion (not random jumps)
+- Keep common tones between chords when possible
+- If one voice moves up, another can move down for balance
+
+### 4. HARMONIC RHYTHM
+**Harmonic rhythm** = how often chords change
+
+**Options:**
+- **Every 4 beats (1 chord per bar):** Traditional, spacious, allows breathing room
+- **Every 2 beats (2 chords per bar):** Moderate movement, common in pop/rock
+- **Every beat:** Fast harmonic rhythm, creates urgency and momentum
+- **Mixed rhythm:** Vary the pace - some chords sustain longer, others change quickly
+
+**CRITICAL:** Once you establish a harmonic rhythm, maintain consistency unless there's a musical reason to change it.
+
+### 5. CHORD EXTENSIONS AND COLOR TONES
+
+**Basic Triads (3 notes):**
+- Major: Root, 3rd, 5th (C-E-G)
+- Minor: Root, b3rd, 5th (C-Eb-G)
+- Diminished: Root, b3rd, b5th (C-Eb-Gb)
+
+**Extended Chords (4+ notes) - PREFERRED:**
+- Maj7: Root, 3rd, 5th, 7th (C-E-G-B) - bright, jazzy
+- Min7: Root, b3rd, 5th, b7th (C-Eb-G-Bb) - smooth, mellow
+- Dom7: Root, 3rd, 5th, b7th (C-E-G-Bb) - wants to resolve
+- Min7b5: Root, b3rd, b5th, b7th (C-Eb-Gb-Bb) - dark, tense
+- 9th chords: Add the 9th (2nd octave up) for extra color
+- 13th chords: Full jazz voicing with 7th, 9th, 11th, 13th
+
+**USE EXTENSIONS LIBERALLY** - they make progressions sound more sophisticated and less generic.
+
+### 6. NOVELTY PARAMETER
+
+**Low Novelty (Conservative):**
+- Stick to diatonic chords (I, ii, iii, IV, V, vi, vii°)
+- Use mostly triads or simple 7th chords
+- Predictable, safe progressions
+- Example: Imaj7-vi7-ii7-V7 in C major
+
+**Medium Novelty (Recommended Default):**
+- Diatonic + modal interchange
+- Secondary dominants
+- Extended harmonies (9ths, some 11ths)
+- Example: Imaj7-bVII7-vi7-V/vi-ii7-V7 in C major
+
+**High Novelty (Adventurous):**
+- Chromatic mediants
+- Tritone substitutions
+- Altered dominants (b9, #9, #11, b13)
+- Parallel major/minor movement
+- Example: Imaj7-bVI7-bII7-V7alt-Imaj7 in C major
+
+### 7. DURATION AND COMPLETENESS
+
+**NEVER leave bars empty** - fill the entire requested duration with chords
+
+**Duration Calculation:**
+- 1 bar = 4 beats (in 4/4 time)
+- 4 bars = 16 beats total
+- If user requests "4-bar progression", generate notes from beat 0 to beat 16
+
+**Example - 4 bars, 1 chord per bar:**
+- Chord 1: beats 0-4
+- Chord 2: beats 4-8
+- Chord 3: beats 8-12
+- Chord 4: beats 12-16
+
+### 8. AVOIDING REPETITION
+
+**CRITICAL:** Do not repeat the same chord pattern over and over.
+
+**Bad (repetitive):**
+- I-IV-V-I, I-IV-V-I, I-IV-V-I, I-IV-V-I (same pattern 4 times)
+
+**Good (varied):**
+- I-vi-ii-V, iii-vi-ii-V, IV-vii°-iii-vi, ii-V-I (different each time)
+
+**Development techniques:**
+- Start simple, add complexity
+- Use sequences (repeat a pattern at different pitch levels)
+- Create question-answer phrases (tension → resolution)
+- Build to a climax and resolve
+
+## PRACTICAL EXAMPLES
+
+### Example 1: Sophisticated 8-bar progression in C major (medium novelty)
+```
+Bar 1 (0-4):   Cmaj7  (C-E-G-B)
+Bar 2 (4-8):   Am7    (A-C-E-G)
+Bar 3 (8-12):  Dm7    (D-F-A-C)
+Bar 4 (12-16): G7     (G-B-D-F)
+Bar 5 (16-20): Em7    (E-G-B-D)
+Bar 6 (20-24): A7     (A-C#-E-G) - secondary dominant (V/ii)
+Bar 7 (24-28): Dm7    (D-F-A-C)
+Bar 8 (28-32): G7     (G-B-D-F)
+```
+**Why this works:** Uses ii, iii, vi, not just I-IV-V-vi. Includes secondary dominant (A7). Voice leading flows smoothly.
+
+### Example 2: High novelty progression in D minor
+```
+Bar 1 (0-4):   Dm9     (D-F-A-C-E)
+Bar 2 (4-8):   Bbmaj7  (Bb-D-F-A) - bVI, modal interchange
+Bar 3 (8-12):  Ebmaj7#11 (Eb-G-Bb-D-F#) - bII, chromatic mediant
+Bar 4 (12-16): A7alt   (A-C#-E-G-Bb-Db) - altered dominant
+```
+**Why this works:** Extended chords, chromatic harmony, unexpected but musical movement, jazz-influenced.
+
+### Example 3: Circle of fifths movement in G major
+```
+Bar 1-2 (0-8):   Gmaj7  (G-B-D-F#)
+Bar 3-4 (8-16):  Cmaj7  (C-E-G-B)
+Bar 5-6 (16-24): F#m7b5 (F#-A-C-E)
+Bar 7-8 (24-32): Bm7    (B-D-F#-A)
+```
+**Why this works:** Descending fifths (G→C→F#→B), strong harmonic motion, uses vii and iii.
+
+### Example 4: Replaying chords with rhythm variations (like a keyboard player)
+**When user requests "replay", "retrigger", or wants chords played with rhythm:**
+- **CRITICAL**: Use the EXACT SAME chords from the original progression
+- Play each chord multiple times at different beats (syncopation)
+- Mix in arpeggios of the same chord tones
+- Vary the rhythm but keep the harmonic content identical
+
+**Example - Replaying a C major chord with rhythm variations:**
+```
+Original: C major chord at beat 0 (C-E-G, duration 4 beats)
+
+Replayed version:
+Beat 0.0:   C-E-G (full chord, simultaneous)
+Beat 0.5:   C-E-G (quick retrigger)
+Beat 1.5:   C-E-G-C (arpeggio up, then chord)
+Beat 2.5:   C-E-G (syncopated hit)
+Beat 3.0:   E-G-C (arpeggio down)
+Beat 3.5:   C-E-G (final hit)
+```
+
+**Key principles for replaying chords:**
+1. **Preserve chord identity**: If original has C major (C-E-G), all retriggers must use C-E-G (not C-E-G-B or other variants)
+2. **Syncopation**: Play chords at off-beats (0.5, 1.5, 2.5, 3.5 beats) not just strong beats (0, 1, 2, 3)
+3. **Retriggering**: Same chord played multiple times within a bar (not sustained pads)
+4. **Arpeggios mixed in**: Break up the chord into sequential notes (C-E-G-C or G-E-C-G) but use ONLY notes from the original chord
+5. **Rhythm variety**: Mix full chords (simultaneous notes) with arpeggios (sequential notes) of the same chord
+
+**Example - Replaying a 4-bar progression (C-Am-F-G):**
+```
+Original progression:
+Beat 0-4:   C major (C-E-G)
+Beat 4-8:   Am (A-C-E)
+Beat 8-12:  F major (F-A-C)
+Beat 12-16: G major (G-B-D)
+
+Replayed version with rhythm:
+Beat 0.0:   C-E-G (full chord)
+Beat 0.5:   C-E-G (retrigger)
+Beat 1.5:   C-E-G-C (arpeggio)
+Beat 2.5:   C-E-G (syncopated)
+Beat 3.0:   E-G-C (arpeggio)
+Beat 4.0:   A-C-E (full chord - Am)
+Beat 4.5:   A-C-E (retrigger)
+Beat 5.5:   A-C-E-A (arpeggio)
+Beat 6.5:   A-C-E (syncopated)
+Beat 7.0:   C-E-A (arpeggio)
+Beat 8.0:   F-A-C (full chord - F major)
+Beat 8.5:   F-A-C (retrigger)
+Beat 9.5:   F-A-C-F (arpeggio)
+Beat 10.5:  F-A-C (syncopated)
+Beat 11.0:  A-C-F (arpeggio)
+Beat 12.0:  G-B-D (full chord - G major)
+Beat 12.5:  G-B-D (retrigger)
+Beat 13.5:  G-B-D-G (arpeggio)
+Beat 14.5:  G-B-D (syncopated)
+Beat 15.0:  B-D-G (arpeggio)
+```
+
+**CRITICAL - What NOT to do:**
+- ❌ **DON'T** create new chords or change the harmony
+- ❌ **DON'T** only play chords at beats 0, 4, 8, 12 (that's the original pattern)
+- ❌ **DON'T** generate arpeggios that don't match the original chord tones
+- ❌ **DON'T** create completely new arpeggio patterns unrelated to the chords
+
+**CRITICAL - What TO do:**
+- ✅ **DO** use the exact same chord tones from the original
+- ✅ **DO** play chords at syncopated beats (0.5, 1.5, 2.5, 3.5)
+- ✅ **DO** mix full chords with arpeggios of the same chord
+- ✅ **DO** create rhythmic interest while preserving harmonic content
+- ✅ **DO** think like a keyboard player: retriggering chords, adding subtle arpeggios, syncopated hits
+
+## QUALITY CHECKLIST
+
+Before finalizing a chord progression, verify:
+- ✅ Shows harmonic variety and interest
+- ✅ Includes chord extensions when appropriate (7ths, 9ths)
+- ✅ Doesn't rely exclusively on I-IV-V-vi
+- ✅ Has smooth voice leading between chords
+- ✅ Fills the entire requested duration (no empty bars)
+- ✅ Demonstrates thoughtful chord choices, not random selection
+- ✅ Creates a sense of musical direction (tension and resolution)
+- ✅ Balances familiarity with exploration
+
+## REMEMBER
+
+Create progressions that are musically compelling and interesting, using the full harmonic palette available. Common progressions like I-IV-V are fine when appropriate, but explore other possibilities too. The goal is musical quality and interest, not rigidly avoiding certain patterns.

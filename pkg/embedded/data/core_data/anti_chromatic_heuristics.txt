@@ -1,0 +1,75 @@
+**ANTI-CHROMATIC HEURISTICS — REVISED GUIDELINES**
+
+**PURPOSE**
+Maintain melodic clarity and tonal focus by avoiding aimless chromatic motion. Use chromaticism *expressively*, not habitually.
+
+---
+
+**CORE PRINCIPLES**
+- Avoid continuous chromatic or scalar motion without harmonic intent.
+- Focus on **chord tones** (1, 3, 5, 7) and **diatonic passing tones**.
+- Limit consecutive semitone movements to a **maximum of two**; break with leaps or skips.
+- Prefer **melodic intervals of 3rds, 4ths, and 5ths** for structural clarity.
+- Align phrase starts, cadences, and harmonic changes with **phrase boundaries (4–8 beats)**.
+
+---
+
+**ALLOWED CHROMATIC USES (CONTEXTUAL EXCEPTIONS)**
+- **Approach tones** leading by semitone into a chord tone (ascending or descending).
+- **Enclosures**: e.g., upper-lower approach around a target note (jazz phrasing).
+- **Chromatic passing tones** in stepwise motion between diatonic tones, provided:
+  - They resolve immediately.
+  - They do not repeat or form continuous runs.
+- **Borrowed scale notes** from parallel modes (♭6 in major, ♯4 in minor) are permitted when harmonically grounded.
+- **Blues chromaticism** (flat 5 or mixolydian ♭3–3 oscillation) is acceptable if stylistically appropriate.
+
+---
+
+**PHRASE & HARMONY INTEGRATION**
+- Use leaps to emphasize **underlying harmony**.
+- Anchor phrases on chord tones during harmonic changes.
+- Chromatic notes should resolve by **step into diatonic tones**.
+- Reserve chromatic movement for **transitions, fills, or expressive color**, not the main motif.
+- Keep tension brief—typically within a single beat or half-beat.
+
+---
+
+**MOTIVIC CONSISTENCY**
+- Repeat and vary **motifs**, not chromatic runs.
+- Develop motifs by rhythm, contour, or interval, not chromatic drift.
+- Every chromatic note should feel **intentional**—never filler.
+
+---
+
+**GENRE CONTEXT RECOMMENDATIONS**
+| Style | Chromatic Usage | Comment |
+|--------|-----------------|----------|
+| Classical | limited | only as passing or neighbor tones |
+| Jazz | moderate | enclosures, approach tones, bebop chromaticism |
+| Rock / Blues | expressive | ♭3–3 or ♭5–5 color tones allowed |
+| EDM / Pop | minimal | keep melodic center strong |
+| Cinematic | contextual | tension-building transitions only |
+| Fusion / Prog | advanced | controlled chromatic sequences acceptable if harmonically justified |
+
+---
+
+**RHYTHMIC PLACEMENT OF CHROMATICISM**
+- Place chromatic tones on **weak subdivisions** (off-beats, 16th upbeats).
+- Resolve on strong beats with chord tones.
+- For 4/4, preferred pattern: tension (beat 2 or 4) → resolution (beat 1 or 3).
+- Never sustain chromatic tones longer than the beat unless forming a suspended tension that resolves harmonically.
+
+---
+
+**QUALITY CONTROL CHECKLIST**
+-  No more than two consecutive semitones.
+-  All chromatic tones resolve by step to chord tones.
+-  No repeating chromatic runs longer than 4 notes.
+-  Each chromatic choice serves melodic or emotional purpose.
+-  Chromaticism aligns with harmonic context and phrase boundaries.
+
+---
+
+**SUMMARY**
+Chromaticism should **amplify emotion or momentum**, not distract from tonality.
+Use sparingly and intentionally to enrich melodic contour, highlight transitions, or express tension–release arcs.
