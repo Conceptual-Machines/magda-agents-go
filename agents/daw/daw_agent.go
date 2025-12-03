@@ -504,7 +504,7 @@ func (a *DawAgent) handleTextDelta(
 	log.Printf("📝 MAGDA: Accumulated %d chars (delta: %d)", len(*accumulatedText), len(text))
 
 	// Try to parse actions from accumulated text after each delta
-		actions, err := a.parseActionsIncremental(*accumulatedText, state)
+	actions, err := a.parseActionsIncremental(*accumulatedText, state)
 	if err == nil && len(actions) > len(*allActions) {
 		// New actions found - call callback for each new one
 		for i := len(*allActions); i < len(actions); i++ {

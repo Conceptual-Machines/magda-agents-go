@@ -206,9 +206,9 @@ func ExampleForEachWithSideEffects() {
 	addFX := func(track interface{}) {
 		trackMap := track.(map[string]interface{})
 		action := map[string]interface{}{
-			"action":  "add_track_fx",
-			"track":   trackMap["index"],
-			"fxname":  "ReaVerb",
+			"action": "add_track_fx",
+			"track":  trackMap["index"],
+			"fxname": "ReaVerb",
 		}
 		actions = append(actions, action)
 	}
@@ -335,4 +335,3 @@ func RunAllExamples() {
 	fmt.Println("\n=== Nested Property Access ===")
 	ExampleNestedPropertyAccess()
 }
-
