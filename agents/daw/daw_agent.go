@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
 	"github.com/Conceptual-Machines/magda-agents-go/metrics"
 	"github.com/Conceptual-Machines/magda-agents-go/models"
 	"github.com/Conceptual-Machines/magda-agents-go/prompt"
+	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go/responses"
 )
 
@@ -100,6 +100,7 @@ func (a *DawAgent) GenerateActions(
 			ToolName: "magda_dsl",
 			Description: "Executes REAPER operations using the MAGDA DSL. " +
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
+				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
 				"Use functional methods for collections: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
@@ -296,6 +297,7 @@ func (a *DawAgent) GenerateActionsStream(
 			ToolName: "magda_dsl",
 			Description: "Executes REAPER operations using the MAGDA DSL. " +
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
+				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
 				"Use functional methods for collections: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
@@ -502,7 +504,7 @@ func (a *DawAgent) handleTextDelta(
 	log.Printf("📝 MAGDA: Accumulated %d chars (delta: %d)", len(*accumulatedText), len(text))
 
 	// Try to parse actions from accumulated text after each delta
-		actions, err := a.parseActionsIncremental(*accumulatedText, state)
+	actions, err := a.parseActionsIncremental(*accumulatedText, state)
 	if err == nil && len(actions) > len(*allActions) {
 		// New actions found - call callback for each new one
 		for i := len(*allActions); i < len(actions); i++ {

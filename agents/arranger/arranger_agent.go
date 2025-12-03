@@ -9,12 +9,12 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
 	"github.com/Conceptual-Machines/magda-agents-go/metrics"
 	"github.com/Conceptual-Machines/magda-agents-go/models"
 	"github.com/Conceptual-Machines/magda-agents-go/prompt"
+	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go/responses"
 )
 

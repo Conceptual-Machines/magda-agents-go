@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
+	"github.com/getsentry/sentry-go"
 )
 
 // StreamEvent represents a server-sent event for streaming generation

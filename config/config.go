@@ -6,4 +6,3 @@ type Config struct {
 	GeminiAPIKey string // Google Gemini API key (optional)
 	MCPServerURL string // MCP server URL (optional)
 }
-

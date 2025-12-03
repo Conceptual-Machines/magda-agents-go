@@ -11,14 +11,14 @@ import (
 // FunctionalDSLParser parses MAGDA DSL code with functional method support.
 // Uses Grammar School Engine for parsing and supports filter, map, etc.
 type FunctionalDSLParser struct {
-	engine             *gs.Engine
-	reaperDSL          *ReaperDSL
-	currentTrackIndex  int
-	trackCounter       int
-	state              map[string]interface{}
-	data               map[string]interface{} // Storage for collections
-	iterationContext   map[string]interface{} // Current iteration variables (track, fx, clip, etc.)
-	actions            []map[string]interface{}
+	engine            *gs.Engine
+	reaperDSL         *ReaperDSL
+	currentTrackIndex int
+	trackCounter      int
+	state             map[string]interface{}
+	data              map[string]interface{} // Storage for collections
+	iterationContext  map[string]interface{} // Current iteration variables (track, fx, clip, etc.)
+	actions           []map[string]interface{}
 }
 
 // ReaperDSL implements the DSL methods for REAPER operations.
@@ -29,12 +29,12 @@ type ReaperDSL struct {
 // NewFunctionalDSLParser creates a new functional DSL parser.
 func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 	parser := &FunctionalDSLParser{
-		reaperDSL:        &ReaperDSL{},
+		reaperDSL:         &ReaperDSL{},
 		currentTrackIndex: -1,
-		trackCounter:     0,
-		data:             make(map[string]interface{}),
-		iterationContext: make(map[string]interface{}),
-		actions:          make([]map[string]interface{}, 0),
+		trackCounter:      0,
+		data:              make(map[string]interface{}),
+		iterationContext:  make(map[string]interface{}),
+		actions:           make([]map[string]interface{}, 0),
 	}
 
 	parser.reaperDSL.parser = parser
@@ -774,4 +774,3 @@ IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
 
 	return baseGrammar
 }
-

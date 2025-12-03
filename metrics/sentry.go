@@ -108,4 +108,3 @@ func (m *SentryMetrics) RecordGenerationDuration(ctx context.Context, duration t
 
 	span.Description = fmt.Sprintf("Generation Request: %t", success)
 }
-
