@@ -602,4 +602,3 @@ func (p *DSLParser) getSelectedTrackIndex() int {
 
 	return -1
 }
-
