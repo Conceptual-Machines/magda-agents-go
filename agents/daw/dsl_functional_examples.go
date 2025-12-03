@@ -107,7 +107,7 @@ func ExampleFilterFXChain() {
 		// Evaluate predicate: fx.enabled == true
 		fxObj := iterationContext["fx"].(map[string]interface{})
 		fxEnabled := fxObj["enabled"].(bool)
-		predicateResult := fxEnabled == true
+		predicateResult := fxEnabled
 
 		if predicateResult {
 			filtered = append(filtered, fx)
@@ -258,7 +258,7 @@ func ExampleComplexFilterExpression() {
 
 		// Evaluate: track.name == "FX" && track.selected == true
 		condition1 := trackObj["name"].(string) == "FX"
-		condition2 := trackObj["selected"].(bool) == true
+		condition2 := trackObj["selected"].(bool)
 		predicateResult := condition1 && condition2
 
 		if predicateResult {
