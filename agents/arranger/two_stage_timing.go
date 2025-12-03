@@ -32,7 +32,7 @@ func (s *GenerationService) GenerateTwoStageTiming(
 	inputArray []map[string]any,
 	variations int,
 ) (*GenerationResult, error) {
-	return s.GenerateTwoStageTimingStream(ctx, model, inputArray, variations, nil, reasoningEffortMedium, reasoningEffortMedium)
+	return s.GenerateTwoStageTimingStream(ctx, model, inputArray, variations, nil, "medium", "medium")
 }
 
 // GenerateTwoStageTimingStream generates music using timing-first two-stage approach with streaming
@@ -46,10 +46,10 @@ func (s *GenerationService) GenerateTwoStageTimingStream(
 	rhythmicReasoning string,
 ) (*GenerationResult, error) {
 	if harmonicReasoning == "" {
-		harmonicReasoning = reasoningEffortMedium
+		harmonicReasoning = "medium"
 	}
 	if rhythmicReasoning == "" {
-		rhythmicReasoning = reasoningEffortMedium
+		rhythmicReasoning = "medium"
 	}
 
 	log.Printf("🎵 TWO-STAGE TIMING GENERATION STARTED (Model: %s, Stage1 Reasoning: %s, Stage2 Reasoning: %s)",
@@ -122,7 +122,7 @@ func (s *GenerationService) createTimingSkeleton(
 
 	// Use reasoning mode from request (default to "medium" if empty)
 	if reasoningMode == "" {
-		reasoningMode = reasoningEffortMedium
+		reasoningMode = "medium"
 	}
 
 	// Pass the input array directly to the provider (same as one-shot mode)
@@ -265,7 +265,7 @@ func (s *GenerationService) enrichWithHarmonyStage1(
 
 	// Build request for harmonic enrichment (higher reasoning, with MCP)
 	if reasoningMode == "" {
-		reasoningMode = reasoningEffortMedium
+		reasoningMode = "medium"
 	}
 
 	request := &llm.GenerationRequest{
