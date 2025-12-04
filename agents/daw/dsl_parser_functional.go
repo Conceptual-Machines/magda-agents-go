@@ -612,19 +612,55 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 }
 
 // SetSelected handles .set_selected() calls.
+// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
 func (r *ReaperDSL) SetSelected(args gs.Args) error {
 	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for selected call")
-	}
 	selectedValue, ok := args["selected"]
 	if !ok || selectedValue.Kind != gs.ValueBool {
 		return fmt.Errorf("selected must be a boolean")
 	}
+	selected := selectedValue.Bool
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		if filtered, ok := filteredCollection.([]interface{}); ok && len(filtered) > 0 {
+			// Apply to all filtered tracks
+			for _, item := range filtered {
+				trackMap, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				trackIndex, ok := trackMap["index"].(int)
+				if !ok {
+					// Try float64 (JSON numbers are float64)
+					if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+						trackIndex = int(trackIndexFloat)
+					} else {
+						continue
+					}
+				}
+				action := map[string]interface{}{
+					"action":   "set_track_selected",
+					"track":    trackIndex,
+					"selected": selected,
+				}
+				p.actions = append(p.actions, action)
+			}
+			// Clear filtered collection after applying
+			delete(p.data, "current_filtered")
+			log.Printf("Applied set_selected to %d filtered tracks", len(filtered))
+			return nil
+		}
+	}
+
+	// Normal single-track operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for selected call")
+	}
 	action := map[string]interface{}{
 		"action":   "set_track_selected",
 		"track":    p.currentTrackIndex,
-		"selected": selectedValue.Bool,
+		"selected": selected,
 	}
 	p.actions = append(p.actions, action)
 	return nil
@@ -685,35 +721,53 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			iterVar: item,
 		})
 
-		// Evaluate predicate
-		// For now, we'll check if there's a function reference
-		if predicateValue, ok := args["predicate"]; ok {
+			// Evaluate predicate - support property_access comparison_op value format
+		// Example: filter(tracks, track.name == "foo")
+		predicateMatched := false
+
+		// Try to find predicate components from parsed args
+		// The grammar should parse "track.name == \"foo\"" into property, operator, value
+		if propValue, ok := args["property"]; ok && propValue.Kind == gs.ValueString {
+			// Property access like "track.name"
+			if opValue, ok := args["operator"]; ok && opValue.Kind == gs.ValueString {
+				if compareValue, ok := args["value"]; ok {
+					// Extract property name from "track.name" -> "name"
+					propParts := strings.Split(propValue.Str, ".")
+					var propName string
+					if len(propParts) > 1 {
+						// track.name -> name
+						propName = propParts[len(propParts)-1]
+					} else {
+						propName = propValue.Str
+					}
+					predicateMatched = evaluateSimplePredicate(item, propName, opValue.Str, compareValue)
+				}
+			}
+		} else if predicateValue, ok := args["predicate"]; ok {
+			// Handle function reference predicate (future extension)
 			if predicateValue.Kind == gs.ValueFunction {
 				// Function reference - would need to call it
 				// For now, include all items as placeholder
-				filtered = append(filtered, item)
+				predicateMatched = true
 			}
-		} else {
-			// Simple property-based filtering
-			// Example: filter(tracks, "name", "==", "FX")
-			if propNameValue, ok := args["property"]; ok && propNameValue.Kind == gs.ValueString {
-				if opValue, ok := args["operator"]; ok && opValue.Kind == gs.ValueString {
-					if compareValue, ok := args["value"]; ok {
-						// Evaluate simple predicate
-						if evaluateSimplePredicate(item, propNameValue.Str, opValue.Str, compareValue) {
-							filtered = append(filtered, item)
-						}
-					}
-				}
-			}
+		}
+
+		if predicateMatched {
+			filtered = append(filtered, item)
 		}
 
 		p.clearIterationContext()
 	}
 
-	// Store filtered result
+	// Store filtered result - return the filtered collection name for chaining
 	resultName := collectionName + "_filtered"
 	p.data[resultName] = filtered
+
+	// Also store as "current_filtered" for potential chaining
+	p.data["current_filtered"] = filtered
+	
+	// Set the current collection context so chained methods can operate on filtered results
+	p.currentTrackIndex = -1 // Reset, will be set per item in map/for_each
 
 	log.Printf("Filtered %d items to %d", len(collection), len(filtered))
 	return nil
@@ -1001,7 +1055,9 @@ name_chain: ".set_name" "(" "name" "=" STRING ")"
 selected_chain: ".set_selected" "(" "selected" "=" BOOLEAN ")"
 
 // Functional operations
-functional_call: filter_call | map_call | for_each_call
+functional_call: filter_call chain?
+                 | map_call
+                 | for_each_call
 
 filter_call: "filter" "(" IDENTIFIER "," filter_predicate ")"
 filter_predicate: property_access comparison_op value
@@ -1010,9 +1066,15 @@ filter_predicate: property_access comparison_op value
                 | property_access "!=" STRING
                 | property_access "==" BOOLEAN
 
-map_call: "map" "(" function_ref "," IDENTIFIER ")"
+map_call: "map" "(" IDENTIFIER "," function_ref ")"
+          | "map" "(" IDENTIFIER "," method_call ")"
 
 for_each_call: "for_each" "(" IDENTIFIER "," function_ref ")"
+               | "for_each" "(" IDENTIFIER "," method_call ")"
+
+method_call: IDENTIFIER "." IDENTIFIER "(" method_params? ")"
+method_params: method_param ("," SP method_param)*
+method_param: IDENTIFIER "=" (STRING | NUMBER | BOOLEAN)
 
 property_access: IDENTIFIER "." IDENTIFIER
                | IDENTIFIER "." IDENTIFIER "[" NUMBER "]"

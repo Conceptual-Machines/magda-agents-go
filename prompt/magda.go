@@ -93,6 +93,12 @@ Sets the mute state of a track.
 Sets the solo state of a track.
 - Required: ` + "`action: \"set_track_solo\"`" + `, ` + "`track`" + ` (integer), ` + "`solo`" + ` (boolean)
 
+**set_track_selected**
+Selects or deselects a track.
+- Required: ` + "`action: \"set_track_selected\"`" + `, ` + "`track`" + ` (integer), ` + "`selected`" + ` (boolean)
+- When selecting multiple tracks (e.g., "select all tracks named X"), generate multiple individual ` + "`set_track_selected`" + ` actions, one for each matching track
+- Example: ` + "`{\"action\": \"set_track_selected\", \"track\": 0, \"selected\": true}`" + ` selects track at index 0
+
 ### FX and Instruments
 
 **add_instrument**
