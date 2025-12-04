@@ -102,11 +102,13 @@ func (a *DawAgent) GenerateActions(
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"Use functional methods for collections: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
+				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+				"This efficiently filters the collection and applies the action to all matching tracks. " +
+				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
 				"If no track is specified in a chain, it applies to the track created by track(). " +
 				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: llm.GetMagdaDSLGrammar(),
+			Grammar: GetMagdaDSLGrammarForFunctional(),
 			Syntax:  "lark",
 		}
 		log.Printf("🔧 Using DSL mode (CFG grammar)")
@@ -299,11 +301,13 @@ func (a *DawAgent) GenerateActionsStream(
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"Use functional methods for collections: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
+				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+				"This efficiently filters the collection and applies the action to all matching tracks. " +
+				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
 				"If no track is specified in a chain, it applies to the track created by track(). " +
 				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: llm.GetMagdaDSLGrammar(),
+			Grammar: GetMagdaDSLGrammarForFunctional(),
 			Syntax:  "lark",
 		}
 		log.Printf("🔧 Using DSL mode (CFG grammar) for streaming")

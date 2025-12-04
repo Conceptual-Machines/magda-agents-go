@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 
 	"github.com/Conceptual-Machines/grammar-school-go/gs"
 )
@@ -26,6 +28,229 @@ type ReaperDSL struct {
 	parser *FunctionalDSLParser
 }
 
+// magdaParser implements gs.Parser interface for MAGDA DSL
+type magdaParser struct {
+	parent *FunctionalDSLParser
+}
+
+// Parse implements gs.Parser interface
+func (p *magdaParser) Parse(input string) (*gs.CallChain, error) {
+	// Simple parser implementation that converts DSL to CallChain
+	// This is a workaround for grammar-school-go requiring a parser
+	// TODO: Implement proper grammar-based parsing when grammar-school-go supports it
+
+	// For now, we'll use the existing ParseDSL logic to extract actions
+	// and convert them to CallChain format
+	// This is a temporary solution until grammar-school-go is fixed
+
+	// Since we're using the engine.Execute to parse, we need a basic parser
+	// that just returns an empty CallChain and let the engine handle it
+	// Actually, we can't do that because Execute needs the CallChain...
+
+	// Let's create a simple parser that extracts method calls
+	return p.parseSimpleDSL(input)
+}
+
+// parseSimpleDSL parses simple DSL like track(...).method(...)
+func (p *magdaParser) parseSimpleDSL(input string) (*gs.CallChain, error) {
+	// This is a minimal implementation - grammar-school-go was supposed to handle nil parser
+	// but recent changes broke it. This is a workaround.
+
+	// Parse the input manually into a CallChain
+	chain := &gs.CallChain{Calls: []gs.Call{}}
+
+	// Simple regex-based parsing for now
+	// Split by dots to get method calls
+	parts := splitMethodCalls(input)
+
+	for _, part := range parts {
+		call := parseMethodCall(part)
+		if call != nil {
+			chain.Calls = append(chain.Calls, *call)
+		}
+	}
+
+	return chain, nil
+}
+
+// splitMethodCalls splits "track(...).method(...)" into ["track(...)", "method(...)"]
+func splitMethodCalls(input string) []string {
+	var parts []string
+	var current strings.Builder
+	depth := 0
+
+	for _, r := range input {
+		char := string(r)
+
+		if char == "(" {
+			depth++
+			current.WriteRune(r)
+		} else if char == ")" {
+			depth--
+			current.WriteRune(r)
+		} else if char == "." && depth == 0 {
+			if current.Len() > 0 {
+				parts = append(parts, strings.TrimSpace(current.String()))
+				current.Reset()
+			}
+		} else {
+			current.WriteRune(r)
+		}
+	}
+
+	if current.Len() > 0 {
+		parts = append(parts, strings.TrimSpace(current.String()))
+	}
+
+	return parts
+}
+
+// parseMethodCall parses "method(param=value)" into a Call
+func parseMethodCall(input string) *gs.Call {
+	input = strings.TrimSpace(input)
+
+	// Find method name and params
+	parenIndex := strings.Index(input, "(")
+	if parenIndex == -1 {
+		// No params
+		methodName := strings.TrimSpace(input)
+		// Capitalize first letter for Go method names (track -> Track, set_selected -> SetSelected)
+		methodName = capitalizeMethodName(methodName)
+		return &gs.Call{
+			Name: methodName,
+			Args: []gs.Arg{},
+		}
+	}
+
+	methodName := strings.TrimSpace(input[:parenIndex])
+	// Capitalize first letter and convert snake_case to CamelCase
+	methodName = capitalizeMethodName(methodName)
+	paramsStr := strings.TrimSpace(input[parenIndex+1:])
+
+	// Remove trailing )
+	paramsStr = strings.TrimSuffix(paramsStr, ")")
+
+	// Parse params
+	args := parseArgs(paramsStr)
+
+	return &gs.Call{
+		Name: methodName,
+		Args: args,
+	}
+}
+
+// parseArgs parses "param1=value1, param2=value2" into []Arg
+func parseArgs(paramsStr string) []gs.Arg {
+	if paramsStr == "" {
+		return []gs.Arg{}
+	}
+
+	var args []gs.Arg
+
+	// Split by comma, but respect string quotes
+	var current strings.Builder
+	depth := 0
+	inString := false
+
+	for _, r := range paramsStr {
+		char := string(r)
+
+		if char == "\"" {
+			inString = !inString
+			current.WriteRune(r)
+		} else if char == "(" {
+			depth++
+			current.WriteRune(r)
+		} else if char == ")" {
+			depth--
+			current.WriteRune(r)
+		} else if char == "," && depth == 0 && !inString {
+			argStr := strings.TrimSpace(current.String())
+			if argStr != "" {
+				args = append(args, parseArg(argStr))
+			}
+			current.Reset()
+		} else {
+			current.WriteRune(r)
+		}
+	}
+
+	argStr := strings.TrimSpace(current.String())
+	if argStr != "" {
+		args = append(args, parseArg(argStr))
+	}
+
+	return args
+}
+
+// parseArg parses "name=value" into Arg
+func parseArg(argStr string) gs.Arg {
+	parts := strings.SplitN(argStr, "=", 2)
+	if len(parts) != 2 {
+		return gs.Arg{
+			Name:  "",
+			Value: gs.Value{Kind: gs.ValueString, Str: argStr},
+		}
+	}
+
+	name := strings.TrimSpace(parts[0])
+	valueStr := strings.TrimSpace(parts[1])
+
+	value := parseValue(valueStr)
+
+	return gs.Arg{
+		Name:  name,
+		Value: value,
+	}
+}
+
+// capitalizeMethodName converts snake_case to CamelCase (track -> Track, set_selected -> SetSelected)
+func capitalizeMethodName(name string) string {
+	if name == "" {
+		return name
+	}
+
+	// Convert snake_case to CamelCase
+	parts := strings.Split(name, "_")
+	var result strings.Builder
+	for _, part := range parts {
+		if part != "" {
+			result.WriteString(strings.ToUpper(part[:1]) + strings.ToLower(part[1:]))
+		}
+	}
+
+	return result.String()
+}
+
+// parseValue parses a value string into Value
+func parseValue(valueStr string) gs.Value {
+	valueStr = strings.TrimSpace(valueStr)
+
+	// Check if it's a string
+	if strings.HasPrefix(valueStr, "\"") && strings.HasSuffix(valueStr, "\"") {
+		return gs.Value{
+			Kind: gs.ValueString,
+			Str:  valueStr[1 : len(valueStr)-1],
+		}
+	}
+
+	// Check if it's a boolean
+	if valueStr == "true" {
+		return gs.Value{Kind: gs.ValueBool, Bool: true}
+	}
+	if valueStr == "false" {
+		return gs.Value{Kind: gs.ValueBool, Bool: false}
+	}
+
+	// Check if it's a number
+	if num, err := strconv.ParseFloat(valueStr, 64); err == nil {
+		return gs.Value{Kind: gs.ValueNumber, Num: num}
+	}
+
+	// Default to string
+	return gs.Value{Kind: gs.ValueString, Str: valueStr}
+}
+
 // NewFunctionalDSLParser creates a new functional DSL parser.
 func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 	parser := &FunctionalDSLParser{
@@ -40,10 +265,15 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 	parser.reaperDSL.parser = parser
 
 	// Get MAGDA DSL grammar
-	grammar := getMagdaDSLGrammarForFunctional()
+	grammar := GetMagdaDSLGrammarForFunctional()
 
-	// Create Engine with ReaperDSL instance
-	engine, err := gs.NewEngine(grammar, parser.reaperDSL, nil)
+	// Create a parser implementation for grammar-school-go
+	// This is a workaround - grammar-school-go was supposed to support nil parser
+	// but recent changes broke it
+	magdaP := &magdaParser{parent: parser}
+
+	// Create Engine with ReaperDSL instance and parser
+	engine, err := gs.NewEngine(grammar, parser.reaperDSL, magdaP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -379,6 +609,61 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 	return nil
 }
 
+// SetSelected handles .set_selected() calls.
+// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) SetSelected(args gs.Args) error {
+	p := r.parser
+	selectedValue, ok := args["selected"]
+	if !ok || selectedValue.Kind != gs.ValueBool {
+		return fmt.Errorf("selected must be a boolean")
+	}
+	selected := selectedValue.Bool
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		if filtered, ok := filteredCollection.([]interface{}); ok && len(filtered) > 0 {
+			// Apply to all filtered tracks
+			for _, item := range filtered {
+				trackMap, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				trackIndex, ok := trackMap["index"].(int)
+				if !ok {
+					// Try float64 (JSON numbers are float64)
+					if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+						trackIndex = int(trackIndexFloat)
+					} else {
+						continue
+					}
+				}
+				action := map[string]interface{}{
+					"action":   "set_track_selected",
+					"track":    trackIndex,
+					"selected": selected,
+				}
+				p.actions = append(p.actions, action)
+			}
+			// Clear filtered collection after applying
+			delete(p.data, "current_filtered")
+			log.Printf("Applied set_selected to %d filtered tracks", len(filtered))
+			return nil
+		}
+	}
+
+	// Normal single-track operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for selected call")
+	}
+	action := map[string]interface{}{
+		"action":   "set_track_selected",
+		"track":    p.currentTrackIndex,
+		"selected": selected,
+	}
+	p.actions = append(p.actions, action)
+	return nil
+}
+
 // ========== Functional methods ==========
 
 // Filter filters a collection using a predicate.
@@ -434,35 +719,53 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			iterVar: item,
 		})
 
-		// Evaluate predicate
-		// For now, we'll check if there's a function reference
-		if predicateValue, ok := args["predicate"]; ok {
+		// Evaluate predicate - support property_access comparison_op value format
+		// Example: filter(tracks, track.name == "foo")
+		predicateMatched := false
+
+		// Try to find predicate components from parsed args
+		// The grammar should parse "track.name == \"foo\"" into property, operator, value
+		if propValue, ok := args["property"]; ok && propValue.Kind == gs.ValueString {
+			// Property access like "track.name"
+			if opValue, ok := args["operator"]; ok && opValue.Kind == gs.ValueString {
+				if compareValue, ok := args["value"]; ok {
+					// Extract property name from "track.name" -> "name"
+					propParts := strings.Split(propValue.Str, ".")
+					var propName string
+					if len(propParts) > 1 {
+						// track.name -> name
+						propName = propParts[len(propParts)-1]
+					} else {
+						propName = propValue.Str
+					}
+					predicateMatched = evaluateSimplePredicate(item, propName, opValue.Str, compareValue)
+				}
+			}
+		} else if predicateValue, ok := args["predicate"]; ok {
+			// Handle function reference predicate (future extension)
 			if predicateValue.Kind == gs.ValueFunction {
 				// Function reference - would need to call it
 				// For now, include all items as placeholder
-				filtered = append(filtered, item)
+				predicateMatched = true
 			}
-		} else {
-			// Simple property-based filtering
-			// Example: filter(tracks, "name", "==", "FX")
-			if propNameValue, ok := args["property"]; ok && propNameValue.Kind == gs.ValueString {
-				if opValue, ok := args["operator"]; ok && opValue.Kind == gs.ValueString {
-					if compareValue, ok := args["value"]; ok {
-						// Evaluate simple predicate
-						if evaluateSimplePredicate(item, propNameValue.Str, opValue.Str, compareValue) {
-							filtered = append(filtered, item)
-						}
-					}
-				}
-			}
+		}
+
+		if predicateMatched {
+			filtered = append(filtered, item)
 		}
 
 		p.clearIterationContext()
 	}
 
-	// Store filtered result
+	// Store filtered result - return the filtered collection name for chaining
 	resultName := collectionName + "_filtered"
 	p.data[resultName] = filtered
+
+	// Also store as "current_filtered" for potential chaining
+	p.data["current_filtered"] = filtered
+
+	// Set the current collection context so chained methods can operate on filtered results
+	p.currentTrackIndex = -1 // Reset, will be set per item in map/for_each
 
 	log.Printf("Filtered %d items to %d", len(collection), len(filtered))
 	return nil
@@ -703,8 +1006,9 @@ func compareValues(a interface{}, b gs.Value) int {
 	}
 }
 
-// getMagdaDSLGrammarForFunctional returns the grammar with functional methods added.
-func getMagdaDSLGrammarForFunctional() string {
+// GetMagdaDSLGrammarForFunctional returns the grammar with functional methods added.
+// This is the grammar used for CFG generation to allow the LLM to generate functional DSL code.
+func GetMagdaDSLGrammarForFunctional() string {
 	// Start with base grammar
 	baseGrammar := `
 // MAGDA DSL Grammar - Functional scripting for REAPER operations
@@ -724,7 +1028,7 @@ track_param: "instrument" "=" STRING
            | "id" "=" NUMBER
            | "selected" "=" BOOLEAN
 
-chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain
+chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain | selected_chain
 
 clip_chain: ".new_clip" "(" clip_params? ")"
 clip_params: clip_param ("," SP clip_param)*
@@ -746,21 +1050,36 @@ pan_chain: ".set_pan" "(" "pan" "=" NUMBER ")"
 mute_chain: ".set_mute" "(" "mute" "=" BOOLEAN ")"
 solo_chain: ".set_solo" "(" "solo" "=" BOOLEAN ")"
 name_chain: ".set_name" "(" "name" "=" STRING ")"
+selected_chain: ".set_selected" "(" "selected" "=" BOOLEAN ")"
 
 // Functional operations
-functional_call: filter_call | map_call | store_call | get_tracks_call | get_fx_chain_call
+functional_call: filter_call chain?
+                 | map_call
+                 | for_each_call
 
-filter_call: "filter" "(" filter_params ")"
-filter_params: IDENTIFIER "," IDENTIFIER "=" STRING "," IDENTIFIER "=" STRING "," IDENTIFIER "=" value
+filter_call: "filter" "(" IDENTIFIER "," filter_predicate ")"
+filter_predicate: property_access comparison_op value
+                | property_access comparison_op BOOLEAN
+                | property_access "==" STRING
+                | property_access "!=" STRING
+                | property_access "==" BOOLEAN
 
-map_call: "map" "(" map_params ")"
-map_params: IDENTIFIER "," IDENTIFIER "=" IDENTIFIER
+map_call: "map" "(" IDENTIFIER "," function_ref ")"
+          | "map" "(" IDENTIFIER "," method_call ")"
 
-store_call: "store" "(" store_params ")"
-store_params: "name" "=" STRING "," "value" "=" value
+for_each_call: "for_each" "(" IDENTIFIER "," function_ref ")"
+               | "for_each" "(" IDENTIFIER "," method_call ")"
 
-get_tracks_call: "get_tracks" "(" ")"
-get_fx_chain_call: "get_fx_chain" "(" ")"
+method_call: IDENTIFIER "." IDENTIFIER "(" method_params? ")"
+method_params: method_param ("," SP method_param)*
+method_param: IDENTIFIER "=" (STRING | NUMBER | BOOLEAN)
+
+property_access: IDENTIFIER "." IDENTIFIER
+               | IDENTIFIER "." IDENTIFIER "[" NUMBER "]"
+
+comparison_op: "==" | "!=" | "<" | ">" | "<=" | ">="
+
+function_ref: "@" IDENTIFIER
 
 array: "[" (value ("," SP value)*)? "]"
 value: STRING | NUMBER | BOOLEAN | array
