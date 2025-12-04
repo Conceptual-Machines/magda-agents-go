@@ -88,4 +88,3 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 		})
 	}
 }
-
