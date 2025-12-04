@@ -128,9 +128,7 @@ func parseMethodCall(input string) *gs.Call {
 	paramsStr := strings.TrimSpace(input[parenIndex+1:])
 
 	// Remove trailing )
-	if strings.HasSuffix(paramsStr, ")") {
-		paramsStr = paramsStr[:len(paramsStr)-1]
-	}
+	paramsStr = strings.TrimSuffix(paramsStr, ")")
 
 	// Parse params
 	args := parseArgs(paramsStr)
