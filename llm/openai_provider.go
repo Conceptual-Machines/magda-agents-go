@@ -436,6 +436,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				// 1. Direct "input" field (tool call input)
 				if input, ok := outputItemMap["input"].(string); ok && input != "" {
 					log.Printf("🔧 Found CFG tool call input (DSL): %s", truncateString(input, maxPreviewChars))
+					log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(input), input)
 					return &GenerationResponse{
 						RawOutput: input,
 						Usage:     resp.Usage,
@@ -542,6 +543,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 		// Check if it looks like DSL (starts with track( or similar)
 		if strings.HasPrefix(textOutput, "track(") || strings.Contains(textOutput, ".newClip(") {
 			log.Printf("🔧 Found DSL in text output (after cleaning markdown): %s", truncateString(textOutput, maxPreviewChars))
+			log.Printf("📋 FULL DSL CODE from text output (%d chars, NO TRUNCATION):\n%s", len(textOutput), textOutput)
 			return &GenerationResponse{
 				RawOutput: textOutput,
 				Usage:     resp.Usage,

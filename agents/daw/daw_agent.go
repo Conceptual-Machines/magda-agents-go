@@ -392,9 +392,9 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 	if a.useDSL {
 		// Check if it's DSL (starts with "track" or similar function call)
 		if strings.HasPrefix(text, "track(") || strings.Contains(text, ".new_clip(") || strings.Contains(text, ".add_midi(") || strings.Contains(text, ".filter(") || strings.Contains(text, ".map(") || strings.Contains(text, ".for_each(") {
-		// This is DSL code - parse and translate to REAPER API actions
-		log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
-		log.Printf("📋 FULL DSL CODE (first 1000 chars): %s", truncate(text, 1000))
+			// This is DSL code - parse and translate to REAPER API actions
+			log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
+			log.Printf("📋 FULL DSL CODE (all %d chars, NO TRUNCATION):\n%s", len(text), text)
 
 			parser, err := NewFunctionalDSLParser()
 			if err != nil {
