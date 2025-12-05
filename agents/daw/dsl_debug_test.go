@@ -80,4 +80,3 @@ func TestFilterDSLGeneration(t *testing.T) {
 	log.Printf("📊 Total selection actions: %d (expected: 3)", selectionCount)
 	require.Equal(t, 3, selectionCount, "Should have 3 selection actions for 3 'foo' tracks")
 }
-
