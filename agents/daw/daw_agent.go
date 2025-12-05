@@ -541,6 +541,7 @@ func (a *DawAgent) handleStreamCompleted(
 	state map[string]interface{},
 ) error {
 	log.Printf("📦 MAGDA: Stream completed, final parse of %d chars", len(*accumulatedText))
+	log.Printf("📋 MAGDA: FULL accumulated text at completion (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
 	if *accumulatedText != "" {
 		actions, err := a.parseActionsIncremental(*accumulatedText, state)
 		if err == nil {
@@ -555,6 +556,7 @@ func (a *DawAgent) handleStreamCompleted(
 		} else {
 			log.Printf("❌ MAGDA: Final parse failed: %v", err)
 			log.Printf("❌ MAGDA: Accumulated text (first %d chars): %s", maxErrorPreviewChars, truncate(*accumulatedText, maxErrorPreviewChars))
+			log.Printf("📋 MAGDA: FULL accumulated text on error (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
 		}
 	}
 	if usageData, ok := event.Data["usage"]; ok {
