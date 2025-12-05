@@ -392,8 +392,9 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 	if a.useDSL {
 		// Check if it's DSL (starts with "track" or similar function call)
 		if strings.HasPrefix(text, "track(") || strings.Contains(text, ".new_clip(") || strings.Contains(text, ".add_midi(") || strings.Contains(text, ".filter(") || strings.Contains(text, ".map(") || strings.Contains(text, ".for_each(") {
-			// This is DSL code - parse and translate to REAPER API actions
-			log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
+		// This is DSL code - parse and translate to REAPER API actions
+		log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
+		log.Printf("📋 FULL DSL CODE (first 1000 chars): %s", truncate(text, 1000))
 
 			parser, err := NewFunctionalDSLParser()
 			if err != nil {
@@ -506,6 +507,11 @@ func (a *DawAgent) handleTextDelta(
 
 	*accumulatedText += text
 	log.Printf("📝 MAGDA: Accumulated %d chars (delta: %d)", len(*accumulatedText), len(text))
+
+	// Log full accumulated text every 100 chars to see DSL as it builds
+	if len(*accumulatedText)%100 < len(text) || len(*accumulatedText) < 500 {
+		log.Printf("📋 MAGDA: Full accumulated text so far (%d chars): %s", len(*accumulatedText), *accumulatedText)
+	}
 
 	// Try to parse actions from accumulated text after each delta
 	actions, err := a.parseActionsIncremental(*accumulatedText, state)
