@@ -727,8 +727,8 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 		// The grammar should parse "track.name == \"foo\"" into property, operator, value
 		if propValue, ok := args["property"]; ok && propValue.Kind == gs.ValueString {
 			// Property access like "track.name"
-			if opValue, ok := args["operator"]; ok && opValue.Kind == gs.ValueString {
-				if compareValue, ok := args["value"]; ok {
+				if opValue, ok := args["operator"]; ok && opValue.Kind == gs.ValueString {
+					if compareValue, ok := args["value"]; ok {
 					// Extract property name from "track.name" -> "name"
 					propParts := strings.Split(propValue.Str, ".")
 					var propName string

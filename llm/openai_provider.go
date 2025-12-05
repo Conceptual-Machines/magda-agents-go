@@ -861,6 +861,10 @@ func (p *OpenAIProvider) handleStreamEvent(
 			if json.Unmarshal(deltaBytes, &deltaMap) == nil {
 				if text, ok := deltaMap["OfString"]; ok {
 					*accumulatedText += text
+					// Log full accumulated text periodically to see DSL as it builds (no truncation)
+					if len(*accumulatedText)%500 < len(text) || len(*accumulatedText) < 1000 {
+						log.Printf("📋 FULL accumulated text so far (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
+					}
 					// Send text delta in callback for incremental parsing
 					return callback(StreamEvent{
 						Type:    "output_text.delta",

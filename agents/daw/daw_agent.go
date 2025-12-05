@@ -102,7 +102,9 @@ func (a *DawAgent) GenerateActions(
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+				"**CRITICAL - SELECTION VS SOLO**: When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER). " +
+				"NEVER use set_track_solo for selection - 'select' means visual selection (set_track_selected), 'solo' means audio isolation (set_track_solo). " +
+				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
 				"This efficiently filters the collection and applies the action to all matching tracks. " +
 				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
@@ -301,7 +303,9 @@ func (a *DawAgent) GenerateActionsStream(
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+				"**CRITICAL - SELECTION VS SOLO**: When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER). " +
+				"NEVER use set_track_solo for selection - 'select' means visual selection (set_track_selected), 'solo' means audio isolation (set_track_solo). " +
+				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
 				"This efficiently filters the collection and applies the action to all matching tracks. " +
 				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
