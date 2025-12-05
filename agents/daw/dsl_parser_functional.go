@@ -621,34 +621,48 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
-		if filtered, ok := filteredCollection.([]interface{}); ok && len(filtered) > 0 {
-			// Apply to all filtered tracks
-			for _, item := range filtered {
-				trackMap, ok := item.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				trackIndex, ok := trackMap["index"].(int)
-				if !ok {
-					// Try float64 (JSON numbers are float64)
-					if trackIndexFloat, ok := trackMap["index"].(float64); ok {
-						trackIndex = int(trackIndexFloat)
-					} else {
+		log.Printf("🔍 SetSelected: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 SetSelected: Filtered collection has %d items, selected=%v", len(filtered), selected)
+			if len(filtered) > 0 {
+				// Apply to all filtered tracks
+				for _, item := range filtered {
+					trackMap, ok := item.(map[string]interface{})
+					if !ok {
+						log.Printf("⚠️  SetSelected: Item is not a map: %T", item)
 						continue
 					}
+					trackIndex, ok := trackMap["index"].(int)
+					if !ok {
+						// Try float64 (JSON numbers are float64)
+						if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+							trackIndex = int(trackIndexFloat)
+						} else {
+							log.Printf("⚠️  SetSelected: Could not extract track index from %+v", trackMap)
+							continue
+						}
+					}
+					trackName, _ := trackMap["name"].(string)
+					log.Printf("✅ SetSelected: Adding action for track %d (name='%s'), selected=%v", trackIndex, trackName, selected)
+					action := map[string]interface{}{
+						"action":   "set_track_selected",
+						"track":    trackIndex,
+						"selected": selected,
+					}
+					p.actions = append(p.actions, action)
 				}
-				action := map[string]interface{}{
-					"action":   "set_track_selected",
-					"track":    trackIndex,
-					"selected": selected,
-				}
-				p.actions = append(p.actions, action)
+				// Clear filtered collection after applying
+				delete(p.data, "current_filtered")
+				log.Printf("✅ SetSelected: Applied set_selected to %d filtered tracks", len(filtered))
+				return nil
+			} else {
+				log.Printf("⚠️  SetSelected: Filtered collection is empty! This means filter() returned 0 results.")
 			}
-			// Clear filtered collection after applying
-			delete(p.data, "current_filtered")
-			log.Printf("Applied set_selected to %d filtered tracks", len(filtered))
-			return nil
+		} else {
+			log.Printf("⚠️  SetSelected: Filtered collection is not a []interface{}: %T", filteredCollection)
 		}
+	} else {
+		log.Printf("🔍 SetSelected: No filtered collection found, using single-track mode (currentTrackIndex=%d)", p.currentTrackIndex)
 	}
 
 	// Normal single-track operation
@@ -739,7 +753,11 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 						propName = propValue.Str
 					}
 					predicateMatched = evaluateSimplePredicate(item, propName, opValue.Str, compareValue)
+				} else {
+					log.Printf("⚠️  Filter: Missing 'value' in predicate args: %+v", args)
 				}
+			} else {
+				log.Printf("⚠️  Filter: Missing 'operator' in predicate args: %+v", args)
 			}
 		} else if predicateValue, ok := args["predicate"]; ok {
 			// Handle function reference predicate (future extension)
@@ -748,6 +766,9 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 				// For now, include all items as placeholder
 				predicateMatched = true
 			}
+		} else {
+			// Log what args we actually received for debugging
+			log.Printf("⚠️  Filter: Predicate not parsed correctly. Received args keys: %v", getArgsKeys(args))
 		}
 
 		if predicateMatched {
@@ -767,7 +788,14 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	// Set the current collection context so chained methods can operate on filtered results
 	p.currentTrackIndex = -1 // Reset, will be set per item in map/for_each
 
-	log.Printf("Filtered %d items to %d", len(collection), len(filtered))
+	log.Printf("✅ Filtered %d items from '%s' to %d matches", len(collection), collectionName, len(filtered))
+	if len(filtered) == 0 {
+		log.Printf("⚠️  WARNING: Filter returned 0 results! Args received: %v", getArgsKeys(args))
+		// Log first item to debug
+		if len(collection) > 0 {
+			log.Printf("   First item in collection: %+v", collection[0])
+		}
+	}
 	return nil
 }
 
@@ -929,6 +957,15 @@ func (p *FunctionalDSLParser) getSelectedTrackIndex() int {
 	}
 
 	return -1
+}
+
+// getArgsKeys returns a list of keys in the args map for debugging
+func getArgsKeys(args gs.Args) []string {
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // evaluateSimplePredicate evaluates a simple property-based predicate.

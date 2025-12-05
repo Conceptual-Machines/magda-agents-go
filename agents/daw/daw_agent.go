@@ -102,7 +102,14 @@ func (a *DawAgent) GenerateActions(
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+				"**CRITICAL - SELECTION OPERATIONS**: " +
+				"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
+				"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
+				"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
+				"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
+				"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
+				"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
+				"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
 				"This efficiently filters the collection and applies the action to all matching tracks. " +
 				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
@@ -301,7 +308,14 @@ func (a *DawAgent) GenerateActionsStream(
 				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+				"**CRITICAL - SELECTION OPERATIONS**: " +
+				"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
+				"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
+				"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
+				"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
+				"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
+				"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
+				"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
 				"This efficiently filters the collection and applies the action to all matching tracks. " +
 				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
@@ -388,12 +402,35 @@ func (a *DawAgent) GenerateActionsStream(
 func (a *DawAgent) parseActionsIncremental(text string, state map[string]interface{}) ([]map[string]interface{}, error) {
 	text = strings.TrimSpace(text)
 
+	log.Printf("🔍 parseActionsIncremental called with %d chars, useDSL=%v", len(text), a.useDSL)
+	if len(text) > 0 {
+		previewLen := 200
+		if len(text) < previewLen {
+			previewLen = len(text)
+		}
+		log.Printf("📄 Input text preview (first %d chars): %s", previewLen, text[:previewLen])
+		log.Printf("📋 FULL INPUT TEXT (all %d chars, NO TRUNCATION):\n%s", len(text), text)
+	}
+
 	// If using DSL mode, try parsing as DSL first
 	if a.useDSL {
 		// Check if it's DSL (starts with "track" or similar function call)
-		if strings.HasPrefix(text, "track(") || strings.Contains(text, ".new_clip(") || strings.Contains(text, ".add_midi(") || strings.Contains(text, ".filter(") || strings.Contains(text, ".map(") || strings.Contains(text, ".for_each(") {
+		hasTrackPrefix := strings.HasPrefix(text, "track(")
+		hasFilter := strings.Contains(text, ".filter(") || strings.Contains(text, "filter(")
+		hasNewClip := strings.Contains(text, ".new_clip(") || strings.Contains(text, ".newClip(")
+		hasAddMidi := strings.Contains(text, ".add_midi(")
+		hasMap := strings.Contains(text, ".map(")
+		hasForEach := strings.Contains(text, ".for_each(")
+		
+		isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach
+		
+		log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, isDSL=%v", 
+			hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, isDSL)
+		
+		if isDSL {
 			// This is DSL code - parse and translate to REAPER API actions
 			log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
+			log.Printf("📋 FULL DSL CODE (all %d chars, NO TRUNCATION):\n%s", len(text), text)
 
 			parser, err := NewFunctionalDSLParser()
 			if err != nil {
@@ -408,6 +445,8 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 				// If DSL parsing failed, fall through to JSON parsing
 				log.Printf("⚠️  DSL parsing failed, trying JSON parse: %v", err)
 			}
+		} else {
+			log.Printf("⚠️  Text does not match DSL pattern. First 100 chars: %s", truncate(text, 100))
 		}
 	}
 
@@ -507,6 +546,11 @@ func (a *DawAgent) handleTextDelta(
 	*accumulatedText += text
 	log.Printf("📝 MAGDA: Accumulated %d chars (delta: %d)", len(*accumulatedText), len(text))
 
+	// Log full accumulated text every 100 chars to see DSL as it builds
+	if len(*accumulatedText)%100 < len(text) || len(*accumulatedText) < 500 {
+		log.Printf("📋 MAGDA: Full accumulated text so far (%d chars): %s", len(*accumulatedText), *accumulatedText)
+	}
+
 	// Try to parse actions from accumulated text after each delta
 	actions, err := a.parseActionsIncremental(*accumulatedText, state)
 	if err == nil && len(actions) > len(*allActions) {
@@ -535,6 +579,7 @@ func (a *DawAgent) handleStreamCompleted(
 	state map[string]interface{},
 ) error {
 	log.Printf("📦 MAGDA: Stream completed, final parse of %d chars", len(*accumulatedText))
+	log.Printf("📋 MAGDA: FULL accumulated text at completion (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
 	if *accumulatedText != "" {
 		actions, err := a.parseActionsIncremental(*accumulatedText, state)
 		if err == nil {
@@ -549,6 +594,7 @@ func (a *DawAgent) handleStreamCompleted(
 		} else {
 			log.Printf("❌ MAGDA: Final parse failed: %v", err)
 			log.Printf("❌ MAGDA: Accumulated text (first %d chars): %s", maxErrorPreviewChars, truncate(*accumulatedText, maxErrorPreviewChars))
+			log.Printf("📋 MAGDA: FULL accumulated text on error (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
 		}
 	}
 	if usageData, ok := event.Data["usage"]; ok {

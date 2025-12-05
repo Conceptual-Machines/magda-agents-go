@@ -90,14 +90,20 @@ Sets the mute state of a track.
 - Required: ` + "`action: \"set_track_mute\"`" + `, ` + "`track`" + ` (integer), ` + "`mute`" + ` (boolean)
 
 **set_track_solo**
-Sets the solo state of a track.
+Sets the solo state of a track (audio isolation - only this track plays, others are muted).
 - Required: ` + "`action: \"set_track_solo\"`" + `, ` + "`track`" + ` (integer), ` + "`solo`" + ` (boolean)
+- **DO NOT use this for selection operations** - "solo" is ONLY for audio isolation, NOT for visual selection
+- Only use when user explicitly says "solo track" or "isolate track"
 
 **set_track_selected**
-Selects or deselects a track.
+Selects or deselects a track (VISUAL SELECTION - highlighting tracks in REAPER's arrangement view).
 - Required: ` + "`action: \"set_track_selected\"`" + `, ` + "`track`" + ` (integer), ` + "`selected`" + ` (boolean)
-- When selecting multiple tracks (e.g., "select all tracks named X"), generate multiple individual ` + "`set_track_selected`" + ` actions, one for each matching track
-- Example: ` + "`{\"action\": \"set_track_selected\", \"track\": 0, \"selected\": true}`" + ` selects track at index 0
+- **CRITICAL DISTINCTION**: 
+  - When user says "select track" or "select all tracks named X" → use ` + "`set_track_selected`" + ` (visual highlighting)
+  - When user says "solo track" → use ` + "`set_track_solo`" + ` (audio isolation)
+  - These are COMPLETELY DIFFERENT operations - "select" ≠ "solo"
+- When selecting multiple tracks (e.g., "select all tracks named X"), use DSL: ` + "`filter(tracks, track.name == \"X\").set_selected(selected=true)`" + `
+- Example: ` + "`{\"action\": \"set_track_selected\", \"track\": 0, \"selected\": true}`" + ` visually selects/highlights track at index 0
 
 ### FX and Instruments
 
