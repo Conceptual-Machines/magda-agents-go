@@ -99,6 +99,12 @@ func (a *DawAgent) GenerateActions(
 			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
+			"**CRITICAL - DELETE OPERATIONS**: " +
+			"- When user says 'delete [track name]' or 'remove [track name]', you MUST generate DSL code: filter(tracks, track.name == \"[name]\").delete() " +
+			"- For delete by track id: track(id=1).delete() where id is 1-based " +
+			"- Example: 'delete Nebula Drift' → filter(tracks, track.name == \"Nebula Drift\").delete() " +
+			"- Example: 'remove track 1' → track(id=1).delete() " +
+			"- NEVER use set_mute or set_selected for delete operations - 'delete' means permanently remove the track " +
 			"**CRITICAL - SELECTION OPERATIONS**: " +
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
 			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
@@ -193,7 +199,7 @@ func (a *DawAgent) buildInputMessages(question string, state map[string]interfac
 }
 
 // parseActionsFromResponse extracts actions from the LLM response
-// For CFG/DSL mode: RawOutput contains DSL code (e.g., track().newClip().addMidi())
+	// For CFG/DSL mode: RawOutput contains DSL code (e.g., track().new_clip().add_midi())
 // For JSON Schema mode: RawOutput contains JSON with actions array
 func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state map[string]interface{}) ([]map[string]interface{}, error) {
 	// The provider should have stored the raw output (DSL or JSON) in RawOutput
@@ -205,7 +211,8 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 	dslCode := strings.TrimSpace(resp.RawOutput)
 	
 	// Check if it's DSL (starts with "track" or similar function call)
-	if !strings.HasPrefix(dslCode, "track(") && !strings.Contains(dslCode, ".new_clip(") && !strings.Contains(dslCode, ".add_midi(") && !strings.Contains(dslCode, ".filter(") && !strings.Contains(dslCode, ".map(") && !strings.Contains(dslCode, ".for_each(") && !strings.Contains(dslCode, ".delete(") && !strings.Contains(dslCode, ".deleteClip(") {
+	// NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
+	if !strings.HasPrefix(dslCode, "track(") && !strings.Contains(dslCode, ".new_clip(") && !strings.Contains(dslCode, ".add_midi(") && !strings.Contains(dslCode, ".filter(") && !strings.Contains(dslCode, ".map(") && !strings.Contains(dslCode, ".for_each(") && !strings.Contains(dslCode, ".delete(") && !strings.Contains(dslCode, ".delete_clip(") {
 		const maxLogLength = 500
 		log.Printf("❌ LLM did not generate DSL code. Raw output (first %d chars): %s", maxLogLength, truncate(resp.RawOutput, maxLogLength))
 		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
@@ -280,6 +287,12 @@ func (a *DawAgent) GenerateActionsStream(
 			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
+			"**CRITICAL - DELETE OPERATIONS**: " +
+			"- When user says 'delete [track name]' or 'remove [track name]', you MUST generate DSL code: filter(tracks, track.name == \"[name]\").delete() " +
+			"- For delete by track id: track(id=1).delete() where id is 1-based " +
+			"- Example: 'delete Nebula Drift' → filter(tracks, track.name == \"Nebula Drift\").delete() " +
+			"- Example: 'remove track 1' → track(id=1).delete() " +
+			"- NEVER use set_mute or set_selected for delete operations - 'delete' means permanently remove the track " +
 			"**CRITICAL - SELECTION OPERATIONS**: " +
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
 			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
@@ -382,14 +395,15 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 
 	// Always try parsing as DSL first (DSL mode is always enabled)
 	// Check if it's DSL (starts with "track" or similar function call)
+	// NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
 	hasTrackPrefix := strings.HasPrefix(text, "track(")
 	hasFilter := strings.Contains(text, ".filter(") || strings.Contains(text, "filter(")
-	hasNewClip := strings.Contains(text, ".new_clip(") || strings.Contains(text, ".newClip(")
+	hasNewClip := strings.Contains(text, ".new_clip(")
 	hasAddMidi := strings.Contains(text, ".add_midi(")
 	hasMap := strings.Contains(text, ".map(")
 	hasForEach := strings.Contains(text, ".for_each(")
 	hasDelete := strings.Contains(text, ".delete(")
-	hasDeleteClip := strings.Contains(text, ".deleteClip(")
+	hasDeleteClip := strings.Contains(text, ".delete_clip(")
 	
 	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip
 	

@@ -483,11 +483,39 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 		}
 	}
 	
-	// Check direct fields
+	// Check direct fields - with detailed logging
+	log.Printf("🔍 ========== findDSLInOutputItem: Checking direct fields (input, action, arguments) ==========")
 	for _, field := range []string{"input", "action", "arguments"} {
-		if val, ok := itemMap[field].(string); ok && val != "" {
-			log.Printf("🔧 Found CFG tool call %s (DSL): %s", field, truncateString(val, maxPreviewChars))
-			return val
+		if val, exists := itemMap[field]; exists {
+			log.Printf("🔍 Field '%s' EXISTS: type=%T", field, val)
+			if valStr, ok := val.(string); ok && valStr != "" {
+				log.Printf("🔍 Field '%s' is string with %d chars: %s", field, len(valStr), truncateString(valStr, 500))
+				if p.isDSLCode(valStr) {
+					log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", field, truncateString(valStr, maxPreviewChars))
+					return valStr
+				}
+			} else {
+				// Log what type it actually is
+				valJSON, _ := json.Marshal(val)
+				log.Printf("🔍 Field '%s' is NOT a string, JSON: %s", field, truncateString(string(valJSON), 500))
+			}
+		} else {
+			log.Printf("🔍 Field '%s' DOES NOT EXIST", field)
+		}
+	}
+	
+	// Also check other fields that might contain DSL
+	log.Printf("🔍 ========== findDSLInOutputItem: Checking other fields (result, output, content) ==========")
+	for _, field := range []string{"result", "output", "content"} {
+		if val, exists := itemMap[field]; exists {
+			log.Printf("🔍 Field '%s' EXISTS: type=%T", field, val)
+			if valStr, ok := val.(string); ok && valStr != "" {
+				log.Printf("🔍 Field '%s' is string with %d chars: %s", field, len(valStr), truncateString(valStr, 500))
+				if p.isDSLCode(valStr) {
+					log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", field, truncateString(valStr, maxPreviewChars))
+					return valStr
+				}
+			}
 		}
 	}
 	
@@ -552,15 +580,16 @@ func (p *OpenAIProvider) extractAndCleanTextOutput(resp *responses.Response) str
 }
 
 // isDSLCode checks if a string looks like DSL code
+// NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
 func (p *OpenAIProvider) isDSLCode(text string) bool {
 	return strings.HasPrefix(text, "track(") ||
-		strings.Contains(text, ".newClip(") ||
-		strings.Contains(text, ".delete(") ||
-		strings.Contains(text, ".deleteClip(") ||
 		strings.Contains(text, ".new_clip(") ||
 		strings.Contains(text, ".add_midi(") ||
+		strings.Contains(text, ".delete(") ||
+		strings.Contains(text, ".delete_clip(") ||
 		strings.Contains(text, ".filter(") ||
-		strings.Contains(text, ".map(")
+		strings.Contains(text, ".map(") ||
+		strings.Contains(text, ".for_each(")
 }
 
 // validateCFGOutput validates that CFG output is DSL, not JSON
@@ -632,7 +661,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 			log.Printf("❌ Text output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
 			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool. LLM must use the CFG tool to generate DSL code")
 		}
-		return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool and produced no output")
+		return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool to generate DSL code. LLM must use the CFG tool to generate DSL code")
 	}
 
 	if textOutput == "" {
