@@ -454,8 +454,56 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 }
 
 // Delete handles .delete() calls to delete the current track.
+// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
 func (r *ReaperDSL) Delete(args gs.Args) error {
 	p := r.parser
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 Delete: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 Delete: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				// Apply to all filtered tracks
+				for _, item := range filtered {
+					trackMap, ok := item.(map[string]interface{})
+					if !ok {
+						log.Printf("⚠️  Delete: Item is not a map: %T", item)
+						continue
+					}
+					trackIndex, ok := trackMap["index"].(int)
+					if !ok {
+						// Try float64 (JSON numbers are float64)
+						if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+							trackIndex = int(trackIndexFloat)
+						} else {
+							log.Printf("⚠️  Delete: Could not extract track index from %+v", trackMap)
+							continue
+						}
+					}
+					trackName, _ := trackMap["name"].(string)
+					log.Printf("✅ Delete: Adding action for track %d (name='%s')", trackIndex, trackName)
+					action := map[string]interface{}{
+						"action": "delete_track",
+						"track":  trackIndex,
+					}
+					p.actions = append(p.actions, action)
+				}
+				// Clear filtered collection after applying
+				delete(p.data, "current_filtered")
+				log.Printf("✅ Delete: Applied delete_track to %d filtered tracks", len(filtered))
+				return nil
+			} else {
+				log.Printf("⚠️  Delete: Filtered collection is empty! This means filter() returned 0 results.")
+			}
+		} else {
+			log.Printf("⚠️  Delete: Filtered collection is not a []interface{}: %T", filteredCollection)
+		}
+	} else {
+		log.Printf("🔍 Delete: No filtered collection found, using single-track mode (currentTrackIndex=%d)", p.currentTrackIndex)
+	}
+
+	// Normal single-track operation
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for delete call")
 	}
