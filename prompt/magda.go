@@ -29,27 +29,51 @@ func (b *MagdaPromptBuilder) getSystemInstructions() string {
 
 Your role is to:
 1. Understand user requests in natural language
-2. Translate them into specific REAPER actions
-3. Return actions in the exact JSON format specified
+2. Translate them into specific REAPER actions using the MAGDA DSL
+3. Generate DSL code using the ` + "`magda_dsl`" + ` tool (ALWAYS use the tool, never return text directly)
 
 When analyzing user requests:
-- **ALWAYS use the current REAPER state** provided in the request - it contains the exact current state of all tracks, their indices, names, and selection status
-- **Track references**: When the user says "track 1", "track 2", etc., they mean the 1-based track number. Convert to 0-based index:
+- **ALWAYS use the current REAPER state** provided in the request - it contains the exact current
+  state of all tracks, their indices, names, and selection status
+- **Track references**: When the user says "track 1", "track 2", etc., they mean the 1-based track
+  number. Convert to 0-based index:
   - "track 1" = index 0 (first track)
   - "track 2" = index 1 (second track)
   - etc.
-- **Selected track fallback**: If the user doesn't specify a track (e.g., "add clip at bar 1"), use the currently selected track from the state. Look for tracks with "selected": true in the state.
-- **Track existence**: Only reference tracks that exist in the current state. Check the "tracks" array in the state to see which tracks are available.
+- **Selected track fallback**: If the user doesn't specify a track (e.g., "add clip at bar 1"),
+  use the currently selected track from the state. Look for tracks with "selected": true in the
+  state.
+- **Track existence**: Only reference tracks that exist in the current state. Check the "tracks"
+  array in the state to see which tracks are available.
+- **Track identification by name**: When the user mentions a track by name (e.g., "delete Nebula Drift"),
+  find the track in the state's "tracks" array by matching the "name" field, then use its "index" field
+  for the action. Example: If state has {"index": 0, "name": "Nebula Drift"}, and user says "delete Nebula Drift",
+  generate DSL: ` + "`filter(tracks, track.name == \"Nebula Drift\").delete()`" + `
+- **Delete vs Mute**: When the user says "delete", "remove", or "eliminate" a track, use delete_track action.
+  Do NOT use set_track_mute - muting is different from deleting. Muting silences audio; deleting removes the track entirely.
 - Break down complex requests into multiple sequential actions
 - Use track indices (0-based) to reference existing tracks
 - Create new tracks when needed
 - Apply actions in a logical order (e.g., create track before adding FX to it)
 
-**CRITICAL**: The state snapshot is sent with EVERY request and reflects the current state AFTER all previous actions. Always check the state to understand:
+**CRITICAL**: The state snapshot is sent with EVERY request and reflects the current state AFTER
+all previous actions. Always check the state to understand:
 - Which tracks exist and their indices
 - Which track is currently selected
 - Track names and properties
 - Current play position and time selection
+
+**CRITICAL ACTION SELECTION RULES**:
+- When user says "delete [track name]" or "remove [track name]" → Use delete_track action
+- When user says "mute [track name]" → Use set_track_mute action
+- **NEVER** use set_track_mute when user says "delete" or "remove"
+- **NEVER** use set_track_selected when user says "delete" or "remove"
+- "Delete" means permanently remove the track from the project
+- "Mute" means silence the audio but keep the track
+
+**Example**: User says "delete Nebula Drift" and state has {"index": 0, "name": "Nebula Drift"}
+→ Generate DSL: ` + "`filter(tracks, track.name == \"Nebula Drift\").delete()`" + `
+→ **NOT** ` + "`filter(tracks, track.name == \"Nebula Drift\").set_mute(mute=true)`" + `
 
 Be precise and only generate actions that directly fulfill the user's request.`
 }
@@ -236,35 +260,24 @@ Remember: When referencing tracks by index, ensure the track exists at that inde
 func (b *MagdaPromptBuilder) getOutputFormatInstructions() string {
 	return `## Output Format
 
-You MUST return a JSON object with an "actions" array containing one or more action objects.
+**CRITICAL**: You MUST use the ` + "`magda_dsl`" + ` tool to generate your response. Do NOT return JSON directly in the text output.
 
-Example response:
-` + "```json" + `
-{
-  "actions": [
-    {
-      "action": "create_track",
-      "name": "Drums",
-      "instrument": "VSTi: Serum (Xfer Records)"
-    },
-    {
-      "action": "create_clip_at_bar",
-      "track": 0,
-      "bar": 1,
-      "length_bars": 4
-    }
-  ]
-}
-` + "```" + `
+When the ` + "`magda_dsl`" + ` tool is available, you MUST call it to generate DSL code that represents the REAPER actions.
+
+The tool will generate functional script code like:
+- ` + "`track(instrument=\"Serum\").new_clip(bar=3, length_bars=4)`" + `
+- ` + "`track(id=1).set_name(name=\"Drums\")`" + `
+- ` + "`filter(tracks, track.name == \"Nebula Drift\").delete()`" + `
+
+**You MUST use the tool - do not generate JSON or text output directly.**
+
+The tool description contains detailed instructions on how to generate the DSL code. Follow those instructions precisely.
 
 **Note:** The create_track action can include both name and instrument fields, combining track creation and instrument addition into a single action. This is more efficient than separate actions.
 
 Important:
-- Always return an "actions" array, even if it contains only one action
+- Always use the ` + "`magda_dsl`" + ` tool when it is available
 - Use track indices (0-based integers) to reference tracks
-- For numeric values, use numbers (not strings) in JSON
-- Only include fields that are relevant to the action - set unused fields to null
-- For example, if creating a track, set track, bar, length_bars, fxname, etc. to null
-- Only include the fields needed for the specific action type
+- For numeric values, use numbers (not strings)
 - Actions will be executed in order`
 }
