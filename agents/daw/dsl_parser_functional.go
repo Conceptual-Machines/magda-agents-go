@@ -795,7 +795,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 						// Check if value starts with comparison operator (e.g., "=\"value\"" or "==\"value\"")
 						if strings.HasPrefix(valueStr, "=") || strings.HasPrefix(valueStr, "!=") {
 							// Reconstruct predicate: key + value
-							// key is like "track.name", value is like "=\"Nebula Drift\""
+							// key is like "track.name", value is like "=\"Nebula Drift\"" or "=true"
 							operator := "=="
 							if strings.HasPrefix(valueStr, "!=") {
 								operator = "!="
@@ -803,11 +803,25 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 							} else {
 								valueStr = strings.TrimPrefix(valueStr, "=")
 							}
-							// Remove quotes if present
-							valueStr = strings.Trim(valueStr, "\"")
 							
-							// Reconstruct full predicate: "track.name == \"Nebula Drift\""
-							reconstructedPred := fmt.Sprintf("%s %s \"%s\"", key, operator, valueStr)
+							// Check if value is a boolean (true/false) - don't wrap in quotes
+							valueStr = strings.TrimSpace(valueStr)
+							isBoolean := valueStr == "true" || valueStr == "false"
+							
+							// Remove quotes if present (for string values)
+							if !isBoolean {
+								valueStr = strings.Trim(valueStr, "\"")
+							}
+							
+							// Reconstruct predicate
+							var reconstructedPred string
+							if isBoolean {
+								// For booleans: "track.muted == true" (no quotes)
+								reconstructedPred = fmt.Sprintf("%s %s %s", key, operator, valueStr)
+							} else {
+								// For strings: "track.name == \"Nebula Drift\"" (with quotes)
+								reconstructedPred = fmt.Sprintf("%s %s \"%s\"", key, operator, valueStr)
+							}
 							log.Printf("🔍 Filter: Reconstructed predicate from split args: '%s'", reconstructedPred)
 							
 							// Parse and evaluate
@@ -816,21 +830,17 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 								predicateMatched = true
 								break
 							} else {
-								log.Printf("❌ Filter: Reconstructed predicate did not match for item: %v", item)
+								// This is expected - predicate didn't match this item, continue checking
+								log.Printf("🔍 Filter: Predicate did not match for item (this is normal): %v", item)
 							}
 						}
 					}
 				}
 			}
 			
-			if !predicateMatched {
-				// Log what args we actually received for debugging
-				log.Printf("⚠️  Filter: Predicate not parsed correctly. Received args keys: %v", getArgsKeys(args))
-				// Log all args for debugging
-				for k, v := range args {
-					log.Printf("   Arg[%s] = %+v (Kind: %v, Str: '%s')", k, v, v.Kind, v.Str)
-				}
-			}
+			// Note: predicateMatched being false here is expected for items that don't match the predicate
+			// We only log a warning if we couldn't even attempt to parse the predicate
+			// (which would mean we didn't find any predicate-like args at all)
 		}
 
 		if predicateMatched {
@@ -1080,8 +1090,14 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 	
 	propName := propParts[1]
 	
-	// Remove quotes from right side if present
-	right = strings.Trim(right, "\"")
+	// Check if right side is a boolean (true/false without quotes)
+	rightTrimmed := strings.TrimSpace(right)
+	isBooleanValue := rightTrimmed == "true" || rightTrimmed == "false"
+	
+	// Remove quotes from right side if present (for string values)
+	if !isBooleanValue {
+		right = strings.Trim(right, "\"")
+	}
 	
 	// Get the property value from the item
 	itemMap, ok := item.(map[string]interface{})
@@ -1094,7 +1110,27 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		return false
 	}
 	
-	// Compare values
+	// Handle boolean comparisons specially
+	if isBooleanValue {
+		expectedBool := rightTrimmed == "true"
+		if itemBool, ok := itemValue.(bool); ok {
+			if op == "==" {
+				return itemBool == expectedBool
+			} else if op == "!=" {
+				return itemBool != expectedBool
+			}
+		}
+		// If item value is not a bool, convert and compare as string
+		itemValueStr := fmt.Sprintf("%t", itemValue)
+		if op == "==" {
+			return itemValueStr == rightTrimmed
+		} else if op == "!=" {
+			return itemValueStr != rightTrimmed
+		}
+		return false
+	}
+	
+	// Compare values (for strings and numbers)
 	var itemValueStr string
 	switch v := itemValue.(type) {
 	case string:
