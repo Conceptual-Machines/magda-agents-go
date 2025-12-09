@@ -102,7 +102,7 @@ func (a *DawAgent) GenerateActions(
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
 			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
 			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-			"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
+			"- You MUST ONLY generate DSL code - no other formats are allowed. " +
 			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
 			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
 			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
@@ -282,7 +282,7 @@ func (a *DawAgent) GenerateActionsStream(
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
 			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
 			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-			"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
+			"- You MUST ONLY generate DSL code - no other formats are allowed. " +
 			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
 			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
 			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
