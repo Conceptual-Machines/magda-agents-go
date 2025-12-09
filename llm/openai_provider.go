@@ -171,15 +171,10 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 			
 			modifiedJSON, _ := json.Marshal(paramsMap)
 			
-			// Save request payload to file for debugging
+			// Print full request payload
 			if request.CFGGrammar != nil {
-				requestFile := "/tmp/openai_request.json"
 				prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
-				if err := os.WriteFile(requestFile, prettyJSON, 0644); err != nil {
-					log.Printf("⚠️  Failed to save request payload: %v", err)
-				} else {
-					log.Printf("💾 Saved request payload to %s (%d bytes)", requestFile, len(prettyJSON))
-				}
+				log.Printf("📤 FULL REQUEST PAYLOAD:\n%s", string(prettyJSON))
 			}
 			
 			log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
