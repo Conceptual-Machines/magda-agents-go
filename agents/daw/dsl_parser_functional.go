@@ -622,8 +622,26 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 				predicateMatched = true
 			}
 		} else {
-			// Log what args we actually received for debugging
-			log.Printf("⚠️  Filter: Predicate not parsed correctly. Received args keys: %v", getArgsKeys(args))
+			// Try to manually parse predicate from args
+			// The parser might have given us the predicate as a raw string
+			// Look for any string value that looks like a predicate expression
+			for _, value := range args {
+				if value.Kind == gs.ValueString {
+					predStr := strings.TrimSpace(value.Str)
+					// Check if it looks like a predicate: "track.name == \"value\"" or "track.name==\"value\""
+					if strings.Contains(predStr, ".") && (strings.Contains(predStr, "==") || strings.Contains(predStr, "!=")) {
+						// Try to parse it manually
+						if matched := p.parseAndEvaluatePredicate(predStr, item, iterVar); matched {
+							predicateMatched = true
+							break
+						}
+					}
+				}
+			}
+			if !predicateMatched {
+				// Log what args we actually received for debugging
+				log.Printf("⚠️  Filter: Predicate not parsed correctly. Received args keys: %v", getArgsKeys(args))
+			}
 		}
 
 		if predicateMatched {
@@ -821,6 +839,85 @@ func getArgsKeys(args gs.Args) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// parseAndEvaluatePredicate parses a predicate string like "track.name == \"value\"" and evaluates it
+func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item interface{}, iterVar string) bool {
+	// Remove quotes and whitespace
+	predStr = strings.TrimSpace(predStr)
+	
+	// Try to match patterns like:
+	// - track.name == "value"
+	// - track.name=="value"
+	// - track.name != "value"
+	
+	// Find the operator
+	var op string
+	var opIndex int
+	if idx := strings.Index(predStr, "=="); idx != -1 {
+		op = "=="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, "!="); idx != -1 {
+		op = "!="
+		opIndex = idx
+	} else {
+		return false
+	}
+	
+	// Split into left (property) and right (value)
+	left := strings.TrimSpace(predStr[:opIndex])
+	right := strings.TrimSpace(predStr[opIndex+len(op):])
+	
+	// Extract property name from "track.name" or "iterVar.name"
+	// The left side should be like "track.name" where "track" is the iterVar
+	propParts := strings.Split(left, ".")
+	if len(propParts) != 2 {
+		return false
+	}
+	
+	// Verify the first part matches the iteration variable (or is just the variable name)
+	// For "track.name", we expect iterVar to be "track"
+	if propParts[0] != iterVar && propParts[0] != "track" {
+		return false
+	}
+	
+	propName := propParts[1]
+	
+	// Remove quotes from right side if present
+	right = strings.Trim(right, "\"")
+	
+	// Get the property value from the item
+	itemMap, ok := item.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	
+	itemValue, ok := itemMap[propName]
+	if !ok {
+		return false
+	}
+	
+	// Compare values
+	var itemValueStr string
+	switch v := itemValue.(type) {
+	case string:
+		itemValueStr = v
+	case float64:
+		itemValueStr = fmt.Sprintf("%g", v)
+	case bool:
+		itemValueStr = fmt.Sprintf("%t", v)
+	default:
+		itemValueStr = fmt.Sprintf("%v", v)
+	}
+	
+	// Evaluate comparison
+	if op == "==" {
+		return itemValueStr == right
+	} else if op == "!=" {
+		return itemValueStr != right
+	}
+	
+	return false
 }
 
 // evaluateSimplePredicate evaluates a simple property-based predicate.
