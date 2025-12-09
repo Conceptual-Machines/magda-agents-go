@@ -488,16 +488,29 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 	for _, field := range []string{"input", "action", "arguments"} {
 		if val, exists := itemMap[field]; exists {
 			log.Printf("🔍 Field '%s' EXISTS: type=%T", field, val)
-			if valStr, ok := val.(string); ok && valStr != "" {
-				log.Printf("🔍 Field '%s' is string with %d chars: %s", field, len(valStr), truncateString(valStr, 500))
-				if p.isDSLCode(valStr) {
+			if valStr, ok := val.(string); ok {
+				log.Printf("🔍 Field '%s' is string with %d chars, value: %s", field, len(valStr), truncateString(valStr, 1000))
+				if valStr != "" && p.isDSLCode(valStr) {
 					log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", field, truncateString(valStr, maxPreviewChars))
 					return valStr
 				}
 			} else {
 				// Log what type it actually is
 				valJSON, _ := json.Marshal(val)
-				log.Printf("🔍 Field '%s' is NOT a string, JSON: %s", field, truncateString(string(valJSON), 500))
+				log.Printf("🔍 Field '%s' is NOT a string, JSON: %s", field, truncateString(string(valJSON), 1000))
+				// If it's a map, check its contents
+				if valMap, ok := val.(map[string]any); ok {
+					log.Printf("🔍 Field '%s' is a map with keys: %v", field, getMapKeys(valMap))
+					for k, v := range valMap {
+						if vStr, ok := v.(string); ok && vStr != "" {
+							log.Printf("🔍 Field '%s[%s]' = %s", field, k, truncateString(vStr, 500))
+							if p.isDSLCode(vStr) {
+								log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s[%s]': %s", field, k, truncateString(vStr, maxPreviewChars))
+								return vStr
+							}
+						}
+					}
+				}
 			}
 		} else {
 			log.Printf("🔍 Field '%s' DOES NOT EXIST", field)
@@ -509,24 +522,88 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 	for _, field := range []string{"result", "output", "content"} {
 		if val, exists := itemMap[field]; exists {
 			log.Printf("🔍 Field '%s' EXISTS: type=%T", field, val)
-			if valStr, ok := val.(string); ok && valStr != "" {
-				log.Printf("🔍 Field '%s' is string with %d chars: %s", field, len(valStr), truncateString(valStr, 500))
-				if p.isDSLCode(valStr) {
+			if valStr, ok := val.(string); ok {
+				log.Printf("🔍 Field '%s' is string with %d chars, value: %s", field, len(valStr), truncateString(valStr, 1000))
+				if valStr != "" && p.isDSLCode(valStr) {
 					log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", field, truncateString(valStr, maxPreviewChars))
 					return valStr
 				}
+			} else if val != nil {
+				valJSON, _ := json.Marshal(val)
+				log.Printf("🔍 Field '%s' is NOT a string, JSON: %s", field, truncateString(string(valJSON), 1000))
 			}
 		}
 	}
 	
 	// Check "outputs" array
 	if outputs, ok := itemMap["outputs"].([]any); ok && len(outputs) > 0 {
-		if firstOutput, ok := outputs[0].(map[string]any); ok {
-			if outputText, ok := firstOutput["text"].(string); ok && outputText != "" {
-				log.Printf("🔧 Found CFG tool call output text (DSL): %s", truncateString(outputText, maxPreviewChars))
-				return outputText
+		log.Printf("🔍 Found 'outputs' array with %d items", len(outputs))
+		for j, output := range outputs {
+			if outputMap, ok := output.(map[string]any); ok {
+				log.Printf("🔍 Output %d keys: %v", j, getMapKeys(outputMap))
+				for key, val := range outputMap {
+					if valStr, ok := val.(string); ok && valStr != "" {
+						log.Printf("🔍 Output[%d][%s] = %s", j, key, truncateString(valStr, 500))
+						if p.isDSLCode(valStr) {
+							log.Printf("🔧 ✅✅✅ FOUND DSL IN OUTPUT[%d][%s]: %s", j, key, truncateString(valStr, maxPreviewChars))
+							return valStr
+						}
+					}
+				}
 			}
 		}
+	}
+	
+	// Check "tools" array - this is critical for CFG tools
+	log.Printf("🔍 ========== findDSLInOutputItem: Checking 'tools' field ==========")
+	if toolsVal, exists := itemMap["tools"]; exists {
+		log.Printf("🔍 Field 'tools' EXISTS: type=%T", toolsVal)
+		if tools, ok := toolsVal.([]any); ok {
+			log.Printf("🔍 'tools' is an array with %d items", len(tools))
+			if len(tools) > 0 {
+				for j, tool := range tools {
+					if toolMap, ok := tool.(map[string]any); ok {
+						log.Printf("🔍 Tool %d keys: %v", j, getMapKeys(toolMap))
+						for key, val := range toolMap {
+							if valStr, ok := val.(string); ok && valStr != "" {
+								log.Printf("🔍 Tool[%d][%s] = %s", j, key, truncateString(valStr, 500))
+								if p.isDSLCode(valStr) {
+									log.Printf("🔧 ✅✅✅ FOUND DSL IN TOOL[%d][%s]: %s", j, key, truncateString(valStr, maxPreviewChars))
+									return valStr
+								}
+							} else if valMap, ok := val.(map[string]any); ok {
+								log.Printf("🔍 Tool[%d][%s] is a map with keys: %v", j, key, getMapKeys(valMap))
+								for subKey, subVal := range valMap {
+									if subValStr, ok := subVal.(string); ok && subValStr != "" {
+										log.Printf("🔍 Tool[%d][%s][%s] = %s", j, key, subKey, truncateString(subValStr, 500))
+										if p.isDSLCode(subValStr) {
+											log.Printf("🔧 ✅✅✅ FOUND DSL IN TOOL[%d][%s][%s]: %s", j, key, subKey, truncateString(subValStr, maxPreviewChars))
+											return subValStr
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		} else {
+			log.Printf("🔍 'tools' is NOT an array, type=%T, value: %v", toolsVal, toolsVal)
+			if toolsMap, ok := toolsVal.(map[string]any); ok {
+				log.Printf("🔍 'tools' is a map with keys: %v", getMapKeys(toolsMap))
+				for k, v := range toolsMap {
+					if vStr, ok := v.(string); ok && vStr != "" {
+						log.Printf("🔍 tools[%s] = %s", k, truncateString(vStr, 500))
+						if p.isDSLCode(vStr) {
+							log.Printf("🔧 ✅✅✅ FOUND DSL IN tools[%s]: %s", k, truncateString(vStr, maxPreviewChars))
+							return vStr
+						}
+					}
+				}
+			}
+		}
+	} else {
+		log.Printf("🔍 Field 'tools' DOES NOT EXIST")
 	}
 	
 	// Check tool_calls array
