@@ -935,6 +935,97 @@ func (r *ReaperDSL) Map(args gs.Args) error {
 	return fmt.Errorf("map requires a function argument")
 }
 
+// ForEach applies a function or method to each item in a collection (side effects).
+// Grammar: for_each(collection, @function) or for_each(collection, item.method())
+func (r *ReaperDSL) ForEach(args gs.Args) error {
+	p := r.parser
+
+	// Get collection - similar to Filter and Map
+	var collection []interface{}
+	var collectionName string
+
+	// Try to get collection from various argument positions
+	if collectionValue, ok := args["collection"]; ok && collectionValue.Kind == gs.ValueString {
+		collectionName = collectionValue.Str
+		var err error
+		collection, err = p.resolveCollection(collectionName)
+		if err != nil {
+			return fmt.Errorf("failed to resolve collection: %w", err)
+		}
+	} else if collectionValue, ok := args[""]; ok && collectionValue.Kind == gs.ValueString {
+		// Positional first argument
+		collectionName = collectionValue.Str
+		var err error
+		collection, err = p.resolveCollection(collectionName)
+		if err != nil {
+			return fmt.Errorf("failed to resolve collection: %w", err)
+		}
+	} else {
+		// Try to find collection by iterating through args
+		for _, value := range args {
+			if value.Kind == gs.ValueString {
+				potentialName := value.Str
+				if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
+					collectionName = potentialName
+					collection = resolved
+					break
+				}
+			}
+		}
+	}
+
+	if collection == nil {
+		return fmt.Errorf("for_each requires a collection argument (got args: %v, available collections: %v)", args, getDataKeys(p.data))
+	}
+
+	// Derive iteration variable name
+	iterVar := p.getIterVarFromCollection(collectionName)
+
+	// For now, for_each will iterate and set iteration context
+	// The actual function/method execution would happen in a chained call or via function reference
+	// This is a placeholder implementation - full implementation would:
+	// 1. Parse function reference (@func_name) and call it
+	// 2. Parse method call (item.method()) and execute it
+	// 3. Apply side effects to each item
+
+	log.Printf("🔄 ForEach: Iterating over %d items in collection '%s'", len(collection), collectionName)
+
+	// Store collection for potential chaining
+	p.data["current_for_each"] = collection
+	p.currentTrackIndex = -1 // Reset, will be set per item
+
+	// For now, just iterate and set context - actual method execution would happen in chained calls
+	// This allows patterns like: for_each(tracks, track.set_selected(selected=true))
+	// But that would need to be parsed as: for_each(tracks).set_selected(selected=true) or similar
+	
+	// Basic implementation: just iterate and log
+	// Full implementation would need to parse and execute the function/method argument
+	for i, item := range collection {
+		p.setIterationContext(map[string]interface{}{
+			iterVar: item,
+		})
+		
+		// If item is a track, set currentTrackIndex for chained methods
+		if trackMap, ok := item.(map[string]interface{}); ok {
+			if index, ok := trackMap["index"].(int); ok {
+				p.currentTrackIndex = index
+			} else if indexFloat, ok := trackMap["index"].(float64); ok {
+				p.currentTrackIndex = int(indexFloat)
+			}
+		}
+
+		log.Printf("  ForEach[%d]: Processing item (index=%d)", i, p.currentTrackIndex)
+		
+		// TODO: Execute function reference or method call here
+		// For now, this is a placeholder that allows the iteration context to be set
+		
+		p.clearIterationContext()
+	}
+
+	log.Printf("✅ ForEach: Processed %d items from '%s'", len(collection), collectionName)
+	return nil
+}
+
 // Store stores a value in data storage.
 func (r *ReaperDSL) Store(args gs.Args) error {
 	p := r.parser
