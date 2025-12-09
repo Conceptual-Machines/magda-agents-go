@@ -728,6 +728,9 @@ func (p *OpenAIProvider) extractAndCleanTextOutput(resp *responses.Response) str
 // NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
 func (p *OpenAIProvider) isDSLCode(text string) bool {
 	return strings.HasPrefix(text, "track(") ||
+		strings.HasPrefix(text, "filter(") ||
+		strings.HasPrefix(text, "map(") ||
+		strings.HasPrefix(text, "for_each(") ||
 		strings.Contains(text, ".new_clip(") ||
 		strings.Contains(text, ".add_midi(") ||
 		strings.Contains(text, ".delete(") ||
