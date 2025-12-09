@@ -507,6 +507,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	var collection []interface{}
 	var collectionName string
 
+	// Check for named argument first
 	if collectionValue, ok := args["collection"]; ok {
 		if collectionValue.Kind == gs.ValueString {
 			collectionName = collectionValue.Str
@@ -517,7 +518,17 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			}
 		}
 	} else if collectionValue, ok := args["_positional"]; ok {
-		// First positional argument is collection
+		// Check for _positional key (if parser sets it)
+		if collectionValue.Kind == gs.ValueString {
+			collectionName = collectionValue.Str
+			var err error
+			collection, err = p.resolveCollection(collectionName)
+			if err != nil {
+				return fmt.Errorf("failed to resolve collection: %w", err)
+			}
+		}
+	} else if collectionValue, ok := args[""]; ok {
+		// Check for positional argument with empty name (first positional arg)
 		if collectionValue.Kind == gs.ValueString {
 			collectionName = collectionValue.Str
 			var err error
@@ -527,7 +538,36 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			}
 		}
 	} else {
-		return fmt.Errorf("filter requires a collection argument")
+		// Try to find first positional argument by checking for empty name key
+		// The parser sets args[""] for positional arguments without "="
+		if collectionValue, ok := args[""]; ok && collectionValue.Kind == gs.ValueString {
+			collectionName = collectionValue.Str
+			var err error
+			collection, err = p.resolveCollection(collectionName)
+			if err != nil {
+				return fmt.Errorf("failed to resolve collection '%s': %w", collectionName, err)
+			}
+		} else {
+			// Last resort: iterate and find first string value that resolves to a collection
+			for key, value := range args {
+				// Skip known named arguments that are not collections
+				if key == "predicate" || key == "property" || key == "operator" || key == "value" {
+					continue
+				}
+				// Try to resolve as collection
+				if value.Kind == gs.ValueString {
+					potentialName := value.Str
+					if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
+						collectionName = potentialName
+						collection = resolved
+						break
+					}
+				}
+			}
+			if collection == nil {
+				return fmt.Errorf("filter requires a collection argument (got args: %v)", args)
+			}
+		}
 	}
 
 	if collection == nil {
