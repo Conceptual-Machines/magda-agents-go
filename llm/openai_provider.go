@@ -13,11 +13,9 @@ import (
 	"time"
 
 	"github.com/Conceptual-Machines/grammar-school-go/gs"
-	"github.com/Conceptual-Machines/magda-agents-go/models"
 	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/packages/ssestream"
 	"github.com/openai/openai-go/responses"
 	"github.com/openai/openai-go/shared"
 )
@@ -97,24 +95,15 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 	span := transaction.StartChild("openai.api_call")
 	apiStartTime := time.Now()
 
-	// Use raw HTTP request if we need CFG tools or verbosity
+	// Use raw HTTP request for CFG tools (MAGDA always uses DSL/CFG)
 	// Marshal params to JSON, modify as needed, make raw HTTP request
 	var resp *responses.Response
 	var err error
-	if request.CFGGrammar != nil || request.OutputSchema != nil {
+	if request.CFGGrammar != nil {
 		paramsJSON, _ := json.Marshal(params)
 		var paramsMap map[string]any
 		if json.Unmarshal(paramsJSON, &paramsMap) == nil {
-			// Add verbosity to text if OutputSchema is provided
-			if request.OutputSchema != nil {
-				if text, ok := paramsMap["text"].(map[string]any); ok {
-					text["verbosity"] = "low"
-					log.Printf("✅ Added verbosity=low to text parameter")
-				}
-			}
-
-			// Add CFG tool if configured
-			if request.CFGGrammar != nil {
+			// Add CFG tool (MAGDA always uses DSL)
 				// Use grammar-school utility to build OpenAI CFG tool payload
 				cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
 					ToolName:    request.CFGGrammar.ToolName,
@@ -160,9 +149,8 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 				toolJSON, _ := json.MarshalIndent(cfgTool, "", "  ")
 				log.Printf("🔧 Added CFG tool: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 				log.Printf("🔧 CFG tool structure: %s", truncateString(string(toolJSON), 2000))
-			}
 
-			// Verify instructions are in paramsMap
+				// Verify instructions are in paramsMap
 			if instructions, ok := paramsMap["instructions"].(string); ok {
 				log.Printf("🔍 Instructions in request (first 500 chars): %s", truncateString(instructions, 500))
 			} else {
@@ -205,12 +193,44 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 						log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(body))
 					}
 				}
-				resp = &responses.Response{}
-				if json.Unmarshal(body, resp) != nil {
+				
+				// Parse raw JSON to extract DSL from input field (SDK struct may not expose it)
+				log.Printf("🔍 Parsing raw JSON response to extract DSL from input field...")
+				var rawResponse map[string]any
+				if json.Unmarshal(body, &rawResponse) != nil {
 					err = fmt.Errorf("failed to parse response")
 				} else {
-						// Process response with CFG support
-						processedResp, processErr := p.processResponseWithCFG(resp, startTime, transaction, request.OutputSchema, request.CFGGrammar)
+					// Extract DSL code directly from raw JSON
+					if output, ok := rawResponse["output"].([]any); ok {
+						log.Printf("🔍 Found output array with %d items", len(output))
+						for i, item := range output {
+							if itemMap, ok := item.(map[string]any); ok {
+								log.Printf("🔍 Checking output item %d, type: %v", i, itemMap["type"])
+								if itemType, ok := itemMap["type"].(string); ok && itemType == "custom_tool_call" {
+									log.Printf("✅ Found custom_tool_call in raw JSON! Checking input field...")
+									if input, ok := itemMap["input"].(string); ok && input != "" {
+										log.Printf("✅✅✅ Found DSL code in raw JSON input field: %s", truncateString(input, 200))
+										return &GenerationResponse{
+											RawOutput: input,
+											Usage:     p.extractUsageFromRawResponse(rawResponse),
+										}, nil
+									} else {
+										log.Printf("⚠️  custom_tool_call found but input field is missing or empty")
+									}
+								}
+							}
+						}
+					} else {
+						log.Printf("⚠️  No output array found in raw response")
+					}
+					
+					// Fallback: parse as SDK struct for other fields
+					resp = &responses.Response{}
+					if json.Unmarshal(body, resp) != nil {
+						err = fmt.Errorf("failed to parse response")
+					} else {
+						// Process response with CFG support (MAGDA always uses DSL)
+						processedResp, processErr := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
 						if processErr != nil {
 							err = processErr
 						} else {
@@ -218,6 +238,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 							return processedResp, nil
 						}
 					}
+				}
 				} else {
 					err = fmt.Errorf("API error %d: %s", httpResp.StatusCode, string(body))
 				}
@@ -227,7 +248,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 		}
 	}
 
-	// Fall back to SDK if raw request failed or no OutputSchema
+	// Fall back to SDK if raw request failed
 	if resp == nil && err == nil {
 		resp, err = p.client.Responses.New(ctx, params)
 	}
@@ -244,55 +265,21 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 
 	log.Printf("⏱️  OPENAI API CALL COMPLETED in %v", apiDuration)
 
-	// Process response
-	result, err := p.processResponse(resp, startTime, transaction, request.OutputSchema)
-	if err != nil {
-		return nil, err
+	// Process response (MAGDA always uses DSL/CFG)
+	if request.CFGGrammar != nil {
+		result, err := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
+		if err != nil {
+			return nil, err
+		}
+		transaction.SetTag("success", "true")
+		return result, nil
 	}
 
-	transaction.SetTag("success", "true")
-	return result, nil
+	// This should never happen for MAGDA, but handle it gracefully
+	transaction.SetTag("success", "false")
+	return nil, fmt.Errorf("CFG grammar is required for MAGDA")
 }
 
-// GenerateStream implements streaming generation using OpenAI's Responses API
-func (p *OpenAIProvider) GenerateStream(
-	ctx context.Context, request *GenerationRequest, callback StreamCallback,
-) (*GenerationResponse, error) {
-	startTime := time.Now()
-	log.Printf("🎵 OPENAI STREAMING GENERATION REQUEST STARTED (Model: %s)", request.Model)
-
-	// Start Sentry transaction
-	transaction := sentry.StartTransaction(ctx, "openai.generate_stream")
-	defer transaction.Finish()
-
-	transaction.SetTag("model", request.Model)
-	transaction.SetTag("provider", "openai")
-	transaction.SetTag("streaming", "true")
-	transaction.SetTag("mcp_enabled", fmt.Sprintf("%t", request.MCPConfig != nil))
-
-	// Build OpenAI-specific request parameters
-	// Note: CFG tools in streaming are not yet supported by the SDK
-	// The LLM may still generate DSL as plain text, which we parse in parseActionsIncremental
-	params := p.buildRequestParams(request)
-
-	log.Printf("🚨 CRITICAL STREAMING: About to call OpenAI Streaming API with params.Model='%s'", params.Model)
-
-	// Call OpenAI Streaming API
-	stream := p.client.Responses.NewStreaming(ctx, params)
-
-	// Process stream
-	result, err := p.processStream(stream, callback, transaction, startTime)
-	if err != nil {
-		transaction.SetTag("success", "false")
-		sentry.CaptureException(err)
-		return nil, err
-	}
-
-	transaction.SetTag("success", "true")
-	log.Printf("✅ STREAMING GENERATION COMPLETED in %v", time.Since(startTime))
-
-	return result, nil
-}
 
 // buildRequestParams converts GenerationRequest to OpenAI-specific ResponseNewParams
 func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) responses.ResponseNewParams {
@@ -358,21 +345,13 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 		},
 	}
 
-	// Add structured output schema if provided
-	if request.OutputSchema != nil {
-		params.Text = responses.ResponseTextConfigParam{
-			Format: responses.ResponseFormatTextConfigParamOfJSONSchema(
-				request.OutputSchema.Name,
-				request.OutputSchema.Schema,
-			),
-		}
-	}
+	// MAGDA always uses DSL/CFG, no JSON schema
 
 	// Add CFG tool if configured (for DSL output)
 	if request.CFGGrammar != nil {
 		// Clean grammar using grammar-school before sending to OpenAI
 		cleanedGrammar := gs.CleanGrammarForCFG(request.CFGGrammar.Grammar)
-		log.Printf("🔧 CFG GRAMMAR CONFIGURED (STREAMING): %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+		log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 		log.Printf("📝 Grammar cleaned for CFG: %d chars (original: %d chars)", len(cleanedGrammar), len(request.CFGGrammar.Grammar))
 		
 		// Use grammar-school utility to build OpenAI CFG tool payload
@@ -418,7 +397,6 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 		}
 		
 		params.ParallelToolCalls = openai.Bool(false) // CFG tools typically don't use parallel calls
-		log.Printf("🔧 Added CFG tool configuration for streaming: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 	}
 
 	// Add MCP tools if configured
@@ -734,22 +712,12 @@ func (p *OpenAIProvider) isDSLCode(text string) bool {
 		strings.Contains(text, ".for_each(")
 }
 
-// processResponse converts OpenAI Response to GenerationResponse
-func (p *OpenAIProvider) processResponse(
-	resp *responses.Response,
-	startTime time.Time,
-	transaction *sentry.Span,
-	outputSchema *OutputSchema,
-) (*GenerationResponse, error) {
-	return p.processResponseWithCFG(resp, startTime, transaction, outputSchema, nil)
-}
-
 // processResponseWithCFG converts OpenAI Response to GenerationResponse, handling CFG tool calls
+// MAGDA always uses DSL/CFG, so this is the only processing path
 func (p *OpenAIProvider) processResponseWithCFG(
 	resp *responses.Response,
 	startTime time.Time,
 	transaction *sentry.Span,
-	outputSchema *OutputSchema,
 	cfgConfig *CFGConfig,
 ) (*GenerationResponse, error) {
 	span := transaction.StartChild("process_response")
@@ -795,34 +763,9 @@ func (p *OpenAIProvider) processResponseWithCFG(
 	// Log usage stats
 	p.logUsageStats(resp.Usage)
 
-	// Parse JSON output based on schema type
-	result := &GenerationResponse{
-		Usage:    resp.Usage,
-		MCPUsed:  mcpUsed,
-		MCPCalls: mcpCalls,
-		MCPTools: mcpTools,
-	}
-
-	// Check if this is MAGDA output (actions) or musical output (choices)
-	if outputSchema != nil && outputSchema.Name == "MagdaActions" {
-		// Store raw output for MAGDA - the service will parse it
-		result.RawOutput = textOutput
-		totalDuration := time.Since(startTime)
-		log.Printf("✅ MAGDA GENERATION COMPLETED in %v (raw output stored)", totalDuration)
-	} else {
-		// Parse as musical output (default)
-		var output models.MusicalOutput
-		if err := json.Unmarshal([]byte(textOutput), &output); err != nil {
-			log.Printf("❌ Failed to parse output JSON: %v", err)
-			log.Printf("Raw output (first %d chars): %s", maxOutputTrunc, truncate(textOutput, maxOutputTrunc))
-			return nil, fmt.Errorf("failed to parse model output: %w", err)
-		}
-		totalDuration := time.Since(startTime)
-		log.Printf("✅ GENERATION COMPLETED in %v (choices: %d)", totalDuration, len(output.Choices))
-		result.OutputParsed.Choices = output.Choices
-	}
-
-	return result, nil
+	// MAGDA always uses DSL, so we should never reach here
+	// If we do, it means CFG was not configured, which is an error
+	return nil, fmt.Errorf("CFG grammar is required for MAGDA - this code path should never be reached")
 }
 
 // analyzeMCPUsage checks if MCP was used and returns usage details
@@ -894,6 +837,14 @@ func (p *OpenAIProvider) logMCPToolCall(mcpCall responses.ResponseOutputItemMcpC
 	}
 }
 
+// extractUsageFromRawResponse extracts usage from raw JSON response
+func (p *OpenAIProvider) extractUsageFromRawResponse(rawResponse map[string]any) any {
+	if usageMap, ok := rawResponse["usage"].(map[string]any); ok {
+		return usageMap
+	}
+	return nil
+}
+
 // logUsageStats logs token usage statistics
 func (p *OpenAIProvider) logUsageStats(usage responses.ResponseUsage) {
 	reasoningTokens := int64(0)
@@ -920,376 +871,4 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
-}
-
-// processStream processes the OpenAI streaming response
-func (p *OpenAIProvider) processStream(
-	stream *ssestream.Stream[responses.ResponseStreamEventUnion],
-	callback StreamCallback,
-	transaction *sentry.Span,
-	startTime time.Time,
-) (*GenerationResponse, error) {
-	var finalResponse *models.MusicalOutput
-	var mcpUsed bool
-	var mcpCallCount int
-	var mcpTools []string
-	var usage any
-	var accumulatedText string
-
-	eventCount := 0
-
-	// Start a background goroutine to send periodic heartbeats independent of stream events
-	// This ensures heartbeats are sent even when stream.Next() blocks during long operations
-	heartbeatDone := make(chan bool)
-	go func() {
-		ticker := time.NewTicker(heartbeatIntervalSeconds * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				// Send heartbeat
-				elapsed := time.Since(startTime)
-				_ = callback(StreamEvent{
-					Type:    "heartbeat",
-					Message: "Processing...",
-					Data: map[string]any{
-						"events_received": eventCount,
-						"elapsed_seconds": int(elapsed.Seconds()),
-						"note":            "Periodic heartbeat during stream processing",
-					},
-				})
-			case <-heartbeatDone:
-				return
-			}
-		}
-	}()
-
-	for stream.Next() {
-		event := stream.Current()
-		eventCount++
-
-		// Also send heartbeat on event milestones (every 10 events)
-		if eventCount%10 == 0 {
-			if err := p.sendHeartbeat(eventCount, startTime, callback); err != nil {
-				close(heartbeatDone)
-				return nil, err
-			}
-		}
-
-		// Handle the stream event
-		if err := p.handleStreamEvent(
-			event, eventCount, startTime, callback,
-			&finalResponse, &mcpUsed, &mcpCallCount, &mcpTools, &usage, &accumulatedText,
-		); err != nil {
-			close(heartbeatDone)
-			return nil, err
-		}
-	}
-
-	// Stop heartbeat goroutine
-	close(heartbeatDone)
-
-	// Check for stream errors
-	if streamErr := stream.Err(); streamErr != nil {
-		log.Printf("❌ STREAMING ERROR: %v", streamErr)
-		transaction.SetTag("error_type", "stream_error")
-		_ = callback(StreamEvent{Type: "error", Message: fmt.Sprintf("Stream error: %v", streamErr)})
-		return nil, fmt.Errorf("stream error: %w", streamErr)
-	}
-
-	if finalResponse == nil {
-		log.Printf("❌ STREAM COMPLETE: finalResponse is nil - no output was parsed from stream")
-		log.Printf("🔍 Stream ended with: eventCount=%d, accumulatedText length=%d", eventCount, len(accumulatedText))
-		if accumulatedText != "" {
-			log.Printf("⚠️  Accumulated text exists (%d chars) but was not parsed. Preview: %s",
-				len(accumulatedText), truncate(accumulatedText, maxPreviewChars))
-		}
-		return nil, fmt.Errorf("no output received from stream")
-	}
-
-	log.Printf("✅ STREAM COMPLETE: finalResponse parsed successfully with %d choices", len(finalResponse.Choices))
-
-	// Build result
-	result := &GenerationResponse{
-		Usage:    usage,
-		MCPUsed:  mcpUsed,
-		MCPCalls: mcpCallCount,
-		MCPTools: mcpTools,
-	}
-	result.OutputParsed.Choices = finalResponse.Choices
-
-	// Send completion event
-	_ = callback(StreamEvent{
-		Type:    "completed",
-		Message: "Generation complete",
-		Data: map[string]any{
-			"choices_count": len(finalResponse.Choices),
-			"mcp_used":      mcpUsed,
-		},
-	})
-
-	totalDuration := time.Since(startTime)
-	log.Printf("⏱️  STREAMING GENERATION TIME: %v (choices: %d)", totalDuration, len(finalResponse.Choices))
-
-	return result, nil
-}
-
-// sendHeartbeat sends periodic heartbeat events
-func (p *OpenAIProvider) sendHeartbeat(eventCount int, startTime time.Time, callback StreamCallback) error {
-	elapsed := time.Since(startTime)
-	if eventCount%10 == 0 || elapsed.Seconds() > 30 {
-		return callback(StreamEvent{
-			Type:    "heartbeat",
-			Message: "Processing...",
-			Data: map[string]any{
-				"events_received": eventCount,
-				"elapsed_seconds": int(elapsed.Seconds()),
-			},
-		})
-	}
-	return nil
-}
-
-// handleStreamEvent processes a single stream event
-func (p *OpenAIProvider) handleStreamEvent(
-	event responses.ResponseStreamEventUnion,
-	eventCount int,
-	startTime time.Time,
-	callback StreamCallback,
-	finalResponse **models.MusicalOutput,
-	mcpUsed *bool,
-	mcpCallCount *int,
-	mcpTools *[]string,
-	usage *any,
-	accumulatedText *string,
-) error {
-	// Event logging removed to reduce verbosity
-
-	wrappedData := map[string]any{
-		"openai_event_type": event.Type,
-		"event_count":       eventCount,
-		"elapsed_ms":        time.Since(startTime).Milliseconds(),
-	}
-
-	switch event.Type {
-	case "response.output_item.added":
-		log.Printf("📝 output_item.added - starting output generation")
-		return callback(StreamEvent{Type: "output_started", Message: "Generating output...", Data: wrappedData})
-
-	case "response.output_text.delta":
-		// Accumulate text deltas
-		if deltaBytes, err := json.Marshal(event.Delta); err == nil {
-			var deltaMap map[string]string
-			if json.Unmarshal(deltaBytes, &deltaMap) == nil {
-				if text, ok := deltaMap["OfString"]; ok {
-					*accumulatedText += text
-					// Log full accumulated text periodically to see DSL as it builds (no truncation)
-					if len(*accumulatedText)%500 < len(text) || len(*accumulatedText) < 1000 {
-						log.Printf("📋 FULL accumulated text so far (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
-					}
-					// Send text delta in callback for incremental parsing
-					return callback(StreamEvent{
-						Type:    "output_text.delta",
-						Message: "Text delta received",
-						Data: map[string]interface{}{
-							"text": text,
-						},
-					})
-				}
-			}
-		}
-		return nil
-
-	case "response.output_item.done":
-		return p.handleOutputItemDone(accumulatedText, finalResponse, callback, wrappedData)
-
-	case "response.completed":
-		log.Printf("✅ response.completed event")
-		return p.handleResponseCompleted(event, wrappedData, callback, finalResponse, mcpUsed, mcpCallCount, mcpTools, usage)
-
-	default:
-		// Unknown event types - logging removed to reduce verbosity
-	}
-
-	return nil
-}
-
-// handleOutputItemDone processes the output_item.done event to reduce complexity
-func (p *OpenAIProvider) handleOutputItemDone(
-	accumulatedText *string,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-	wrappedData map[string]any,
-) error {
-	log.Printf("📦 output_item.done - accumulated text: %d chars", len(*accumulatedText))
-	// Parse accumulated text when output item is complete and we have text content
-	// Note: Some output items (like tool calls) have 0 chars, so we skip parsing those
-	if *accumulatedText != "" && *finalResponse == nil {
-		return p.parseAccumulatedText(accumulatedText, finalResponse, callback)
-	}
-	if *accumulatedText == "" && *finalResponse == nil {
-		// This might be a tool call result - we'll wait for the actual text output or response.completed
-		log.Printf("ℹ️  output_item.done with no text (likely tool call result), waiting for text output...")
-	}
-	return callback(StreamEvent{Type: "output_progress", Message: "Output item completed", Data: wrappedData})
-}
-
-// parseAccumulatedText parses the accumulated text into MusicalOutput
-func (p *OpenAIProvider) parseAccumulatedText(
-	accumulatedText *string,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-) error {
-	var output models.MusicalOutput
-	if parseErr := json.Unmarshal([]byte(*accumulatedText), &output); parseErr != nil {
-		log.Printf("❌ Parse error in parseAccumulatedText: %v", parseErr)
-		log.Printf("❌ Accumulated text (first %d chars): %s", maxErrorPreviewChars, truncate(*accumulatedText, maxErrorPreviewChars))
-		sentry.CaptureException(parseErr)
-		// Send error event but don't stop processing - let handleResponseCompleted try OutputText()
-		_ = callback(StreamEvent{Type: "error", Message: fmt.Sprintf("Parse error: %v", parseErr)})
-		// Don't return error - let the stream continue so handleResponseCompleted can try OutputText()
-		return nil
-	}
-	*finalResponse = &output
-	log.Printf("✅ Successfully parsed output: %d choices", len(output.Choices))
-	// Only reset accumulated text after successful parsing
-	*accumulatedText = ""
-	return nil
-}
-
-// handleResponseCompleted handles the final response.completed event
-func (p *OpenAIProvider) handleResponseCompleted(
-	event responses.ResponseStreamEventUnion,
-	wrappedData map[string]any,
-	callback StreamCallback,
-	finalResponse **models.MusicalOutput,
-	mcpUsed *bool,
-	mcpCallCount *int,
-	mcpTools *[]string,
-	usage *any,
-) error {
-	_ = callback(StreamEvent{Type: "analyzing", Message: "Analyzing response...", Data: wrappedData})
-
-	resp := event.Response
-	*mcpUsed, *mcpCallCount, *mcpTools = p.analyzeMCPUsage(&resp)
-	*usage = resp.Usage
-
-	log.Printf("🚨 OpenAI response Model: '%s'", resp.Model)
-	log.Printf("📊 Token Usage: Total=%d, Input=%d, Output=%d",
-		resp.Usage.TotalTokens, resp.Usage.InputTokens, resp.Usage.OutputTokens)
-
-	// If we haven't parsed the output yet, try to get it from OutputText()
-	// This handles cases where text output comes in a later output_item after tool calls
-	if *finalResponse == nil {
-		if err := p.tryParseOutputText(&resp, finalResponse, callback); err != nil {
-			return err
-		}
-	} else {
-		log.Printf("✅ finalResponse already set with %d choices", len((*finalResponse).Choices))
-	}
-
-	// Send MCP usage event if applicable
-	if *mcpUsed {
-		_ = callback(StreamEvent{
-			Type:    "mcp_used",
-			Message: fmt.Sprintf("MCP tools used: %v", *mcpTools),
-			Data: map[string]any{
-				"calls": *mcpCallCount,
-				"tools": *mcpTools,
-			},
-		})
-	}
-
-	return nil
-}
-
-// buildParseErrorMessage builds a user-friendly error message for parse errors
-func (p *OpenAIProvider) buildParseErrorMessage(outputText string, parseErr error) string {
-	errorMsg := fmt.Sprintf("Parse error: %v", parseErr)
-	if len(outputText) > 0 {
-		trimmed := strings.TrimSpace(outputText)
-		if strings.HasPrefix(trimmed, "<") || strings.HasPrefix(trimmed, "<!") {
-			errorMsg = "Received HTML response instead of JSON. This may indicate a server error."
-		} else if strings.HasPrefix(trimmed, "/") || !strings.HasPrefix(trimmed, "{") {
-			errorMsg = fmt.Sprintf("Received invalid JSON response: %s", truncate(trimmed, maxErrorResponseChars))
-		}
-	}
-	return errorMsg
-}
-
-// tryParseOutputText attempts to parse output from OutputText() method
-func (p *OpenAIProvider) tryParseOutputText(
-	resp *responses.Response,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-) error {
-	log.Printf("⚠️  finalResponse is nil in handleResponseCompleted, trying OutputText()")
-	outputText := resp.OutputText()
-	log.Printf("🔍 OutputText() returned: length=%d", len(outputText))
-
-	// Check if OutputText() returned something that's clearly not JSON (like a path or URL)
-	outputText = p.validateOutputText(outputText)
-
-	if outputText != "" {
-		return p.parseOutputText(outputText, finalResponse, callback)
-	}
-
-	// OutputText() is empty or invalid - check output items
-	log.Printf("⚠️  OutputText() is empty or invalid - checking if response has output items")
-	log.Printf("🔍 Response has %d output items", len(resp.Output))
-	for i, item := range resp.Output {
-		log.Printf("   Output item #%d: Type=%v", i, item.Type)
-	}
-
-	// If we still don't have a response, send an error
-	if *finalResponse == nil {
-		errorMsg := "No valid output received from model. The response may have been empty or invalid."
-		_ = callback(StreamEvent{Type: "error", Message: errorMsg})
-		return fmt.Errorf("no output received from model")
-	}
-
-	return nil
-}
-
-// validateOutputText checks if outputText is valid JSON and returns empty string if not
-func (p *OpenAIProvider) validateOutputText(outputText string) string {
-	if outputText == "" {
-		return ""
-	}
-
-	trimmed := strings.TrimSpace(outputText)
-	// If it starts with '/' or doesn't start with '{' or '[', it's likely not JSON
-	if strings.HasPrefix(trimmed, "/") || (!strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[")) {
-		previewLen := len(trimmed)
-		if previewLen > maxPathPreviewLen {
-			previewLen = maxPathPreviewLen
-		}
-		log.Printf("⚠️  OutputText() returned non-JSON content (starts with '%s'), ignoring it", trimmed[:previewLen])
-		return "" // Treat as empty so we can check output items
-	}
-
-	return outputText
-}
-
-// parseOutputText parses the outputText JSON into MusicalOutput
-func (p *OpenAIProvider) parseOutputText(
-	outputText string,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-) error {
-	log.Printf("📝 Attempting to parse OutputText (first %d chars): %s", maxPreviewChars, truncate(outputText, maxPreviewChars))
-	var output models.MusicalOutput
-	if parseErr := json.Unmarshal([]byte(outputText), &output); parseErr != nil {
-		log.Printf("❌ Failed to parse OutputText: %v", parseErr)
-		preview := truncate(outputText, maxErrorPreviewChars)
-		log.Printf("Raw OutputText (first %d chars): %s", maxErrorPreviewChars, preview)
-
-		errorMsg := p.buildParseErrorMessage(outputText, parseErr)
-		_ = callback(StreamEvent{Type: "error", Message: errorMsg})
-		return fmt.Errorf("failed to parse output: %w", parseErr)
-	}
-
-	*finalResponse = &output
-	log.Printf("✅ Parsed output from OutputText: %d choices", len(output.Choices))
-	return nil
 }
