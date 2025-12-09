@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -169,6 +170,16 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 			}
 			
 			modifiedJSON, _ := json.Marshal(paramsMap)
+			
+			// Save request payload to file for debugging
+			if request.CFGGrammar != nil {
+				requestFile := "/tmp/openai_request.json"
+				prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
+				if err := os.WriteFile(requestFile, prettyJSON, 0644); err == nil {
+					log.Printf("💾 Saved request payload to %s", requestFile)
+				}
+			}
+			
 			log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
 			req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/responses", bytes.NewReader(modifiedJSON))
 			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
