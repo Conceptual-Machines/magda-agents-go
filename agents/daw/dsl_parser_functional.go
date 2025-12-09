@@ -459,10 +459,26 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 func (r *ReaperDSL) SetSelected(args gs.Args) error {
 	p := r.parser
 	selectedValue, ok := args["selected"]
-	if !ok || selectedValue.Kind != gs.ValueBool {
-		return fmt.Errorf("selected must be a boolean")
+	if !ok {
+		return fmt.Errorf("selected parameter is required")
 	}
-	selected := selectedValue.Bool
+	
+	var selected bool
+	if selectedValue.Kind == gs.ValueBool {
+		selected = selectedValue.Bool
+	} else if selectedValue.Kind == gs.ValueString {
+		// Handle string "true"/"false" as fallback
+		selectedStr := strings.ToLower(strings.TrimSpace(selectedValue.Str))
+		if selectedStr == "true" {
+			selected = true
+		} else if selectedStr == "false" {
+			selected = false
+		} else {
+			return fmt.Errorf("selected must be a boolean (got string: %q)", selectedValue.Str)
+		}
+	} else {
+		return fmt.Errorf("selected must be a boolean (got kind: %v)", selectedValue.Kind)
+	}
 
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
