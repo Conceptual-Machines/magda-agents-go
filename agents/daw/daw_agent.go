@@ -225,7 +225,8 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
 		}
-		parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
+		// Pass state directly - SetState handles both {"state": {...}} and {...} formats
+		parser.SetState(state)
 		actions, err := parser.ParseDSL(dslCode)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse DSL: %w", err)
@@ -417,7 +418,8 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 		if err != nil {
 		return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
 	}
-			parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
+			// Pass state directly - SetState handles both {"state": {...}} and {...} formats
+			parser.SetState(state)
 			actions, err := parser.ParseDSL(text)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse DSL: %w", err)
