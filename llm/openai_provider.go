@@ -734,7 +734,14 @@ func (p *OpenAIProvider) isDSLCode(text string) bool {
 		strings.Contains(text, ".delete_clip(") ||
 		strings.Contains(text, ".filter(") ||
 		strings.Contains(text, ".map(") ||
-		strings.Contains(text, ".for_each(")
+		strings.Contains(text, ".for_each(") ||
+		strings.Contains(text, ".set_selected(") ||
+		strings.Contains(text, ".set_mute(") ||
+		strings.Contains(text, ".set_solo(") ||
+		strings.Contains(text, ".set_volume(") ||
+		strings.Contains(text, ".set_pan(") ||
+		strings.Contains(text, ".set_name(") ||
+		strings.Contains(text, ".add_fx(")
 }
 
 // processResponseWithCFG converts OpenAI Response to GenerationResponse, handling CFG tool calls

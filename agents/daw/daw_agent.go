@@ -212,7 +212,26 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 
 	// Check if it's DSL (starts with "track" or similar function call)
 	// NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
-	if !strings.HasPrefix(dslCode, "track(") && !strings.Contains(dslCode, ".new_clip(") && !strings.Contains(dslCode, ".add_midi(") && !strings.Contains(dslCode, ".filter(") && !strings.Contains(dslCode, ".map(") && !strings.Contains(dslCode, ".for_each(") && !strings.Contains(dslCode, ".delete(") && !strings.Contains(dslCode, ".delete_clip(") {
+	hasTrackPrefix := strings.HasPrefix(dslCode, "track(")
+	hasNewClip := strings.Contains(dslCode, ".new_clip(")
+	hasAddMidi := strings.Contains(dslCode, ".add_midi(")
+	hasFilter := strings.Contains(dslCode, ".filter(")
+	hasMap := strings.Contains(dslCode, ".map(")
+	hasForEach := strings.Contains(dslCode, ".for_each(")
+	hasDelete := strings.Contains(dslCode, ".delete(")
+	hasDeleteClip := strings.Contains(dslCode, ".delete_clip(")
+	hasSetSelected := strings.Contains(dslCode, ".set_selected(")
+	hasSetMute := strings.Contains(dslCode, ".set_mute(")
+	hasSetSolo := strings.Contains(dslCode, ".set_solo(")
+	hasSetVolume := strings.Contains(dslCode, ".set_volume(")
+	hasSetPan := strings.Contains(dslCode, ".set_pan(")
+	hasSetName := strings.Contains(dslCode, ".set_name(")
+	hasAddFx := strings.Contains(dslCode, ".add_fx(")
+	
+	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
+		hasSetSelected || hasSetMute || hasSetSolo || hasSetVolume || hasSetPan || hasSetName || hasAddFx
+	
+	if !isDSL {
 		const maxLogLength = 500
 		log.Printf("❌ LLM did not generate DSL code. Raw output (first %d chars): %s", maxLogLength, truncate(resp.RawOutput, maxLogLength))
 		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
@@ -398,11 +417,19 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 	hasForEach := strings.Contains(text, ".for_each(")
 	hasDelete := strings.Contains(text, ".delete(")
 	hasDeleteClip := strings.Contains(text, ".delete_clip(")
+	hasSetSelected := strings.Contains(text, ".set_selected(")
+	hasSetMute := strings.Contains(text, ".set_mute(")
+	hasSetSolo := strings.Contains(text, ".set_solo(")
+	hasSetVolume := strings.Contains(text, ".set_volume(")
+	hasSetPan := strings.Contains(text, ".set_pan(")
+	hasSetName := strings.Contains(text, ".set_name(")
+	hasAddFx := strings.Contains(text, ".add_fx(")
 
-	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip
+	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
+		hasSetSelected || hasSetMute || hasSetSolo || hasSetVolume || hasSetPan || hasSetName || hasAddFx
 
-	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, isDSL=%v",
-		hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, isDSL)
+	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, hasSetSelected=%v, hasSetMute=%v, hasSetSolo=%v, hasSetVolume=%v, hasSetPan=%v, hasSetName=%v, hasAddFx=%v, isDSL=%v",
+		hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, hasSetSelected, hasSetMute, hasSetSolo, hasSetVolume, hasSetPan, hasSetName, hasAddFx, isDSL)
 
 	if !isDSL {
 		const maxLogLength = 500
