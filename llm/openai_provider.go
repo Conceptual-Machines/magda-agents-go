@@ -442,6 +442,16 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 		
 		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
 		
+		// Debug: Check code field explicitly
+		if codeVal, exists := outputItemMap["code"]; exists {
+			log.Printf("🔍 'code' field EXISTS in output item %d: type=%T, value=%v", i, codeVal, codeVal)
+			if codeStr, ok := codeVal.(string); ok {
+				log.Printf("🔍 'code' is a string with %d chars: %s", len(codeStr), truncateString(codeStr, 200))
+			}
+		} else {
+			log.Printf("🔍 'code' field DOES NOT EXIST in output item %d", i)
+		}
+		
 		// Check all possible locations for DSL code
 		if dslCode := p.findDSLInOutputItem(outputItemMap); dslCode != "" {
 			return dslCode
