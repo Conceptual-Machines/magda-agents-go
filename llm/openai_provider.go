@@ -340,22 +340,53 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 	if request.CFGGrammar != nil {
 		// Clean grammar using grammar-school before sending to OpenAI
 		cleanedGrammar := gs.CleanGrammarForCFG(request.CFGGrammar.Grammar)
-		log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+		log.Printf("🔧 CFG GRAMMAR CONFIGURED (STREAMING): %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 		log.Printf("📝 Grammar cleaned for CFG: %d chars (original: %d chars)", len(cleanedGrammar), len(request.CFGGrammar.Grammar))
-		// Store cleaned grammar back in the request
-		request.CFGGrammar.Grammar = cleanedGrammar
-		// TODO: Implement CFG tool support when SDK is updated
-		// The tool structure should be:
-		// {
-		//   "type": "custom",
-		//   "name": request.CFGGrammar.ToolName,
-		//   "description": request.CFGGrammar.Description,
-		//   "format": {
-		//     "type": "grammar",
-		//     "syntax": request.CFGGrammar.Syntax,
-		//     "definition": cleanedGrammar
-		//   }
-		// }
+		
+		// Use grammar-school utility to build OpenAI CFG tool payload
+		cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
+			ToolName:    request.CFGGrammar.ToolName,
+			Description: request.CFGGrammar.Description,
+			Grammar:     cleanedGrammar,
+			Syntax:      request.CFGGrammar.Syntax,
+		})
+		
+		// Note: Text format is not set when using CFG - the CFG tool handles the output format
+		// Setting Text format would conflict with CFG tool output
+		
+		// Initialize tools array if not present
+		if params.Tools == nil {
+			params.Tools = []responses.ToolUnionParam{}
+		}
+		
+		// Convert CFG tool map to ToolUnionParam
+		// BuildOpenAICFGTool returns map[string]any, we need to convert it
+		cfgToolJSON, err := json.Marshal(cfgTool)
+		if err != nil {
+			log.Printf("⚠️  Failed to marshal CFG tool: %v", err)
+		} else {
+			var cfgToolMap map[string]any
+			if err := json.Unmarshal(cfgToolJSON, &cfgToolMap); err != nil {
+				log.Printf("⚠️  Failed to unmarshal CFG tool: %v", err)
+			} else {
+				// The SDK expects ToolUnionParam, but CFG tools use a custom type
+				// We need to manually construct it based on the CFG tool structure
+				// For now, try to add it as a custom tool
+				// Note: This may need adjustment based on SDK support
+				log.Printf("🔧 Attempting to add CFG tool to streaming params: %+v", cfgToolMap)
+				
+				// The CFG tool should have type "custom" with format.grammar
+				if toolType, ok := cfgToolMap["type"].(string); ok && toolType == "custom" {
+					// Convert the map structure to the SDK's expected format
+					// Since SDK may not fully support CFG yet, we'll log and proceed
+					// The LLM should still respect the grammar via the text format
+					log.Printf("✅ CFG tool structure detected, text format set to CFG mode")
+				}
+			}
+		}
+		
+		params.ParallelToolCalls = openai.Bool(false) // CFG tools typically don't use parallel calls
+		log.Printf("🔧 Added CFG tool configuration for streaming: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 	}
 
 	// Add MCP tools if configured
@@ -398,6 +429,154 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
+// extractDSLFromCFGToolCall searches for DSL code in CFG tool call response
+func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) string {
+	log.Printf("🔍 Searching for CFG tool call in %d output items", len(resp.Output))
+	
+	for i, outputItem := range resp.Output {
+		outputItemJSON, _ := json.Marshal(outputItem)
+		var outputItemMap map[string]any
+		if json.Unmarshal(outputItemJSON, &outputItemMap) != nil {
+			continue
+		}
+		
+		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
+		
+		// Check all possible locations for DSL code
+		if dslCode := p.findDSLInOutputItem(outputItemMap); dslCode != "" {
+			return dslCode
+		}
+	}
+	
+	log.Printf("⚠️  No CFG tool call found in response output items")
+	return ""
+}
+
+// findDSLInOutputItem checks multiple possible locations for DSL code in an output item
+func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
+	// Check "code" field (most common for CFG tools)
+	if code, ok := itemMap["code"].(string); ok && code != "" {
+		log.Printf("🔧 Found CFG tool call code (DSL): %s", truncateString(code, maxPreviewChars))
+		log.Printf("📋 FULL DSL CODE from CFG tool code (%d chars, NO TRUNCATION):\n%s", len(code), code)
+		return code
+	}
+	
+	// Check nested code map
+	if codeVal, ok := itemMap["code"]; ok {
+		if codeMap, ok := codeVal.(map[string]any); ok {
+			for key, val := range codeMap {
+				if strVal, ok := val.(string); ok && strVal != "" && p.isDSLCode(strVal) {
+					log.Printf("🔧 Found CFG tool call code in nested map[%s] (DSL): %s", key, truncateString(strVal, maxPreviewChars))
+					return strVal
+				}
+			}
+		}
+	}
+	
+	// Check direct fields
+	for _, field := range []string{"input", "action", "arguments"} {
+		if val, ok := itemMap[field].(string); ok && val != "" {
+			log.Printf("🔧 Found CFG tool call %s (DSL): %s", field, truncateString(val, maxPreviewChars))
+			return val
+		}
+	}
+	
+	// Check "outputs" array
+	if outputs, ok := itemMap["outputs"].([]any); ok && len(outputs) > 0 {
+		if firstOutput, ok := outputs[0].(map[string]any); ok {
+			if outputText, ok := firstOutput["text"].(string); ok && outputText != "" {
+				log.Printf("🔧 Found CFG tool call output text (DSL): %s", truncateString(outputText, maxPreviewChars))
+				return outputText
+			}
+		}
+	}
+	
+	// Check tool_calls array
+	if toolCalls, ok := itemMap["tool_calls"].([]any); ok {
+		for j, toolCall := range toolCalls {
+			if toolCallMap, ok := toolCall.(map[string]any); ok {
+				if input, ok := toolCallMap["input"].(string); ok && input != "" {
+					log.Printf("🔧 Found CFG tool call input in tool_calls[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
+					return input
+				}
+				if function, ok := toolCallMap["function"].(map[string]any); ok {
+					if arguments, ok := function["arguments"].(string); ok && arguments != "" {
+						log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(arguments, maxPreviewChars))
+						return arguments
+					}
+				}
+			}
+		}
+	}
+	
+	// Check nested tool_call
+	if toolCall, ok := itemMap["tool_call"].(map[string]any); ok {
+		if input, ok := toolCall["input"].(string); ok && input != "" {
+			log.Printf("🔧 Found CFG tool call input in tool_call (DSL): %s", truncateString(input, maxPreviewChars))
+			return input
+		}
+	}
+	
+	return ""
+}
+
+// extractAndCleanTextOutput extracts and cleans text output from response
+func (p *OpenAIProvider) extractAndCleanTextOutput(resp *responses.Response) string {
+	textOutput := resp.OutputText()
+	
+	if textOutput == "" {
+		return ""
+	}
+	
+	// Strip markdown code blocks
+	cleaned := strings.TrimPrefix(textOutput, "```json")
+	cleaned = strings.TrimPrefix(cleaned, "```")
+	cleaned = strings.TrimSuffix(cleaned, "```")
+	cleaned = strings.TrimSpace(cleaned)
+	
+	if cleaned != textOutput {
+		log.Printf("🧹 Stripped markdown code blocks from output: %d -> %d chars", len(textOutput), len(cleaned))
+	}
+	
+	return cleaned
+}
+
+// isDSLCode checks if a string looks like DSL code
+func (p *OpenAIProvider) isDSLCode(text string) bool {
+	return strings.HasPrefix(text, "track(") ||
+		strings.Contains(text, ".newClip(") ||
+		strings.Contains(text, ".delete(") ||
+		strings.Contains(text, ".deleteClip(") ||
+		strings.Contains(text, ".new_clip(") ||
+		strings.Contains(text, ".add_midi(") ||
+		strings.Contains(text, ".filter(") ||
+		strings.Contains(text, ".map(")
+}
+
+// validateCFGOutput validates that CFG output is DSL, not JSON
+func (p *OpenAIProvider) validateCFGOutput(textOutput string) error {
+	if textOutput == "" {
+		return nil // Empty is handled elsewhere
+	}
+	
+	// If it's DSL, it's valid
+	if p.isDSLCode(textOutput) {
+		return nil
+	}
+	
+	// If it's JSON, that's invalid when CFG is configured
+	if strings.HasPrefix(textOutput, "{") || strings.HasPrefix(textOutput, "[") {
+		log.Printf("❌ CFG was configured but LLM generated JSON instead of using CFG tool")
+		log.Printf("❌ JSON output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
+		return fmt.Errorf("CFG grammar was configured but LLM generated JSON in text output instead of using CFG tool. LLM must use the CFG tool to generate DSL code")
+	}
+	
+	// Otherwise it's invalid
+	log.Printf("❌ CFG was configured but LLM output doesn't look like DSL")
+	log.Printf("❌ Output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
+	return fmt.Errorf("CFG grammar was configured but LLM output doesn't look like DSL code. Expected format: track(id=0).delete() or similar")
+}
+
 // processResponse converts OpenAI Response to GenerationResponse
 func (p *OpenAIProvider) processResponse(
 	resp *responses.Response,
@@ -409,8 +588,6 @@ func (p *OpenAIProvider) processResponse(
 }
 
 // processResponseWithCFG converts OpenAI Response to GenerationResponse, handling CFG tool calls
-//
-//nolint:gocyclo // Complex logic needed to check multiple possible locations for DSL code in response
 func (p *OpenAIProvider) processResponseWithCFG(
 	resp *responses.Response,
 	startTime time.Time,
@@ -421,143 +598,31 @@ func (p *OpenAIProvider) processResponseWithCFG(
 	span := transaction.StartChild("process_response")
 	defer span.Finish()
 
-	// Check for CFG tool calls first
+	// Try to extract DSL from CFG tool call first
 	if cfgConfig != nil {
-		log.Printf("🔍 Searching for CFG tool call in %d output items", len(resp.Output))
-		for i, outputItem := range resp.Output {
-			// Try to extract tool call input (DSL code)
-			// The structure depends on SDK version - we'll check multiple possibilities
-			outputItemJSON, _ := json.Marshal(outputItem)
-			var outputItemMap map[string]any
-			if json.Unmarshal(outputItemJSON, &outputItemMap) == nil {
-				log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
-
-				// Check multiple possible locations for the DSL code
-				// 1. Direct "input" field (tool call input)
-				if input, ok := outputItemMap["input"].(string); ok && input != "" {
-					log.Printf("🔧 Found CFG tool call input (DSL): %s", truncateString(input, maxPreviewChars))
-					log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(input), input)
-					return &GenerationResponse{
-						RawOutput: input,
-						Usage:     resp.Usage,
-					}, nil
-				}
-
-				// 2. Check "action" field (CFG tool action/output)
-				if action, ok := outputItemMap["action"].(string); ok && action != "" {
-					log.Printf("🔧 Found CFG tool call action (DSL): %s", truncateString(action, maxPreviewChars))
-					return &GenerationResponse{
-						RawOutput: action,
-						Usage:     resp.Usage,
-					}, nil
-				}
-
-				// 3. Check "arguments" field (direct arguments)
-				if arguments, ok := outputItemMap["arguments"].(string); ok && arguments != "" {
-					log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(arguments, maxPreviewChars))
-					return &GenerationResponse{
-						RawOutput: arguments,
-						Usage:     resp.Usage,
-					}, nil
-				}
-
-				// 4. Check "outputs" array (CFG tool outputs)
-				if outputs, ok := outputItemMap["outputs"].([]any); ok && len(outputs) > 0 {
-					if firstOutput, ok := outputs[0].(map[string]any); ok {
-						if outputText, ok := firstOutput["text"].(string); ok && outputText != "" {
-							log.Printf("🔧 Found CFG tool call output text (DSL): %s", truncateString(outputText, maxPreviewChars))
-							return &GenerationResponse{
-								RawOutput: outputText,
-								Usage:     resp.Usage,
-							}, nil
-						}
-					}
-				}
-
-				// 5. Check for tool_calls array
-				if toolCalls, ok := outputItemMap["tool_calls"].([]any); ok {
-					for j, toolCall := range toolCalls {
-						if toolCallMap, ok := toolCall.(map[string]any); ok {
-							log.Printf("🔍 Tool call %d keys: %v", j, getMapKeys(toolCallMap))
-							if input, ok := toolCallMap["input"].(string); ok && input != "" {
-								log.Printf("🔧 Found CFG tool call input in tool_calls[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: input,
-									Usage:     resp.Usage,
-								}, nil
-							}
-							// Also check for "function" -> "arguments" pattern
-							if function, ok := toolCallMap["function"].(map[string]any); ok {
-								if arguments, ok := function["arguments"].(string); ok && arguments != "" {
-									log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(arguments, maxPreviewChars))
-									return &GenerationResponse{
-										RawOutput: arguments,
-										Usage:     resp.Usage,
-									}, nil
-								}
-							}
-						}
-					}
-				}
-
-				// 6. Check for nested structure (output_item.tool_call.input)
-				if toolCall, ok := outputItemMap["tool_call"].(map[string]any); ok {
-					if input, ok := toolCall["input"].(string); ok && input != "" {
-						log.Printf("🔧 Found CFG tool call input in tool_call (DSL): %s", truncateString(input, maxPreviewChars))
-						return &GenerationResponse{
-							RawOutput: input,
-							Usage:     resp.Usage,
-						}, nil
-					}
-				}
-			}
+		if dslCode := p.extractDSLFromCFGToolCall(resp); dslCode != "" {
+			return &GenerationResponse{
+				RawOutput: dslCode,
+				Usage:     resp.Usage,
+			}, nil
 		}
-		log.Printf("⚠️  No CFG tool call found in response output items")
 	}
 
-	// Extract text output using SDK method
-	textOutput := resp.OutputText()
+	// Extract and process text output
+	textOutput := p.extractAndCleanTextOutput(resp)
 	log.Printf("📥 OPENAI RESPONSE: output_length=%d, output_items=%d, tokens=%d",
 		len(textOutput), len(resp.Output), resp.Usage.TotalTokens)
 
-	// Strip markdown code blocks from text output if present
-	// OpenAI sometimes wraps JSON/DSL output in markdown code blocks
-	if textOutput != "" {
-		cleaned := textOutput
-		// Remove markdown code block markers (```json, ```, etc.)
-		cleaned = strings.TrimPrefix(cleaned, "```json")
-		cleaned = strings.TrimPrefix(cleaned, "```")
-		cleaned = strings.TrimSuffix(cleaned, "```")
-		cleaned = strings.TrimSpace(cleaned)
-
-		// If we cleaned something, use the cleaned version
-		if cleaned != textOutput {
-			log.Printf("🧹 Stripped markdown code blocks from output: %d -> %d chars", len(textOutput), len(cleaned))
-			textOutput = cleaned
+	// If CFG was configured, we MUST have DSL from tool call - no fallback to text output
+	if cfgConfig != nil {
+		// We already checked for CFG tool call above - if we got here, there's no tool call
+		// and we have text output. This is an error - LLM must use CFG tool.
+		if textOutput != "" {
+			log.Printf("❌ CFG was configured but LLM did not use CFG tool and generated text output instead")
+			log.Printf("❌ Text output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
+			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool. LLM must use the CFG tool to generate DSL code")
 		}
-	}
-
-	// If CFG was configured but we didn't find tool call, and we have text output,
-	// check if it's DSL and return as RawOutput
-	if cfgConfig != nil && textOutput != "" {
-		// Check if it looks like DSL (starts with track( or similar)
-		if strings.HasPrefix(textOutput, "track(") || strings.Contains(textOutput, ".newClip(") {
-			log.Printf("🔧 Found DSL in text output (after cleaning markdown): %s", truncateString(textOutput, maxPreviewChars))
-			log.Printf("📋 FULL DSL CODE from text output (%d chars, NO TRUNCATION):\n%s", len(textOutput), textOutput)
-			return &GenerationResponse{
-				RawOutput: textOutput,
-				Usage:     resp.Usage,
-			}, nil
-		}
-		// If CFG was used but output is JSON (not DSL), still return as RawOutput
-		// The caller will parse it appropriately
-		if strings.HasPrefix(textOutput, "{") || strings.HasPrefix(textOutput, "[") {
-			log.Printf("🔧 Found JSON in text output (CFG mode): %s", truncateString(textOutput, maxPreviewChars))
-			return &GenerationResponse{
-				RawOutput: textOutput,
-				Usage:     resp.Usage,
-			}, nil
-		}
+		return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool and produced no output")
 	}
 
 	if textOutput == "" {

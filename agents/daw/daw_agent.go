@@ -2,7 +2,6 @@ package daw
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
 	"github.com/Conceptual-Machines/magda-agents-go/metrics"
-	"github.com/Conceptual-Machines/magda-agents-go/models"
 	"github.com/Conceptual-Machines/magda-agents-go/prompt"
 	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go/responses"
@@ -42,8 +40,8 @@ func NewDawAgent(cfg *config.Config) *DawAgent {
 	// Use OpenAI provider (default for now)
 	provider := llm.NewOpenAIProvider(cfg.OpenAIAPIKey)
 
-	// Check environment variable to determine mode (default to DSL for now)
-	useDSL := true // Can be made configurable via env var: os.Getenv("MAGDA_USE_DSL") != "false"
+	// Always use DSL mode (CFG grammar) for better latency and structured output
+	useDSL := true
 
 	agent := &DawAgent{
 		provider:      provider,
@@ -56,7 +54,7 @@ func NewDawAgent(cfg *config.Config) *DawAgent {
 	log.Printf("🤖 DAW AGENT INITIALIZED:")
 	log.Printf("   Provider: %s", provider.Name())
 	log.Printf("   System prompt loaded: %d chars", len(systemPrompt))
-	log.Printf("   Mode: %s", map[bool]string{true: "DSL (CFG)", false: "JSON Schema"}[useDSL])
+	log.Printf("   Mode: DSL (CFG) - always enabled")
 
 	return agent
 }
@@ -93,41 +91,30 @@ func (a *DawAgent) GenerateActions(
 		SystemPrompt:  a.systemPrompt,
 	}
 
-	// Choose between JSON Schema and CFG/DSL based on configuration
-	if a.useDSL {
-		// Use CFG grammar for DSL output
-		request.CFGGrammar = &llm.CFGConfig{
-			ToolName: "magda_dsl",
-			Description: "Executes REAPER operations using the MAGDA DSL. " +
-				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
-				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
-				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"**CRITICAL - SELECTION OPERATIONS**: " +
-				"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
-				"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
-				"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-				"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
-				"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
-				"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
-				"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
-				"This efficiently filters the collection and applies the action to all matching tracks. " +
-				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
-				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
-				"If no track is specified in a chain, it applies to the track created by track(). " +
-				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: GetMagdaDSLGrammarForFunctional(),
-			Syntax:  "lark",
-		}
-		log.Printf("🔧 Using DSL mode (CFG grammar)")
-	} else {
-		// Use JSON Schema for structured output (legacy mode)
-		request.OutputSchema = &llm.OutputSchema{
-			Name:        "MagdaActions",
-			Description: "REAPER actions to execute",
-			Schema:      llm.GetMagdaActionsSchema(),
-		}
-		log.Printf("🔧 Using JSON Schema mode (legacy)")
+	// Always use CFG grammar for DSL output (DSL mode is always enabled)
+	request.CFGGrammar = &llm.CFGConfig{
+		ToolName: "magda_dsl",
+		Description: "Executes REAPER operations using the MAGDA DSL. " +
+			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
+			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
+			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
+			"**CRITICAL - SELECTION OPERATIONS**: " +
+			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
+			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
+			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
+			"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
+			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
+			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
+			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+			"This efficiently filters the collection and applies the action to all matching tracks. " +
+			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
+			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
+			"If no track is specified in a chain, it applies to the track created by track(). " +
+			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
+		Grammar: GetMagdaDSLGrammarForFunctional(),
+		Syntax:  "lark",
 	}
+	log.Printf("🔧 Using DSL mode (CFG grammar) - always enabled")
 
 	// Call provider
 	log.Printf("🚀 MAGDA PROVIDER REQUEST: %s", a.provider.Name())
@@ -213,46 +200,31 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 		return nil, fmt.Errorf("no raw output available in response")
 	}
 
-	// If using DSL mode, try parsing as DSL first
-	if a.useDSL {
-		dslCode := strings.TrimSpace(resp.RawOutput)
-		// Check if it's DSL (starts with "track" or similar function call)
-		if strings.HasPrefix(dslCode, "track(") || strings.Contains(dslCode, ".new_clip(") || strings.Contains(dslCode, ".add_midi(") || strings.Contains(dslCode, ".filter(") || strings.Contains(dslCode, ".map(") || strings.Contains(dslCode, ".for_each(") {
-			// This is DSL code - parse and translate to REAPER API actions
-			log.Printf("✅ Found DSL code in response: %s", truncate(dslCode, MaxDSLPreviewLength))
-
-			parser, err := NewFunctionalDSLParser()
-			if err != nil {
-				return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
-			}
-			parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
-			actions, err := parser.ParseDSL(dslCode)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse DSL: %w", err)
-			}
-
-			log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
-			return actions, nil
-		}
-		// If DSL mode but output doesn't look like DSL, try parsing as JSON (fallback)
-		log.Printf("⚠️  DSL mode enabled but output doesn't look like DSL, trying JSON parse")
-	}
-
-	// JSON Schema mode (legacy) or fallback: parse as JSON
-	var magdaOutput models.MagdaActionsOutput
-	if err := json.Unmarshal([]byte(resp.RawOutput), &magdaOutput); err != nil {
-		log.Printf("❌ Failed to parse MAGDA output as JSON: %v", err)
+	// Parse as DSL only - no fallback to JSON
+	dslCode := strings.TrimSpace(resp.RawOutput)
+	
+	// Check if it's DSL (starts with "track" or similar function call)
+	if !strings.HasPrefix(dslCode, "track(") && !strings.Contains(dslCode, ".new_clip(") && !strings.Contains(dslCode, ".add_midi(") && !strings.Contains(dslCode, ".filter(") && !strings.Contains(dslCode, ".map(") && !strings.Contains(dslCode, ".for_each(") && !strings.Contains(dslCode, ".delete(") && !strings.Contains(dslCode, ".deleteClip(") {
 		const maxLogLength = 500
-		log.Printf("Raw output (first %d chars): %s", maxLogLength, truncate(resp.RawOutput, maxLogLength))
-		return nil, fmt.Errorf("failed to parse MAGDA output: %w", err)
+		log.Printf("❌ LLM did not generate DSL code. Raw output (first %d chars): %s", maxLogLength, truncate(resp.RawOutput, maxLogLength))
+		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
 	}
 
-	if len(magdaOutput.Actions) == 0 {
-		return nil, fmt.Errorf("no actions found in MAGDA output")
-	}
+		// This is DSL code - parse and translate to REAPER API actions
+		log.Printf("✅ Found DSL code in response: %s", truncate(dslCode, MaxDSLPreviewLength))
 
-	log.Printf("✅ Parsed %d actions from MAGDA JSON output", len(magdaOutput.Actions))
-	return magdaOutput.Actions, nil
+		parser, err := NewFunctionalDSLParser()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
+		}
+		parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
+		actions, err := parser.ParseDSL(dslCode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse DSL: %w", err)
+		}
+
+		log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
+		return actions, nil
 }
 
 // truncate truncates a string to a maximum length
@@ -299,36 +271,30 @@ func (a *DawAgent) GenerateActionsStream(
 		SystemPrompt:  a.systemPrompt,
 	}
 
-	// Choose between JSON Schema and CFG/DSL based on configuration
-	if a.useDSL {
-		// Use CFG grammar for DSL output
-		request.CFGGrammar = &llm.CFGConfig{
-			ToolName: "magda_dsl",
-			Description: "Executes REAPER operations using the MAGDA DSL. " +
-				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
-				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
-				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"**CRITICAL - SELECTION OPERATIONS**: " +
-				"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
-				"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
-				"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-				"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
-				"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
-				"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
-				"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
-				"This efficiently filters the collection and applies the action to all matching tracks. " +
-				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
-				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
-				"If no track is specified in a chain, it applies to the track created by track(). " +
-				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: GetMagdaDSLGrammarForFunctional(),
-			Syntax:  "lark",
-		}
-		log.Printf("🔧 Using DSL mode (CFG grammar) for streaming")
-	} else {
-		// No OutputSchema - we'll parse raw JSON from text stream
-		log.Printf("🔧 Using JSON Schema mode (legacy) for streaming")
+	// Always use CFG grammar for DSL output (DSL mode is always enabled)
+	request.CFGGrammar = &llm.CFGConfig{
+		ToolName: "magda_dsl",
+		Description: "Executes REAPER operations using the MAGDA DSL. " +
+			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
+			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
+			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
+			"**CRITICAL - SELECTION OPERATIONS**: " +
+			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
+			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
+			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
+			"- NEVER generate JSON actions like {\"action\": \"set_track_solo\"} - you MUST generate DSL code. " +
+			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
+			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
+			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+			"This efficiently filters the collection and applies the action to all matching tracks. " +
+			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
+			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
+			"If no track is specified in a chain, it applies to the track created by track(). " +
+			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
+		Grammar: GetMagdaDSLGrammarForFunctional(),
+		Syntax:  "lark",
 	}
+	log.Printf("🔧 Using DSL mode (CFG grammar) for streaming - always enabled")
 
 	// Track accumulated text and parsed actions
 	var accumulatedText string
@@ -412,100 +378,47 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 		log.Printf("📋 FULL INPUT TEXT (all %d chars, NO TRUNCATION):\n%s", len(text), text)
 	}
 
-	// If using DSL mode, try parsing as DSL first
-	if a.useDSL {
-		// Check if it's DSL (starts with "track" or similar function call)
-		hasTrackPrefix := strings.HasPrefix(text, "track(")
-		hasFilter := strings.Contains(text, ".filter(") || strings.Contains(text, "filter(")
-		hasNewClip := strings.Contains(text, ".new_clip(") || strings.Contains(text, ".newClip(")
-		hasAddMidi := strings.Contains(text, ".add_midi(")
-		hasMap := strings.Contains(text, ".map(")
-		hasForEach := strings.Contains(text, ".for_each(")
-		
-		isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach
-		
-		log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, isDSL=%v", 
-			hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, isDSL)
-		
-		if isDSL {
-			// This is DSL code - parse and translate to REAPER API actions
-			log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
-			log.Printf("📋 FULL DSL CODE (all %d chars, NO TRUNCATION):\n%s", len(text), text)
-
-			parser, err := NewFunctionalDSLParser()
-			if err != nil {
-				log.Printf("⚠️  Failed to create functional DSL parser: %v, trying JSON parse", err)
-			} else {
-				parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
-				actions, err := parser.ParseDSL(text)
-				if err == nil && len(actions) > 0 {
-					log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
-					return actions, nil
-				}
-				// If DSL parsing failed, fall through to JSON parsing
-				log.Printf("⚠️  DSL parsing failed, trying JSON parse: %v", err)
-			}
-		} else {
-			log.Printf("⚠️  Text does not match DSL pattern. First 100 chars: %s", truncate(text, 100))
-		}
+	// Always try parsing as DSL first (DSL mode is always enabled)
+	// Check if it's DSL (starts with "track" or similar function call)
+	hasTrackPrefix := strings.HasPrefix(text, "track(")
+	hasFilter := strings.Contains(text, ".filter(") || strings.Contains(text, "filter(")
+	hasNewClip := strings.Contains(text, ".new_clip(") || strings.Contains(text, ".newClip(")
+	hasAddMidi := strings.Contains(text, ".add_midi(")
+	hasMap := strings.Contains(text, ".map(")
+	hasForEach := strings.Contains(text, ".for_each(")
+	hasDelete := strings.Contains(text, ".delete(")
+	hasDeleteClip := strings.Contains(text, ".deleteClip(")
+	
+	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip
+	
+	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, isDSL=%v", 
+		hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, isDSL)
+	
+	if !isDSL {
+		const maxLogLength = 500
+		log.Printf("❌ LLM did not generate DSL code in stream. Text (first %d chars): %s", maxLogLength, truncate(text, maxLogLength))
+		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
 	}
 
-	// First, try to parse as complete MagdaActionsOutput
-	var magdaOutput models.MagdaActionsOutput
-	if err := json.Unmarshal([]byte(text), &magdaOutput); err == nil {
-		if len(magdaOutput.Actions) > 0 {
-			return magdaOutput.Actions, nil
-		}
+		// This is DSL code - parse and translate to REAPER API actions
+		log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
+		log.Printf("📋 FULL DSL CODE (all %d chars, NO TRUNCATION):\n%s", len(text), text)
+
+		parser, err := NewFunctionalDSLParser()
+		if err != nil {
+		return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
+	}
+			parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
+			actions, err := parser.ParseDSL(text)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DSL: %w", err)
 	}
 
-	// Try to find and extract the actions array directly
-	// Look for "actions": [ ... ]
-	actionsStart := strings.Index(text, `"actions"`)
-	if actionsStart == -1 {
-		// Maybe it's just an array of actions?
-		if strings.HasPrefix(text, "[") {
-			var actions []map[string]interface{}
-			if err := json.Unmarshal([]byte(text), &actions); err == nil {
-				return actions, nil
-			}
-		}
-		return nil, fmt.Errorf("no actions array found")
+	if len(actions) == 0 {
+		return nil, fmt.Errorf("DSL parsed but produced no actions")
 	}
 
-	// Find the opening bracket after "actions"
-	arrayStart := strings.Index(text[actionsStart:], "[")
-	if arrayStart == -1 {
-		return nil, fmt.Errorf("actions array not found")
-	}
-	arrayStart += actionsStart
-
-	// Find matching closing bracket
-	bracketCount := 0
-	arrayEnd := -1
-	for i := arrayStart; i < len(text); i++ {
-		if text[i] == '[' {
-			bracketCount++
-		} else if text[i] == ']' {
-			bracketCount--
-			if bracketCount == 0 {
-				arrayEnd = i + 1
-				break
-			}
-		}
-	}
-
-	if arrayEnd == -1 {
-		// Array not complete yet
-		return nil, fmt.Errorf("actions array incomplete")
-	}
-
-	// Extract and parse the actions array
-	actionsJSON := text[arrayStart:arrayEnd]
-	var actions []map[string]interface{}
-	if err := json.Unmarshal([]byte(actionsJSON), &actions); err != nil {
-		return nil, fmt.Errorf("failed to parse actions array: %w", err)
-	}
-
+	log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
 	return actions, nil
 }
 

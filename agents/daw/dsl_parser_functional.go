@@ -678,6 +678,46 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 	return nil
 }
 
+// Delete handles .delete() calls to delete the current track.
+func (r *ReaperDSL) Delete(args gs.Args) error {
+	p := r.parser
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for delete call")
+	}
+	action := map[string]interface{}{
+		"action": "delete_track",
+		"track":  p.currentTrackIndex,
+	}
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// DeleteClip handles .deleteClip() calls to delete a clip from the current track.
+func (r *ReaperDSL) DeleteClip(args gs.Args) error {
+	p := r.parser
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for deleteClip call")
+	}
+	action := map[string]interface{}{
+		"action": "delete_clip",
+		"track":  p.currentTrackIndex,
+	}
+
+	// Clip identification: clip index, position, or bar
+	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
+		action["clip"] = int(clipValue.Num)
+	} else if positionValue, ok := args["position"]; ok && positionValue.Kind == gs.ValueNumber {
+		action["position"] = positionValue.Num
+	} else if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+		action["bar"] = int(barValue.Num)
+	} else {
+		return fmt.Errorf("deleteClip requires one of: clip (index), position (seconds), or bar (number)")
+	}
+
+	p.actions = append(p.actions, action)
+	return nil
+}
+
 // ========== Functional methods ==========
 
 // Filter filters a collection using a predicate.
@@ -1065,7 +1105,7 @@ track_param: "instrument" "=" STRING
            | "id" "=" NUMBER
            | "selected" "=" BOOLEAN
 
-chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain | selected_chain
+chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain | selected_chain | delete_chain | delete_clip_chain
 
 clip_chain: ".new_clip" "(" clip_params? ")"
 clip_params: clip_param ("," SP clip_param)*
@@ -1088,6 +1128,14 @@ mute_chain: ".set_mute" "(" "mute" "=" BOOLEAN ")"
 solo_chain: ".set_solo" "(" "solo" "=" BOOLEAN ")"
 name_chain: ".set_name" "(" "name" "=" STRING ")"
 selected_chain: ".set_selected" "(" "selected" "=" BOOLEAN ")"
+
+// Deletion operations
+delete_chain: ".delete" "(" ")"
+delete_clip_chain: ".delete_clip" "(" delete_clip_params? ")"
+delete_clip_params: delete_clip_param ("," SP delete_clip_param)*
+delete_clip_param: "clip" "=" NUMBER
+                 | "position" "=" NUMBER
+                 | "bar" "=" NUMBER
 
 // Functional operations
 functional_call: filter_call chain?
