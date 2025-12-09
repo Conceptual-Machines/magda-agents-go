@@ -108,10 +108,6 @@ func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]interface{}
 		return nil, fmt.Errorf("empty DSL code")
 	}
 
-	// Preprocess DSL: Add statement separators where statements are concatenated
-	// Example: track(...)track(...) -> track(...); track(...)
-	// This handles cases where the LLM generates multiple statements without separators
-	dslCode = p.preprocessDSL(dslCode)
 
 	// Reset actions for new parse
 	p.actions = make([]map[string]interface{}, 0)
