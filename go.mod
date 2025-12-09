@@ -3,7 +3,7 @@ module github.com/Conceptual-Machines/magda-agents-go
 go 1.24
 
 require (
-	github.com/Conceptual-Machines/grammar-school-go v0.6.0
+	github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209155813-e5d5f5fdaf5a
 	github.com/getsentry/sentry-go v0.35.3
 	github.com/openai/openai-go v1.12.0
 	github.com/stretchr/testify v1.8.4

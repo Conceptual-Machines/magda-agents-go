@@ -155,9 +155,19 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 				paramsMap["tools"] = tools
 				paramsMap["parallel_tool_calls"] = false // CFG tools typically don't use parallel calls
 
+				// Log the actual tool structure for debugging
+				toolJSON, _ := json.MarshalIndent(cfgTool, "", "  ")
 				log.Printf("🔧 Added CFG tool: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+				log.Printf("🔧 CFG tool structure: %s", truncateString(string(toolJSON), 2000))
 			}
 
+			// Verify instructions are in paramsMap
+			if instructions, ok := paramsMap["instructions"].(string); ok {
+				log.Printf("🔍 Instructions in request (first 500 chars): %s", truncateString(instructions, 500))
+			} else {
+				log.Printf("⚠️  Instructions NOT found in paramsMap! Keys: %v", getMapKeys(paramsMap))
+			}
+			
 			modifiedJSON, _ := json.Marshal(paramsMap)
 			log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
 			req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/responses", bytes.NewReader(modifiedJSON))
@@ -171,12 +181,16 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 						log.Printf("⚠️  Failed to close response body: %v", closeErr)
 					}
 				}()
-				body, _ := io.ReadAll(httpResp.Body)
-				if httpResp.StatusCode == http.StatusOK {
-					resp = &responses.Response{}
-					if json.Unmarshal(body, resp) != nil {
-						err = fmt.Errorf("failed to parse response")
-					} else {
+			body, _ := io.ReadAll(httpResp.Body)
+			if httpResp.StatusCode == http.StatusOK {
+				// Log the raw response for debugging
+				if request.CFGGrammar != nil {
+					log.Printf("🔍 RAW OPENAI RESPONSE (first 2000 chars): %s", truncateString(string(body), 2000))
+				}
+				resp = &responses.Response{}
+				if json.Unmarshal(body, resp) != nil {
+					err = fmt.Errorf("failed to parse response")
+				} else {
 						// Process response with CFG support
 						processedResp, processErr := p.processResponseWithCFG(resp, startTime, transaction, request.OutputSchema, request.CFGGrammar)
 						if processErr != nil {
@@ -667,30 +681,6 @@ func (p *OpenAIProvider) isDSLCode(text string) bool {
 		strings.Contains(text, ".filter(") ||
 		strings.Contains(text, ".map(") ||
 		strings.Contains(text, ".for_each(")
-}
-
-// validateCFGOutput validates that CFG output is DSL, not JSON
-func (p *OpenAIProvider) validateCFGOutput(textOutput string) error {
-	if textOutput == "" {
-		return nil // Empty is handled elsewhere
-	}
-	
-	// If it's DSL, it's valid
-	if p.isDSLCode(textOutput) {
-		return nil
-	}
-	
-	// If it's JSON, that's invalid when CFG is configured
-	if strings.HasPrefix(textOutput, "{") || strings.HasPrefix(textOutput, "[") {
-		log.Printf("❌ CFG was configured but LLM generated JSON instead of using CFG tool")
-		log.Printf("❌ JSON output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
-		return fmt.Errorf("CFG grammar was configured but LLM generated JSON in text output instead of using CFG tool. LLM must use the CFG tool to generate DSL code")
-	}
-	
-	// Otherwise it's invalid
-	log.Printf("❌ CFG was configured but LLM output doesn't look like DSL")
-	log.Printf("❌ Output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
-	return fmt.Errorf("CFG grammar was configured but LLM output doesn't look like DSL code. Expected format: track(id=0).delete() or similar")
 }
 
 // processResponse converts OpenAI Response to GenerationResponse

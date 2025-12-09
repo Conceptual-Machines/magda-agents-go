@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 
 	"github.com/Conceptual-Machines/grammar-school-go/gs"
@@ -28,228 +27,6 @@ type ReaperDSL struct {
 	parser *FunctionalDSLParser
 }
 
-// magdaParser implements gs.Parser interface for MAGDA DSL
-type magdaParser struct {
-	parent *FunctionalDSLParser
-}
-
-// Parse implements gs.Parser interface
-func (p *magdaParser) Parse(input string) (*gs.CallChain, error) {
-	// Simple parser implementation that converts DSL to CallChain
-	// This is a workaround for grammar-school-go requiring a parser
-	// TODO: Implement proper grammar-based parsing when grammar-school-go supports it
-
-	// For now, we'll use the existing ParseDSL logic to extract actions
-	// and convert them to CallChain format
-	// This is a temporary solution until grammar-school-go is fixed
-
-	// Since we're using the engine.Execute to parse, we need a basic parser
-	// that just returns an empty CallChain and let the engine handle it
-	// Actually, we can't do that because Execute needs the CallChain...
-
-	// Let's create a simple parser that extracts method calls
-	return p.parseSimpleDSL(input)
-}
-
-// parseSimpleDSL parses simple DSL like track(...).method(...)
-func (p *magdaParser) parseSimpleDSL(input string) (*gs.CallChain, error) {
-	// This is a minimal implementation - grammar-school-go was supposed to handle nil parser
-	// but recent changes broke it. This is a workaround.
-
-	// Parse the input manually into a CallChain
-	chain := &gs.CallChain{Calls: []gs.Call{}}
-
-	// Simple regex-based parsing for now
-	// Split by dots to get method calls
-	parts := splitMethodCalls(input)
-
-	for _, part := range parts {
-		call := parseMethodCall(part)
-		if call != nil {
-			chain.Calls = append(chain.Calls, *call)
-		}
-	}
-
-	return chain, nil
-}
-
-// splitMethodCalls splits "track(...).method(...)" into ["track(...)", "method(...)"]
-func splitMethodCalls(input string) []string {
-	var parts []string
-	var current strings.Builder
-	depth := 0
-
-	for _, r := range input {
-		char := string(r)
-
-		if char == "(" {
-			depth++
-			current.WriteRune(r)
-		} else if char == ")" {
-			depth--
-			current.WriteRune(r)
-		} else if char == "." && depth == 0 {
-			if current.Len() > 0 {
-				parts = append(parts, strings.TrimSpace(current.String()))
-				current.Reset()
-			}
-		} else {
-			current.WriteRune(r)
-		}
-	}
-
-	if current.Len() > 0 {
-		parts = append(parts, strings.TrimSpace(current.String()))
-	}
-
-	return parts
-}
-
-// parseMethodCall parses "method(param=value)" into a Call
-func parseMethodCall(input string) *gs.Call {
-	input = strings.TrimSpace(input)
-
-	// Find method name and params
-	parenIndex := strings.Index(input, "(")
-	if parenIndex == -1 {
-		// No params
-		methodName := strings.TrimSpace(input)
-		// Capitalize first letter for Go method names (track -> Track, set_selected -> SetSelected)
-		methodName = capitalizeMethodName(methodName)
-		return &gs.Call{
-			Name: methodName,
-			Args: []gs.Arg{},
-		}
-	}
-
-	methodName := strings.TrimSpace(input[:parenIndex])
-	// Capitalize first letter and convert snake_case to CamelCase
-	methodName = capitalizeMethodName(methodName)
-	paramsStr := strings.TrimSpace(input[parenIndex+1:])
-
-	// Remove trailing )
-	paramsStr = strings.TrimSuffix(paramsStr, ")")
-
-	// Parse params
-	args := parseArgs(paramsStr)
-
-	return &gs.Call{
-		Name: methodName,
-		Args: args,
-	}
-}
-
-// parseArgs parses "param1=value1, param2=value2" into []Arg
-func parseArgs(paramsStr string) []gs.Arg {
-	if paramsStr == "" {
-		return []gs.Arg{}
-	}
-
-	var args []gs.Arg
-
-	// Split by comma, but respect string quotes
-	var current strings.Builder
-	depth := 0
-	inString := false
-
-	for _, r := range paramsStr {
-		char := string(r)
-
-		if char == "\"" {
-			inString = !inString
-			current.WriteRune(r)
-		} else if char == "(" {
-			depth++
-			current.WriteRune(r)
-		} else if char == ")" {
-			depth--
-			current.WriteRune(r)
-		} else if char == "," && depth == 0 && !inString {
-			argStr := strings.TrimSpace(current.String())
-			if argStr != "" {
-				args = append(args, parseArg(argStr))
-			}
-			current.Reset()
-		} else {
-			current.WriteRune(r)
-		}
-	}
-
-	argStr := strings.TrimSpace(current.String())
-	if argStr != "" {
-		args = append(args, parseArg(argStr))
-	}
-
-	return args
-}
-
-// parseArg parses "name=value" into Arg
-func parseArg(argStr string) gs.Arg {
-	parts := strings.SplitN(argStr, "=", 2)
-	if len(parts) != 2 {
-		return gs.Arg{
-			Name:  "",
-			Value: gs.Value{Kind: gs.ValueString, Str: argStr},
-		}
-	}
-
-	name := strings.TrimSpace(parts[0])
-	valueStr := strings.TrimSpace(parts[1])
-
-	value := parseValue(valueStr)
-
-	return gs.Arg{
-		Name:  name,
-		Value: value,
-	}
-}
-
-// capitalizeMethodName converts snake_case to CamelCase (track -> Track, set_selected -> SetSelected)
-func capitalizeMethodName(name string) string {
-	if name == "" {
-		return name
-	}
-
-	// Convert snake_case to CamelCase
-	parts := strings.Split(name, "_")
-	var result strings.Builder
-	for _, part := range parts {
-		if part != "" {
-			result.WriteString(strings.ToUpper(part[:1]) + strings.ToLower(part[1:]))
-		}
-	}
-
-	return result.String()
-}
-
-// parseValue parses a value string into Value
-func parseValue(valueStr string) gs.Value {
-	valueStr = strings.TrimSpace(valueStr)
-
-	// Check if it's a string
-	if strings.HasPrefix(valueStr, "\"") && strings.HasSuffix(valueStr, "\"") {
-		return gs.Value{
-			Kind: gs.ValueString,
-			Str:  valueStr[1 : len(valueStr)-1],
-		}
-	}
-
-	// Check if it's a boolean
-	if valueStr == "true" {
-		return gs.Value{Kind: gs.ValueBool, Bool: true}
-	}
-	if valueStr == "false" {
-		return gs.Value{Kind: gs.ValueBool, Bool: false}
-	}
-
-	// Check if it's a number
-	if num, err := strconv.ParseFloat(valueStr, 64); err == nil {
-		return gs.Value{Kind: gs.ValueNumber, Num: num}
-	}
-
-	// Default to string
-	return gs.Value{Kind: gs.ValueString, Str: valueStr}
-}
 
 // NewFunctionalDSLParser creates a new functional DSL parser.
 func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
@@ -267,13 +44,11 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 	// Get MAGDA DSL grammar
 	grammar := GetMagdaDSLGrammarForFunctional()
 
-	// Create a parser implementation for grammar-school-go
-	// This is a workaround - grammar-school-go was supposed to support nil parser
-	// but recent changes broke it
-	magdaP := &magdaParser{parent: parser}
+	// Use generic Lark parser from grammar-school
+	larkParser := gs.NewLarkParser()
 
 	// Create Engine with ReaperDSL instance and parser
-	engine, err := gs.NewEngine(grammar, parser.reaperDSL, magdaP)
+	engine, err := gs.NewEngine(grammar, parser.reaperDSL, larkParser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %w", err)
 	}
