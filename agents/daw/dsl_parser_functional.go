@@ -69,7 +69,34 @@ func (p *FunctionalDSLParser) SetState(state map[string]interface{}) {
 		}
 		if tracks, ok := stateMap["tracks"].([]interface{}); ok {
 			p.data["tracks"] = tracks
+			
+			// Extract all clips from all tracks into a global clips collection
+			// This allows filter(clips, ...) to work on all clips across all tracks
+			allClips := make([]interface{}, 0)
+			for _, trackInterface := range tracks {
+				if track, ok := trackInterface.(map[string]interface{}); ok {
+					if clips, ok := track["clips"].([]interface{}); ok {
+						// Add track index to each clip for reference
+						trackIndex, _ := track["index"].(int)
+						if trackIndexFloat, ok := track["index"].(float64); ok {
+							trackIndex = int(trackIndexFloat)
+						}
+						for _, clip := range clips {
+							if clipMap, ok := clip.(map[string]interface{}); ok {
+								// Ensure clip has track reference
+								clipMap["track"] = trackIndex
+							}
+							allClips = append(allClips, clip)
+						}
+					}
+				}
+			}
+			if len(allClips) > 0 {
+				p.data["clips"] = allClips
+				log.Printf("📦 Extracted %d clips from %d tracks into global clips collection", len(allClips), len(tracks))
+			}
 		}
+		// Also check for top-level clips collection (if state provides it directly)
 		if clips, ok := stateMap["clips"].([]interface{}); ok {
 			p.data["clips"] = clips
 		}
