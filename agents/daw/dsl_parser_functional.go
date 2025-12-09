@@ -266,8 +266,9 @@ func (r *ReaperDSL) AddMidi(args gs.Args) error {
 	return nil
 }
 
-// AddFX handles .add_fx() calls.
-func (r *ReaperDSL) AddFX(args gs.Args) error {
+// AddFx handles .add_fx() calls.
+// Note: Method name must be AddFx (not AddFX) for grammar-school camelCase conversion
+func (r *ReaperDSL) AddFx(args gs.Args) error {
 	p := r.parser
 
 	if p.currentTrackIndex < 0 {
