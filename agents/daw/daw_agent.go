@@ -262,7 +262,7 @@ func (a *DawAgent) GenerateActionsStream(
 	defer transaction.Finish()
 
 	transaction.SetTag("model", "gpt-5.1")
-	transaction.SetTag("streaming", "true")
+	transaction.SetTag("streaming", "false")
 	transaction.SetContext("magda", map[string]interface{}{
 		"question_length": len(question),
 		"has_state":       state != nil,
@@ -309,56 +309,49 @@ func (a *DawAgent) GenerateActionsStream(
 		Grammar: GetMagdaDSLGrammarForFunctional(),
 		Syntax:  "lark",
 	}
-	log.Printf("🔧 Using DSL mode (CFG grammar) for streaming - always enabled")
+	log.Printf("🔧 Using DSL mode (CFG grammar) - always enabled")
 
-	// Track accumulated text and parsed actions
-	var accumulatedText string
-	var allActions []map[string]interface{}
-	var usage any
+	// Call non-streaming provider
+	log.Printf("🚀 MAGDA PROVIDER REQUEST: %s", a.provider.Name())
+	resp, err := a.provider.Generate(ctx, request)
 
-	// Stream callback that processes text deltas and parses actions incrementally
-	streamCallback := func(event llm.StreamEvent) error {
-		return a.handleStreamEvent(event, &accumulatedText, &allActions, &usage, callback, state)
-	}
-
-	// Call streaming provider
-	log.Printf("🚀 MAGDA STREAMING PROVIDER REQUEST: %s", a.provider.Name())
-	resp, err := a.provider.GenerateStream(ctx, request, streamCallback)
-
-	// If we already received actions, don't treat provider errors as fatal
-	// (DSL mode generates tool calls, not text, so "no output" errors are expected)
 	if err != nil {
-		if len(allActions) > 0 {
-			log.Printf("⚠️  MAGDA: Provider reported error but %d actions were already received: %v", len(allActions), err)
-			// Continue processing - we have actions, so this is a success
-		} else {
-			transaction.SetTag("success", "false")
-			transaction.SetTag("error_type", "provider_error")
-			sentry.CaptureException(err)
-			return nil, fmt.Errorf("provider stream failed: %w", err)
-		}
+		transaction.SetTag("success", "false")
+		transaction.SetTag("error_type", "provider_error")
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("provider failed: %w", err)
 	}
 
-	// If we still have accumulated text, try final parse
-	if accumulatedText != "" && len(allActions) == 0 {
-		actions, err := a.parseActionsIncremental(accumulatedText, state)
-		if err == nil {
-			allActions = actions
-			for _, action := range actions {
-				_ = callback(action)
-			}
-		}
+	// Extract DSL code from response
+	if resp == nil || resp.RawOutput == "" {
+		transaction.SetTag("success", "false")
+		transaction.SetTag("error_type", "no_output")
+		return nil, fmt.Errorf("no DSL output from provider")
+	}
+
+	// Parse DSL code into actions
+	allActions, err := a.parseActionsIncremental(resp.RawOutput, state)
+	if err != nil {
+		transaction.SetTag("success", "false")
+		transaction.SetTag("error_type", "parse_error")
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("failed to parse DSL: %w", err)
+	}
+
+	// Call callback for each action
+	for _, action := range allActions {
+		_ = callback(action)
 	}
 
 	if len(allActions) == 0 {
 		transaction.SetTag("success", "false")
 		transaction.SetTag("error_type", "no_actions")
-		return nil, fmt.Errorf("no actions found in stream")
+		return nil, fmt.Errorf("no actions found in DSL output")
 	}
 
 	result := &DawResult{
 		Actions: allActions,
-		Usage:   usage,
+		Usage:   nil,
 	}
 
 	if resp != nil && resp.Usage != nil {

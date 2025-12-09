@@ -206,6 +206,18 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 						for i, item := range output {
 							if itemMap, ok := item.(map[string]any); ok {
 								log.Printf("🔍 Checking output item %d, type: %v", i, itemMap["type"])
+								log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(itemMap))
+								
+								// Check for input field BEFORE type check (for debugging)
+								if inputVal, inputExists := itemMap["input"]; inputExists {
+									log.Printf("🔍 'input' field EXISTS in output item %d: type=%T, value=%v", i, inputVal, inputVal)
+									if inputStr, ok := inputVal.(string); ok {
+										log.Printf("🔍 'input' is a string with %d chars: %s", len(inputStr), truncateString(inputStr, 200))
+									}
+								} else {
+									log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
+								}
+								
 								if itemType, ok := itemMap["type"].(string); ok && itemType == "custom_tool_call" {
 									log.Printf("✅ Found custom_tool_call in raw JSON! Checking input field...")
 									if input, ok := itemMap["input"].(string); ok && input != "" {
@@ -215,13 +227,27 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 											Usage:     p.extractUsageFromRawResponse(rawResponse),
 										}, nil
 									} else {
-										log.Printf("⚠️  custom_tool_call found but input field is missing or empty")
+										log.Printf("⚠️  custom_tool_call found but input field check failed")
+										// Try to get input as any type and convert
+										if inputVal, exists := itemMap["input"]; exists {
+											log.Printf("🔍 Input field exists but type assertion failed. Type: %T, Value: %v", inputVal, inputVal)
+											// Try to convert to string
+											if inputStr, ok := inputVal.(string); ok {
+												log.Printf("✅✅✅ Found DSL code (after conversion): %s", truncateString(inputStr, 200))
+												return &GenerationResponse{
+													RawOutput: inputStr,
+													Usage:     p.extractUsageFromRawResponse(rawResponse),
+												}, nil
+											}
+										}
 									}
 								}
+							} else {
+								log.Printf("⚠️  Output item %d is not a map[string]any, type: %T", i, item)
 							}
 						}
 					} else {
-						log.Printf("⚠️  No output array found in raw response")
+						log.Printf("⚠️  No output array found in raw response. Output type: %T", rawResponse["output"])
 					}
 					
 					// Fallback: parse as SDK struct for other fields
