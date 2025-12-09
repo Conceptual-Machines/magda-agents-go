@@ -121,12 +121,6 @@ Sets the solo state of a track (audio isolation - only this track plays, others 
 
 **set_track_selected**
 Selects or deselects a track (VISUAL SELECTION - highlighting tracks in REAPER's arrangement view).
-
-**undo**
-Performs an undo operation in REAPER, reverting the last action.
-- Required: ` + "`action: \"undo\"`" + `
-- No parameters needed
-- Example: ` + "`{\"action\": \"undo\"}`" + ` reverts the last action in REAPER
 - Required: ` + "`action: \"set_track_selected\"`" + `, ` + "`track`" + ` (integer), ` + "`selected`" + ` (boolean)
 - **CRITICAL DISTINCTION**: 
   - When user says "select track" or "select all tracks named X" → use ` + "`set_track_selected`" + ` (visual highlighting)

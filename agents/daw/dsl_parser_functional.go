@@ -611,19 +611,6 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 	return nil
 }
 
-// ========== Undo/Redo operations ==========
-
-// Undo handles undo() calls.
-// Performs an undo operation in REAPER.
-func (r *ReaperDSL) Undo(args gs.Args) error {
-	p := r.parser
-	action := map[string]interface{}{
-		"action": "undo",
-	}
-	p.actions = append(p.actions, action)
-	return nil
-}
-
 // ========== Functional methods ==========
 
 // Filter filters a collection using a predicate.
@@ -1252,7 +1239,6 @@ start: statement+
 
 statement: track_call chain?
          | functional_call
-         | undo_call
 
 track_call: "track" "(" track_params? ")"
 track_params: track_param ("," SP track_param)*
@@ -1313,7 +1299,7 @@ map_call: "map" "(" IDENTIFIER "," function_ref ")"
 for_each_call: "for_each" "(" IDENTIFIER "," function_ref ")"
                | "for_each" "(" IDENTIFIER "," method_call ")"
 
-undo_call: "undo" "(" ")"
+method_call: IDENTIFIER "." IDENTIFIER "(" method_params? ")"
 method_params: method_param ("," SP method_param)*
 method_param: IDENTIFIER "=" (STRING | NUMBER | BOOLEAN)
 
