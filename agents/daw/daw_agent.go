@@ -94,7 +94,8 @@ func (a *DawAgent) GenerateActions(
 	// Always use CFG grammar for DSL output (DSL mode is always enabled)
 	request.CFGGrammar = &llm.CFGConfig{
 		ToolName: "magda_dsl",
-		Description: "Executes REAPER operations using the MAGDA DSL. " +
+		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
+			"Executes REAPER operations using the MAGDA DSL. " +
 			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
@@ -102,7 +103,6 @@ func (a *DawAgent) GenerateActions(
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
 			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
 			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-			"- You MUST ONLY generate DSL code - no other formats are allowed. " +
 			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
 			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
 			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
@@ -110,7 +110,8 @@ func (a *DawAgent) GenerateActions(
 			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
 			"If no track is specified in a chain, it applies to the track created by track(). " +
-			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
+			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR. " +
+			"**REMEMBER: YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
 		Grammar: GetMagdaDSLGrammarForFunctional(),
 		Syntax:  "lark",
 	}
@@ -274,7 +275,8 @@ func (a *DawAgent) GenerateActionsStream(
 	// Always use CFG grammar for DSL output (DSL mode is always enabled)
 	request.CFGGrammar = &llm.CFGConfig{
 		ToolName: "magda_dsl",
-		Description: "Executes REAPER operations using the MAGDA DSL. " +
+		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
+			"Executes REAPER operations using the MAGDA DSL. " +
 			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
@@ -282,7 +284,6 @@ func (a *DawAgent) GenerateActionsStream(
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
 			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
 			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-			"- You MUST ONLY generate DSL code - no other formats are allowed. " +
 			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
 			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
 			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
@@ -290,7 +291,8 @@ func (a *DawAgent) GenerateActionsStream(
 			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
 			"If no track is specified in a chain, it applies to the track created by track(). " +
-			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
+			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR. " +
+			"**REMEMBER: YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
 		Grammar: GetMagdaDSLGrammarForFunctional(),
 		Syntax:  "lark",
 	}
