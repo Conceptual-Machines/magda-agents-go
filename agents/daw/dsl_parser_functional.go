@@ -332,17 +332,60 @@ func (r *ReaperDSL) SetPan(args gs.Args) error {
 
 func (r *ReaperDSL) SetMute(args gs.Args) error {
 	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for mute call")
-	}
 	muteValue, ok := args["mute"]
 	if !ok || muteValue.Kind != gs.ValueBool {
 		return fmt.Errorf("mute must be a boolean")
 	}
+	mute := muteValue.Bool
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 SetMute: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 SetMute: Filtered collection has %d items, mute=%v", len(filtered), mute)
+			if len(filtered) > 0 {
+				// Apply to all filtered tracks
+				for _, item := range filtered {
+					trackMap, ok := item.(map[string]interface{})
+					if !ok {
+						log.Printf("⚠️  SetMute: Item is not a map: %T", item)
+						continue
+					}
+					trackIndex, ok := trackMap["index"].(int)
+					if !ok {
+						// Try float64 (JSON numbers are float64)
+						if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+							trackIndex = int(trackIndexFloat)
+						} else {
+							log.Printf("⚠️  SetMute: Could not extract track index from %+v", trackMap)
+							continue
+						}
+					}
+					trackName, _ := trackMap["name"].(string)
+					log.Printf("✅ SetMute: Adding action for track %d (name='%s'), mute=%v", trackIndex, trackName, mute)
+					action := map[string]interface{}{
+						"action": "set_track_mute",
+						"track":  trackIndex,
+						"mute":   mute,
+					}
+					p.actions = append(p.actions, action)
+				}
+				// Clear filtered collection after applying
+				delete(p.data, "current_filtered")
+				log.Printf("✅ SetMute: Applied set_mute to %d filtered tracks", len(filtered))
+				return nil
+			}
+		}
+	}
+
+	// Normal single-track operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for mute call")
+	}
 	action := map[string]interface{}{
 		"action": "set_track_mute",
 		"track":  p.currentTrackIndex,
-		"mute":   muteValue.Bool,
+		"mute":   mute,
 	}
 	p.actions = append(p.actions, action)
 	return nil
