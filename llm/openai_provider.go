@@ -456,9 +456,16 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 		
 		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
 		
+		// Check for type field - ALWAYS log it
+		typeVal, typeExists := outputItemMap["type"]
+		if typeExists {
+			log.Printf("🔍 'type' field EXISTS in output item %d: value='%v' (type=%T)", i, typeVal, typeVal)
+		} else {
+			log.Printf("🔍 'type' field DOES NOT EXIST in output item %d", i)
+		}
+		
 		// Check for type field
-		if typeVal, exists := outputItemMap["type"]; exists {
-			log.Printf("🔍 'type' field EXISTS in output item %d: value=%v", i, typeVal)
+		if typeExists {
 			
 			// According to Grammar School docs, CFG tool results have type="custom_tool_call"
 			if typeStr, ok := typeVal.(string); ok && typeStr == "custom_tool_call" {
