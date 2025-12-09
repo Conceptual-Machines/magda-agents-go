@@ -139,42 +139,6 @@ func (p *FunctionalDSLParser) clearIterationContext() {
 	p.iterationContext = make(map[string]interface{})
 }
 
-// preprocessDSL adds statement separators where statements are concatenated.
-// Handles cases like: track(...)track(...) -> track(...); track(...)
-func (p *FunctionalDSLParser) preprocessDSL(dslCode string) string {
-	// Pattern: )track( or )filter( or )undo( - insert semicolon before
-	// This handles concatenated statements without separators
-	result := strings.Builder{}
-	result.Grow(len(dslCode) + 100) // Pre-allocate with some extra space
-	
-	i := 0
-	for i < len(dslCode) {
-		// Look for patterns like ")track(" or ")filter(" or ")undo("
-		if i < len(dslCode)-1 && dslCode[i] == ')' {
-			// Check if next token is a statement starter
-			remaining := dslCode[i+1:]
-			remaining = strings.TrimSpace(remaining)
-			
-			// Check for statement starters: track, filter, map, for_each, undo
-			if strings.HasPrefix(remaining, "track(") ||
-				strings.HasPrefix(remaining, "filter(") ||
-				strings.HasPrefix(remaining, "map(") ||
-				strings.HasPrefix(remaining, "for_each(") ||
-				strings.HasPrefix(remaining, "undo(") {
-				// Insert semicolon and newline before the next statement
-				result.WriteByte(')')
-				result.WriteString("; ")
-				i++ // Skip the ')'
-				continue
-			}
-		}
-		result.WriteByte(dslCode[i])
-		i++
-	}
-	
-	return result.String()
-}
-
 // getIterVarFromCollection derives iteration variable name from collection name.
 // tracks -> track, fx_chain -> fx, clips -> clip
 func (p *FunctionalDSLParser) getIterVarFromCollection(collectionName string) string {
