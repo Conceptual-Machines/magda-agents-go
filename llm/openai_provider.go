@@ -456,6 +456,16 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 		
 		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
 		
+		// Debug: Check input field explicitly (CFG tool results are in 'input' according to OpenAI docs)
+		if inputVal, exists := outputItemMap["input"]; exists {
+			log.Printf("🔍 'input' field EXISTS in output item %d: type=%T", i, inputVal)
+			if inputStr, ok := inputVal.(string); ok {
+				log.Printf("🔍 'input' is a string with %d chars: %s", len(inputStr), truncateString(inputStr, 200))
+			}
+		} else {
+			log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
+		}
+		
 		// Debug: Check code field explicitly
 		if codeVal, exists := outputItemMap["code"]; exists {
 			log.Printf("🔍 'code' field EXISTS in output item %d: type=%T, value=%v", i, codeVal, codeVal)
@@ -478,7 +488,14 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 
 // findDSLInOutputItem checks multiple possible locations for DSL code in an output item
 func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
-	// Check "code" field (most common for CFG tools)
+	// Check "input" field FIRST (this is where CFG tool results appear according to OpenAI docs)
+	if input, ok := itemMap["input"].(string); ok && input != "" {
+		log.Printf("🔧 Found CFG tool call in 'input' field (DSL): %s", truncateString(input, maxPreviewChars))
+		log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(input), input)
+		return input
+	}
+	
+	// Check "code" field as fallback
 	if code, ok := itemMap["code"].(string); ok && code != "" {
 		log.Printf("🔧 Found CFG tool call code (DSL): %s", truncateString(code, maxPreviewChars))
 		log.Printf("📋 FULL DSL CODE from CFG tool code (%d chars, NO TRUNCATION):\n%s", len(code), code)
