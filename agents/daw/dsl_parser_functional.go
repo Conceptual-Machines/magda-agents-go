@@ -625,15 +625,20 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			// Try to manually parse predicate from args
 			// The parser might have given us the predicate as a raw string
 			// Look for any string value that looks like a predicate expression
-			for _, value := range args {
+			for key, value := range args {
 				if value.Kind == gs.ValueString {
 					predStr := strings.TrimSpace(value.Str)
+					log.Printf("🔍 Filter: Checking predicate string '%s' (key: '%s')", predStr, key)
 					// Check if it looks like a predicate: "track.name == \"value\"" or "track.name==\"value\""
 					if strings.Contains(predStr, ".") && (strings.Contains(predStr, "==") || strings.Contains(predStr, "!=")) {
+						log.Printf("🔍 Filter: Attempting to parse predicate: '%s'", predStr)
 						// Try to parse it manually
 						if matched := p.parseAndEvaluatePredicate(predStr, item, iterVar); matched {
+							log.Printf("✅ Filter: Predicate matched for item: %v", item)
 							predicateMatched = true
 							break
+						} else {
+							log.Printf("❌ Filter: Predicate did not match for item: %v", item)
 						}
 					}
 				}
@@ -641,6 +646,10 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			if !predicateMatched {
 				// Log what args we actually received for debugging
 				log.Printf("⚠️  Filter: Predicate not parsed correctly. Received args keys: %v", getArgsKeys(args))
+				// Log all args for debugging
+				for k, v := range args {
+					log.Printf("   Arg[%s] = %+v (Kind: %v, Str: '%s')", k, v, v.Kind, v.Str)
+				}
 			}
 		}
 
