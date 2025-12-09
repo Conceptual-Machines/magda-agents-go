@@ -108,6 +108,11 @@ func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]interface{}
 		return nil, fmt.Errorf("empty DSL code")
 	}
 
+	// Preprocess DSL: Add statement separators where statements are concatenated
+	// Example: track(...)track(...) -> track(...); track(...)
+	// This handles cases where the LLM generates multiple statements without separators
+	dslCode = p.preprocessDSL(dslCode)
+
 	// Reset actions for new parse
 	p.actions = make([]map[string]interface{}, 0)
 	p.currentTrackIndex = -1
@@ -136,6 +141,42 @@ func (p *FunctionalDSLParser) setIterationContext(context map[string]interface{}
 // clearIterationContext clears iteration context.
 func (p *FunctionalDSLParser) clearIterationContext() {
 	p.iterationContext = make(map[string]interface{})
+}
+
+// preprocessDSL adds statement separators where statements are concatenated.
+// Handles cases like: track(...)track(...) -> track(...); track(...)
+func (p *FunctionalDSLParser) preprocessDSL(dslCode string) string {
+	// Pattern: )track( or )filter( or )undo( - insert semicolon before
+	// This handles concatenated statements without separators
+	result := strings.Builder{}
+	result.Grow(len(dslCode) + 100) // Pre-allocate with some extra space
+	
+	i := 0
+	for i < len(dslCode) {
+		// Look for patterns like ")track(" or ")filter(" or ")undo("
+		if i < len(dslCode)-1 && dslCode[i] == ')' {
+			// Check if next token is a statement starter
+			remaining := dslCode[i+1:]
+			remaining = strings.TrimSpace(remaining)
+			
+			// Check for statement starters: track, filter, map, for_each, undo
+			if strings.HasPrefix(remaining, "track(") ||
+				strings.HasPrefix(remaining, "filter(") ||
+				strings.HasPrefix(remaining, "map(") ||
+				strings.HasPrefix(remaining, "for_each(") ||
+				strings.HasPrefix(remaining, "undo(") {
+				// Insert semicolon and newline before the next statement
+				result.WriteByte(')')
+				result.WriteString("; ")
+				i++ // Skip the ')'
+				continue
+			}
+		}
+		result.WriteByte(dslCode[i])
+		i++
+	}
+	
+	return result.String()
 }
 
 // getIterVarFromCollection derives iteration variable name from collection name.
@@ -1251,7 +1292,8 @@ func GetMagdaDSLGrammarForFunctional() string {
 // MAGDA DSL Grammar - Functional scripting for REAPER operations
 // Syntax: track().new_clip().add_midi() with method chaining
 
-start: statement+
+start: statement (statement_separator? statement)*
+statement_separator: ";" | NEWLINE | SP+
 
 statement: track_call chain?
          | functional_call
@@ -1330,6 +1372,7 @@ array: "[" (value ("," SP value)*)? "]"
 value: STRING | NUMBER | BOOLEAN | array
 
 SP: " "
+NEWLINE: /\n/
 STRING: /"[^"]*"/
 NUMBER: /-?\d+(\.\d+)?/
 BOOLEAN: "true" | "false"
