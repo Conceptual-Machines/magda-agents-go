@@ -1252,8 +1252,7 @@ func GetMagdaDSLGrammarForFunctional() string {
 // MAGDA DSL Grammar - Functional scripting for REAPER operations
 // Syntax: track().new_clip().add_midi() with method chaining
 
-start: statement (statement_separator? statement)*
-statement_separator: ";" | NEWLINE | SP+
+start: statement+
 
 statement: track_call chain?
          | functional_call
@@ -1332,7 +1331,6 @@ array: "[" (value ("," SP value)*)? "]"
 value: STRING | NUMBER | BOOLEAN | array
 
 SP: " "
-NEWLINE: /\n/
 STRING: /"[^"]*"/
 NUMBER: /-?\d+(\.\d+)?/
 BOOLEAN: "true" | "false"
