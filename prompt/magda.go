@@ -49,6 +49,11 @@ When analyzing user requests:
   find the track in the state's "tracks" array by matching the "name" field, then use its "index" field
   for the action. Example: If state has {"index": 0, "name": "Nebula Drift"}, and user says "delete Nebula Drift",
   generate DSL: ` + "`filter(tracks, track.name == \"Nebula Drift\").delete()`" + `
+- **Track identification by index pattern**: When the user says "odd index tracks" or "even index tracks":
+  - "Odd index" means tracks at indices 1, 3, 5, ... (0-based: 1, 3, 5...)
+  - "Even index" means tracks at indices 0, 2, 4, ... (0-based: 0, 2, 4...)
+  - Check the state's "tracks" array to find which tracks match, then generate multiple ` + "`track(id=X).set_selected(selected=true)`" + ` calls
+  - Example: For "select odd index tracks" with tracks at indices 0,1,2,3,4, generate: ` + "`track(id=2).set_selected(selected=true);track(id=4).set_selected(selected=true)`" + ` (id is 1-based, so index 1 = id 2, index 3 = id 4)
 - **Delete vs Mute**: When the user says "delete", "remove", or "eliminate" a track, use delete_track action.
   Do NOT use set_track_mute - muting is different from deleting. Muting silences audio; deleting removes the track entirely.
 - Break down complex requests into multiple sequential actions
