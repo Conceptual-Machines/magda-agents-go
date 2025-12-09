@@ -638,15 +638,19 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			}
 		} else {
 			// Try to manually parse predicate from args
-			// The parser might have given us the predicate as a raw string
-			// Look for any string value that looks like a predicate expression
+			// The parser might have split the predicate across multiple args
+			// Example: track.name=="Nebula Drift" might be parsed as:
+			//   args["track.name"] = "=\"Nebula Drift\""
+			// We need to reconstruct the full predicate
+			
+			// First, try to find a complete predicate string
 			for key, value := range args {
 				if value.Kind == gs.ValueString {
 					predStr := strings.TrimSpace(value.Str)
 					log.Printf("🔍 Filter: Checking predicate string '%s' (key: '%s')", predStr, key)
-					// Check if it looks like a predicate: "track.name == \"value\"" or "track.name==\"value\""
+					// Check if it looks like a complete predicate: "track.name == \"value\"" or "track.name==\"value\""
 					if strings.Contains(predStr, ".") && (strings.Contains(predStr, "==") || strings.Contains(predStr, "!=")) {
-						log.Printf("🔍 Filter: Attempting to parse predicate: '%s'", predStr)
+						log.Printf("🔍 Filter: Attempting to parse complete predicate: '%s'", predStr)
 						// Try to parse it manually
 						if matched := p.parseAndEvaluatePredicate(predStr, item, iterVar); matched {
 							log.Printf("✅ Filter: Predicate matched for item: %v", item)
@@ -658,6 +662,48 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 					}
 				}
 			}
+			
+			// If no complete predicate found, try to reconstruct from split args
+			// Look for args with keys like "track.name" and values starting with "=" or "!="
+			if !predicateMatched {
+				for key, value := range args {
+					// Skip the collection argument (empty key)
+					if key == "" {
+						continue
+					}
+					if value.Kind == gs.ValueString {
+						valueStr := strings.TrimSpace(value.Str)
+						// Check if value starts with comparison operator (e.g., "=\"value\"" or "==\"value\"")
+						if strings.HasPrefix(valueStr, "=") || strings.HasPrefix(valueStr, "!=") {
+							// Reconstruct predicate: key + value
+							// key is like "track.name", value is like "=\"Nebula Drift\""
+							operator := "=="
+							if strings.HasPrefix(valueStr, "!=") {
+								operator = "!="
+								valueStr = strings.TrimPrefix(valueStr, "!=")
+							} else {
+								valueStr = strings.TrimPrefix(valueStr, "=")
+							}
+							// Remove quotes if present
+							valueStr = strings.Trim(valueStr, "\"")
+							
+							// Reconstruct full predicate: "track.name == \"Nebula Drift\""
+							reconstructedPred := fmt.Sprintf("%s %s \"%s\"", key, operator, valueStr)
+							log.Printf("🔍 Filter: Reconstructed predicate from split args: '%s'", reconstructedPred)
+							
+							// Parse and evaluate
+							if matched := p.parseAndEvaluatePredicate(reconstructedPred, item, iterVar); matched {
+								log.Printf("✅ Filter: Reconstructed predicate matched for item: %v", item)
+								predicateMatched = true
+								break
+							} else {
+								log.Printf("❌ Filter: Reconstructed predicate did not match for item: %v", item)
+							}
+						}
+					}
+				}
+			}
+			
 			if !predicateMatched {
 				// Log what args we actually received for debugging
 				log.Printf("⚠️  Filter: Predicate not parsed correctly. Received args keys: %v", getArgsKeys(args))
