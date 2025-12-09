@@ -6,8 +6,8 @@ cloud.google.com/go/auth v0.9.3/go.mod h1:7z6VY+7h3KUdRov5F1i8NDP5ZzWKYmEPO842Bg
 cloud.google.com/go/compute/metadata v0.5.0 h1:Zr0eK8JbFv6+Wi4ilXAR8FJ3wyNdpxHKJNPos6LTZOY=
 cloud.google.com/go/compute/metadata v0.5.0/go.mod h1:aHnloV2TPI38yx4s9+wAZhHykWvVCfu7hQbF+9CWoiY=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209212121-5940242d6d42 h1:N6SACmNsFIIQanr0XVXvpSmipB3fFEUKnIR58eKWcGM=
-github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209212121-5940242d6d42/go.mod h1:4qhDvJBDaZWf3uNyBkfc46RwCa3zm/Bh8X30+SRtVGQ=
+github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209221559-b28f4a271151 h1:xBQjA7Y4IxlA1AoCrkCPROGNfwxZxlt95gL89unUDkM=
+github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209221559-b28f4a271151/go.mod h1:4qhDvJBDaZWf3uNyBkfc46RwCa3zm/Bh8X30+SRtVGQ=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
