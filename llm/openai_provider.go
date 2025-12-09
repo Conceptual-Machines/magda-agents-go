@@ -175,7 +175,9 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 			if request.CFGGrammar != nil {
 				prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
 				requestFile := "/tmp/openai_request_full.json"
-				if err := os.WriteFile(requestFile, prettyJSON, 0644); err == nil {
+				if err := os.WriteFile(requestFile, prettyJSON, 0644); err != nil {
+					log.Printf("❌ FAILED to save request: %v", err)
+				} else {
 					log.Printf("💾 Saved FULL request payload to %s (%d bytes)", requestFile, len(prettyJSON))
 				}
 			}
@@ -196,13 +198,11 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 			if httpResp.StatusCode == http.StatusOK {
 				// Save full response payload to file
 				if request.CFGGrammar != nil {
-					var prettyResponse map[string]any
-					if json.Unmarshal(body, &prettyResponse) == nil {
-						prettyJSON, _ := json.MarshalIndent(prettyResponse, "", "  ")
-						responseFile := "/tmp/openai_response_full.json"
-						if err := os.WriteFile(responseFile, prettyJSON, 0644); err == nil {
-							log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(prettyJSON))
-						}
+					responseFile := "/tmp/openai_response_full.json"
+					if err := os.WriteFile(responseFile, body, 0644); err != nil {
+						log.Printf("❌ FAILED to save response: %v", err)
+					} else {
+						log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(body))
 					}
 				}
 				resp = &responses.Response{}
