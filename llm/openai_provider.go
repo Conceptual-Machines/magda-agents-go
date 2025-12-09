@@ -456,7 +456,26 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 		
 		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
 		
-		// Debug: Check input field explicitly (CFG tool results are in 'input' according to OpenAI docs)
+		// Check for type field
+		if typeVal, exists := outputItemMap["type"]; exists {
+			log.Printf("🔍 'type' field EXISTS in output item %d: value=%v", i, typeVal)
+			
+			// According to Grammar School docs, CFG tool results have type="custom_tool_call"
+			if typeStr, ok := typeVal.(string); ok && typeStr == "custom_tool_call" {
+				log.Printf("✅ Found custom_tool_call! Checking for 'input' field...")
+				
+				// Get the DSL code from the 'input' field
+				if inputVal, exists := outputItemMap["input"]; exists {
+					if inputStr, ok := inputVal.(string); ok && inputStr != "" {
+						log.Printf("🔧 Found CFG tool call in 'input' field (DSL): %s", truncateString(inputStr, maxPreviewChars))
+						log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(inputStr), inputStr)
+						return inputStr
+					}
+				}
+			}
+		}
+		
+		// Debug: Check input field explicitly (for debugging)
 		if inputVal, exists := outputItemMap["input"]; exists {
 			log.Printf("🔍 'input' field EXISTS in output item %d: type=%T", i, inputVal)
 			if inputStr, ok := inputVal.(string); ok {
@@ -466,17 +485,7 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 			log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
 		}
 		
-		// Debug: Check code field explicitly
-		if codeVal, exists := outputItemMap["code"]; exists {
-			log.Printf("🔍 'code' field EXISTS in output item %d: type=%T, value=%v", i, codeVal, codeVal)
-			if codeStr, ok := codeVal.(string); ok {
-				log.Printf("🔍 'code' is a string with %d chars: %s", len(codeStr), truncateString(codeStr, 200))
-			}
-		} else {
-			log.Printf("🔍 'code' field DOES NOT EXIST in output item %d", i)
-		}
-		
-		// Check all possible locations for DSL code
+		// Fallback: Check all possible locations for DSL code
 		if dslCode := p.findDSLInOutputItem(outputItemMap); dslCode != "" {
 			return dslCode
 		}
