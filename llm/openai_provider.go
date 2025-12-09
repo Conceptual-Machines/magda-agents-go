@@ -104,61 +104,61 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 		var paramsMap map[string]any
 		if json.Unmarshal(paramsJSON, &paramsMap) == nil {
 			// Add CFG tool (MAGDA always uses DSL)
-				// Use grammar-school utility to build OpenAI CFG tool payload
-				cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
-					ToolName:    request.CFGGrammar.ToolName,
-					Description: request.CFGGrammar.Description,
-					Grammar:     request.CFGGrammar.Grammar,
-					Syntax:      request.CFGGrammar.Syntax,
-				})
-				log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+			// Use grammar-school utility to build OpenAI CFG tool payload
+			cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
+				ToolName:    request.CFGGrammar.ToolName,
+				Description: request.CFGGrammar.Description,
+				Grammar:     request.CFGGrammar.Grammar,
+				Syntax:      request.CFGGrammar.Syntax,
+			})
+			log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 
-				// Set text format to plain text (not JSON schema) when using CFG
-				paramsMap["text"] = gs.GetOpenAITextFormatForCFG()
+			// Set text format to plain text (not JSON schema) when using CFG
+			paramsMap["text"] = gs.GetOpenAITextFormatForCFG()
 
-				// Initialize tools array if not present
-				var tools []any
-				if paramsMap["tools"] == nil {
-					tools = []any{}
-				} else {
-					var ok bool
-					tools, ok = paramsMap["tools"].([]any)
-					if !ok {
-						// If tools is not a slice, try to convert from existing tools
-						if existingTools, ok := paramsMap["tools"].([]responses.ToolUnionParam); ok {
-							tools = make([]any, 0, len(existingTools))
-							for _, t := range existingTools {
-								toolJSON, _ := json.Marshal(t)
-								var toolMap map[string]any
-								if unmarshalErr := json.Unmarshal(toolJSON, &toolMap); unmarshalErr != nil {
-									log.Printf("⚠️  Failed to unmarshal tool: %v", unmarshalErr)
-									continue
-								}
-								tools = append(tools, toolMap)
+			// Initialize tools array if not present
+			var tools []any
+			if paramsMap["tools"] == nil {
+				tools = []any{}
+			} else {
+				var ok bool
+				tools, ok = paramsMap["tools"].([]any)
+				if !ok {
+					// If tools is not a slice, try to convert from existing tools
+					if existingTools, ok := paramsMap["tools"].([]responses.ToolUnionParam); ok {
+						tools = make([]any, 0, len(existingTools))
+						for _, t := range existingTools {
+							toolJSON, _ := json.Marshal(t)
+							var toolMap map[string]any
+							if unmarshalErr := json.Unmarshal(toolJSON, &toolMap); unmarshalErr != nil {
+								log.Printf("⚠️  Failed to unmarshal tool: %v", unmarshalErr)
+								continue
 							}
-						} else {
-							tools = []any{}
+							tools = append(tools, toolMap)
 						}
+					} else {
+						tools = []any{}
 					}
 				}
-				tools = append(tools, cfgTool)
-				paramsMap["tools"] = tools
-				paramsMap["parallel_tool_calls"] = false // CFG tools typically don't use parallel calls
+			}
+			tools = append(tools, cfgTool)
+			paramsMap["tools"] = tools
+			paramsMap["parallel_tool_calls"] = false // CFG tools typically don't use parallel calls
 
-				// Log the actual tool structure for debugging
-				toolJSON, _ := json.MarshalIndent(cfgTool, "", "  ")
-				log.Printf("🔧 Added CFG tool: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
-				log.Printf("🔧 CFG tool structure: %s", truncateString(string(toolJSON), 2000))
+			// Log the actual tool structure for debugging
+			toolJSON, _ := json.MarshalIndent(cfgTool, "", "  ")
+			log.Printf("🔧 Added CFG tool: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+			log.Printf("🔧 CFG tool structure: %s", truncateString(string(toolJSON), 2000))
 
-				// Verify instructions are in paramsMap
+			// Verify instructions are in paramsMap
 			if instructions, ok := paramsMap["instructions"].(string); ok {
 				log.Printf("🔍 Instructions in request (first 500 chars): %s", truncateString(instructions, 500))
 			} else {
 				log.Printf("⚠️  Instructions NOT found in paramsMap! Keys: %v", getMapKeys(paramsMap))
 			}
-			
+
 			modifiedJSON, _ := json.Marshal(paramsMap)
-			
+
 			// Save full request payload to file
 			if request.CFGGrammar != nil {
 				prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
@@ -169,7 +169,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 					log.Printf("💾 Saved FULL request payload to %s (%d bytes)", requestFile, len(prettyJSON))
 				}
 			}
-			
+
 			log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
 			req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/responses", bytes.NewReader(modifiedJSON))
 			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
@@ -182,89 +182,89 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 						log.Printf("⚠️  Failed to close response body: %v", closeErr)
 					}
 				}()
-			body, _ := io.ReadAll(httpResp.Body)
-			if httpResp.StatusCode == http.StatusOK {
-				// Save full response payload to file
-				if request.CFGGrammar != nil {
-					responseFile := "/tmp/openai_response_full.json"
-					if err := os.WriteFile(responseFile, body, 0644); err != nil {
-						log.Printf("❌ FAILED to save response: %v", err)
-					} else {
-						log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(body))
+				body, _ := io.ReadAll(httpResp.Body)
+				if httpResp.StatusCode == http.StatusOK {
+					// Save full response payload to file
+					if request.CFGGrammar != nil {
+						responseFile := "/tmp/openai_response_full.json"
+						if err := os.WriteFile(responseFile, body, 0644); err != nil {
+							log.Printf("❌ FAILED to save response: %v", err)
+						} else {
+							log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(body))
+						}
 					}
-				}
-				
-				// Parse raw JSON to extract DSL from input field (SDK struct may not expose it)
-				log.Printf("🔍 Parsing raw JSON response to extract DSL from input field...")
-				var rawResponse map[string]any
-				if json.Unmarshal(body, &rawResponse) != nil {
-					err = fmt.Errorf("failed to parse response")
-				} else {
-					// Extract DSL code directly from raw JSON
-					if output, ok := rawResponse["output"].([]any); ok {
-						log.Printf("🔍 Found output array with %d items", len(output))
-						for i, item := range output {
-							if itemMap, ok := item.(map[string]any); ok {
-								log.Printf("🔍 Checking output item %d, type: %v", i, itemMap["type"])
-								log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(itemMap))
-								
-								// Check for input field BEFORE type check (for debugging)
-								if inputVal, inputExists := itemMap["input"]; inputExists {
-									log.Printf("🔍 'input' field EXISTS in output item %d: type=%T, value=%v", i, inputVal, inputVal)
-									if inputStr, ok := inputVal.(string); ok {
-										log.Printf("🔍 'input' is a string with %d chars: %s", len(inputStr), truncateString(inputStr, 200))
-									}
-								} else {
-									log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
-								}
-								
-								if itemType, ok := itemMap["type"].(string); ok && itemType == "custom_tool_call" {
-									log.Printf("✅ Found custom_tool_call in raw JSON! Checking input field...")
-									if input, ok := itemMap["input"].(string); ok && input != "" {
-										log.Printf("✅✅✅ Found DSL code in raw JSON input field: %s", truncateString(input, 200))
-										return &GenerationResponse{
-											RawOutput: input,
-											Usage:     p.extractUsageFromRawResponse(rawResponse),
-										}, nil
+
+					// Parse raw JSON to extract DSL from input field (SDK struct may not expose it)
+					log.Printf("🔍 Parsing raw JSON response to extract DSL from input field...")
+					var rawResponse map[string]any
+					if json.Unmarshal(body, &rawResponse) != nil {
+						err = fmt.Errorf("failed to parse response")
+					} else {
+						// Extract DSL code directly from raw JSON
+						if output, ok := rawResponse["output"].([]any); ok {
+							log.Printf("🔍 Found output array with %d items", len(output))
+							for i, item := range output {
+								if itemMap, ok := item.(map[string]any); ok {
+									log.Printf("🔍 Checking output item %d, type: %v", i, itemMap["type"])
+									log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(itemMap))
+
+									// Check for input field BEFORE type check (for debugging)
+									if inputVal, inputExists := itemMap["input"]; inputExists {
+										log.Printf("🔍 'input' field EXISTS in output item %d: type=%T, value=%v", i, inputVal, inputVal)
+										if inputStr, ok := inputVal.(string); ok {
+											log.Printf("🔍 'input' is a string with %d chars: %s", len(inputStr), truncateString(inputStr, 200))
+										}
 									} else {
-										log.Printf("⚠️  custom_tool_call found but input field check failed")
-										// Try to get input as any type and convert
-										if inputVal, exists := itemMap["input"]; exists {
-											log.Printf("🔍 Input field exists but type assertion failed. Type: %T, Value: %v", inputVal, inputVal)
-											// Try to convert to string
-											if inputStr, ok := inputVal.(string); ok {
-												log.Printf("✅✅✅ Found DSL code (after conversion): %s", truncateString(inputStr, 200))
-												return &GenerationResponse{
-													RawOutput: inputStr,
-													Usage:     p.extractUsageFromRawResponse(rawResponse),
-												}, nil
+										log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
+									}
+
+									if itemType, ok := itemMap["type"].(string); ok && itemType == "custom_tool_call" {
+										log.Printf("✅ Found custom_tool_call in raw JSON! Checking input field...")
+										if input, ok := itemMap["input"].(string); ok && input != "" {
+											log.Printf("✅✅✅ Found DSL code in raw JSON input field: %s", truncateString(input, 200))
+											return &GenerationResponse{
+												RawOutput: input,
+												Usage:     p.extractUsageFromRawResponse(rawResponse),
+											}, nil
+										} else {
+											log.Printf("⚠️  custom_tool_call found but input field check failed")
+											// Try to get input as any type and convert
+											if inputVal, exists := itemMap["input"]; exists {
+												log.Printf("🔍 Input field exists but type assertion failed. Type: %T, Value: %v", inputVal, inputVal)
+												// Try to convert to string
+												if inputStr, ok := inputVal.(string); ok {
+													log.Printf("✅✅✅ Found DSL code (after conversion): %s", truncateString(inputStr, 200))
+													return &GenerationResponse{
+														RawOutput: inputStr,
+														Usage:     p.extractUsageFromRawResponse(rawResponse),
+													}, nil
+												}
 											}
 										}
 									}
+								} else {
+									log.Printf("⚠️  Output item %d is not a map[string]any, type: %T", i, item)
 								}
+							}
+						} else {
+							log.Printf("⚠️  No output array found in raw response. Output type: %T", rawResponse["output"])
+						}
+
+						// Fallback: parse as SDK struct for other fields
+						resp = &responses.Response{}
+						if json.Unmarshal(body, resp) != nil {
+							err = fmt.Errorf("failed to parse response")
+						} else {
+							// Process response with CFG support (MAGDA always uses DSL)
+							processedResp, processErr := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
+							if processErr != nil {
+								err = processErr
 							} else {
-								log.Printf("⚠️  Output item %d is not a map[string]any, type: %T", i, item)
+								// Return the processed response
+								return processedResp, nil
 							}
 						}
-					} else {
-						log.Printf("⚠️  No output array found in raw response. Output type: %T", rawResponse["output"])
 					}
-					
-					// Fallback: parse as SDK struct for other fields
-					resp = &responses.Response{}
-					if json.Unmarshal(body, resp) != nil {
-						err = fmt.Errorf("failed to parse response")
-					} else {
-						// Process response with CFG support (MAGDA always uses DSL)
-						processedResp, processErr := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
-						if processErr != nil {
-							err = processErr
-						} else {
-							// Return the processed response
-							return processedResp, nil
-						}
-					}
-				}
 				} else {
 					err = fmt.Errorf("API error %d: %s", httpResp.StatusCode, string(body))
 				}
@@ -305,7 +305,6 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 	transaction.SetTag("success", "false")
 	return nil, fmt.Errorf("CFG grammar is required for MAGDA")
 }
-
 
 // buildRequestParams converts GenerationRequest to OpenAI-specific ResponseNewParams
 func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) responses.ResponseNewParams {
@@ -379,7 +378,7 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 		cleanedGrammar := gs.CleanGrammarForCFG(request.CFGGrammar.Grammar)
 		log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 		log.Printf("📝 Grammar cleaned for CFG: %d chars (original: %d chars)", len(cleanedGrammar), len(request.CFGGrammar.Grammar))
-		
+
 		// Use grammar-school utility to build OpenAI CFG tool payload
 		cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
 			ToolName:    request.CFGGrammar.ToolName,
@@ -387,15 +386,15 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 			Grammar:     cleanedGrammar,
 			Syntax:      request.CFGGrammar.Syntax,
 		})
-		
+
 		// Note: Text format is not set when using CFG - the CFG tool handles the output format
 		// Setting Text format would conflict with CFG tool output
-		
+
 		// Initialize tools array if not present
 		if params.Tools == nil {
 			params.Tools = []responses.ToolUnionParam{}
 		}
-		
+
 		// Convert CFG tool map to ToolUnionParam
 		// BuildOpenAICFGTool returns map[string]any, we need to convert it
 		cfgToolJSON, err := json.Marshal(cfgTool)
@@ -411,7 +410,7 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 				// For now, try to add it as a custom tool
 				// Note: This may need adjustment based on SDK support
 				log.Printf("🔧 Attempting to add CFG tool to streaming params: %+v", cfgToolMap)
-				
+
 				// The CFG tool should have type "custom" with format.grammar
 				if toolType, ok := cfgToolMap["type"].(string); ok && toolType == "custom" {
 					// Convert the map structure to the SDK's expected format
@@ -421,7 +420,7 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 				}
 			}
 		}
-		
+
 		params.ParallelToolCalls = openai.Bool(false) // CFG tools typically don't use parallel calls
 	}
 
@@ -468,16 +467,16 @@ func truncateString(s string, maxLen int) string {
 // extractDSLFromCFGToolCall searches for DSL code in CFG tool call response
 func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) string {
 	log.Printf("🔍 Searching for CFG tool call in %d output items", len(resp.Output))
-	
+
 	for i, outputItem := range resp.Output {
 		outputItemJSON, _ := json.Marshal(outputItem)
 		var outputItemMap map[string]any
 		if json.Unmarshal(outputItemJSON, &outputItemMap) != nil {
 			continue
 		}
-		
+
 		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
-		
+
 		// Check for type field - ALWAYS log it
 		typeVal, typeExists := outputItemMap["type"]
 		if typeExists {
@@ -485,14 +484,14 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 		} else {
 			log.Printf("🔍 'type' field DOES NOT EXIST in output item %d", i)
 		}
-		
+
 		// Check for type field
 		if typeExists {
-			
+
 			// According to Grammar School docs, CFG tool results have type="custom_tool_call"
 			if typeStr, ok := typeVal.(string); ok && typeStr == "custom_tool_call" {
 				log.Printf("✅ Found custom_tool_call! Checking for 'input' field...")
-				
+
 				// Get the DSL code from the 'input' field
 				if inputVal, exists := outputItemMap["input"]; exists {
 					if inputStr, ok := inputVal.(string); ok && inputStr != "" {
@@ -503,7 +502,7 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 				}
 			}
 		}
-		
+
 		// Debug: Check input field explicitly (for debugging)
 		if inputVal, exists := outputItemMap["input"]; exists {
 			log.Printf("🔍 'input' field EXISTS in output item %d: type=%T", i, inputVal)
@@ -513,13 +512,13 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 		} else {
 			log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
 		}
-		
+
 		// Fallback: Check all possible locations for DSL code
 		if dslCode := p.findDSLInOutputItem(outputItemMap); dslCode != "" {
 			return dslCode
 		}
 	}
-	
+
 	log.Printf("⚠️  No CFG tool call found in response output items")
 	return ""
 }
@@ -532,14 +531,14 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 		log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(input), input)
 		return input
 	}
-	
+
 	// Check "code" field as fallback
 	if code, ok := itemMap["code"].(string); ok && code != "" {
 		log.Printf("🔧 Found CFG tool call code (DSL): %s", truncateString(code, maxPreviewChars))
 		log.Printf("📋 FULL DSL CODE from CFG tool code (%d chars, NO TRUNCATION):\n%s", len(code), code)
 		return code
 	}
-	
+
 	// Check nested code map
 	if codeVal, ok := itemMap["code"]; ok {
 		if codeMap, ok := codeVal.(map[string]any); ok {
@@ -551,7 +550,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			}
 		}
 	}
-	
+
 	// Check direct fields - with detailed logging
 	log.Printf("🔍 ========== findDSLInOutputItem: Checking direct fields (input, action, arguments) ==========")
 	for _, field := range []string{"input", "action", "arguments"} {
@@ -585,7 +584,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			log.Printf("🔍 Field '%s' DOES NOT EXIST", field)
 		}
 	}
-	
+
 	// Also check other fields that might contain DSL
 	log.Printf("🔍 ========== findDSLInOutputItem: Checking other fields (result, output, content) ==========")
 	for _, field := range []string{"result", "output", "content"} {
@@ -603,7 +602,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			}
 		}
 	}
-	
+
 	// Check "outputs" array
 	if outputs, ok := itemMap["outputs"].([]any); ok && len(outputs) > 0 {
 		log.Printf("🔍 Found 'outputs' array with %d items", len(outputs))
@@ -622,7 +621,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			}
 		}
 	}
-	
+
 	// Check "tools" array - this is critical for CFG tools
 	log.Printf("🔍 ========== findDSLInOutputItem: Checking 'tools' field ==========")
 	if toolsVal, exists := itemMap["tools"]; exists {
@@ -674,7 +673,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 	} else {
 		log.Printf("🔍 Field 'tools' DOES NOT EXIST")
 	}
-	
+
 	// Check tool_calls array
 	if toolCalls, ok := itemMap["tool_calls"].([]any); ok {
 		for j, toolCall := range toolCalls {
@@ -692,7 +691,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			}
 		}
 	}
-	
+
 	// Check nested tool_call
 	if toolCall, ok := itemMap["tool_call"].(map[string]any); ok {
 		if input, ok := toolCall["input"].(string); ok && input != "" {
@@ -700,28 +699,28 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			return input
 		}
 	}
-	
+
 	return ""
 }
 
 // extractAndCleanTextOutput extracts and cleans text output from response
 func (p *OpenAIProvider) extractAndCleanTextOutput(resp *responses.Response) string {
 	textOutput := resp.OutputText()
-	
+
 	if textOutput == "" {
 		return ""
 	}
-	
+
 	// Strip markdown code blocks
 	cleaned := strings.TrimPrefix(textOutput, "```json")
 	cleaned = strings.TrimPrefix(cleaned, "```")
 	cleaned = strings.TrimSuffix(cleaned, "```")
 	cleaned = strings.TrimSpace(cleaned)
-	
+
 	if cleaned != textOutput {
 		log.Printf("🧹 Stripped markdown code blocks from output: %d -> %d chars", len(textOutput), len(cleaned))
 	}
-	
+
 	return cleaned
 }
 

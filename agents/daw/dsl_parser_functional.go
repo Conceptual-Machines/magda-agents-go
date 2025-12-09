@@ -27,7 +27,6 @@ type ReaperDSL struct {
 	parser *FunctionalDSLParser
 }
 
-
 // NewFunctionalDSLParser creates a new functional DSL parser.
 func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 	parser := &FunctionalDSLParser{
@@ -69,7 +68,7 @@ func (p *FunctionalDSLParser) SetState(state map[string]interface{}) {
 		}
 		if tracks, ok := stateMap["tracks"].([]interface{}); ok {
 			p.data["tracks"] = tracks
-			
+
 			// Extract all clips from all tracks into a global clips collection
 			// This allows filter(clips, ...) to work on all clips across all tracks
 			allClips := make([]interface{}, 0)
@@ -761,7 +760,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			// Example: track.name=="Nebula Drift" might be parsed as:
 			//   args["track.name"] = "=\"Nebula Drift\""
 			// We need to reconstruct the full predicate
-			
+
 			// First, try to find a complete predicate string
 			for key, value := range args {
 				if value.Kind == gs.ValueString {
@@ -781,7 +780,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 					}
 				}
 			}
-			
+
 			// If no complete predicate found, try to reconstruct from split args
 			// Look for args with keys like "track.name" and values starting with "=" or "!="
 			if !predicateMatched {
@@ -803,16 +802,16 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 							} else {
 								valueStr = strings.TrimPrefix(valueStr, "=")
 							}
-							
+
 							// Check if value is a boolean (true/false) - don't wrap in quotes
 							valueStr = strings.TrimSpace(valueStr)
 							isBoolean := valueStr == "true" || valueStr == "false"
-							
+
 							// Remove quotes if present (for string values)
 							if !isBoolean {
 								valueStr = strings.Trim(valueStr, "\"")
 							}
-							
+
 							// Reconstruct predicate
 							var reconstructedPred string
 							if isBoolean {
@@ -823,7 +822,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 								reconstructedPred = fmt.Sprintf("%s %s \"%s\"", key, operator, valueStr)
 							}
 							log.Printf("🔍 Filter: Reconstructed predicate from split args: '%s'", reconstructedPred)
-							
+
 							// Parse and evaluate
 							if matched := p.parseAndEvaluatePredicate(reconstructedPred, item, iterVar); matched {
 								log.Printf("✅ Filter: Reconstructed predicate matched for item: %v", item)
@@ -837,7 +836,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 					}
 				}
 			}
-			
+
 			// Note: predicateMatched being false here is expected for items that don't match the predicate
 			// We only log a warning if we couldn't even attempt to parse the predicate
 			// (which would mean we didn't find any predicate-like args at all)
@@ -1052,12 +1051,12 @@ func getDataKeys(data map[string]interface{}) []string {
 func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item interface{}, iterVar string) bool {
 	// Remove quotes and whitespace
 	predStr = strings.TrimSpace(predStr)
-	
+
 	// Try to match patterns like:
 	// - track.name == "value"
 	// - track.name=="value"
 	// - track.name != "value"
-	
+
 	// Find the operator
 	var op string
 	var opIndex int
@@ -1070,46 +1069,46 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 	} else {
 		return false
 	}
-	
+
 	// Split into left (property) and right (value)
 	left := strings.TrimSpace(predStr[:opIndex])
 	right := strings.TrimSpace(predStr[opIndex+len(op):])
-	
+
 	// Extract property name from "track.name" or "iterVar.name"
 	// The left side should be like "track.name" where "track" is the iterVar
 	propParts := strings.Split(left, ".")
 	if len(propParts) != 2 {
 		return false
 	}
-	
+
 	// Verify the first part matches the iteration variable (or is just the variable name)
 	// For "track.name", we expect iterVar to be "track"
 	if propParts[0] != iterVar && propParts[0] != "track" {
 		return false
 	}
-	
+
 	propName := propParts[1]
-	
+
 	// Check if right side is a boolean (true/false without quotes)
 	rightTrimmed := strings.TrimSpace(right)
 	isBooleanValue := rightTrimmed == "true" || rightTrimmed == "false"
-	
+
 	// Remove quotes from right side if present (for string values)
 	if !isBooleanValue {
 		right = strings.Trim(right, "\"")
 	}
-	
+
 	// Get the property value from the item
 	itemMap, ok := item.(map[string]interface{})
 	if !ok {
 		return false
 	}
-	
+
 	itemValue, ok := itemMap[propName]
 	if !ok {
 		return false
 	}
-	
+
 	// Handle boolean comparisons specially
 	if isBooleanValue {
 		expectedBool := rightTrimmed == "true"
@@ -1129,7 +1128,7 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		}
 		return false
 	}
-	
+
 	// Compare values (for strings and numbers)
 	var itemValueStr string
 	switch v := itemValue.(type) {
@@ -1142,14 +1141,14 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 	default:
 		itemValueStr = fmt.Sprintf("%v", v)
 	}
-	
+
 	// Evaluate comparison
 	if op == "==" {
 		return itemValueStr == right
 	} else if op == "!=" {
 		return itemValueStr != right
 	}
-	
+
 	return false
 }
 

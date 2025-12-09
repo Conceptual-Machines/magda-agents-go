@@ -199,7 +199,7 @@ func (a *DawAgent) buildInputMessages(question string, state map[string]interfac
 }
 
 // parseActionsFromResponse extracts actions from the LLM response
-	// For CFG/DSL mode: RawOutput contains DSL code (e.g., track().new_clip().add_midi())
+// For CFG/DSL mode: RawOutput contains DSL code (e.g., track().new_clip().add_midi())
 // For JSON Schema mode: RawOutput contains JSON with actions array
 func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state map[string]interface{}) ([]map[string]interface{}, error) {
 	// The provider should have stored the raw output (DSL or JSON) in RawOutput
@@ -209,7 +209,7 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 
 	// Parse as DSL only - no fallback to JSON
 	dslCode := strings.TrimSpace(resp.RawOutput)
-	
+
 	// Check if it's DSL (starts with "track" or similar function call)
 	// NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
 	if !strings.HasPrefix(dslCode, "track(") && !strings.Contains(dslCode, ".new_clip(") && !strings.Contains(dslCode, ".add_midi(") && !strings.Contains(dslCode, ".filter(") && !strings.Contains(dslCode, ".map(") && !strings.Contains(dslCode, ".for_each(") && !strings.Contains(dslCode, ".delete(") && !strings.Contains(dslCode, ".delete_clip(") {
@@ -218,22 +218,22 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
 	}
 
-		// This is DSL code - parse and translate to REAPER API actions
-		log.Printf("✅ Found DSL code in response: %s", truncate(dslCode, MaxDSLPreviewLength))
+	// This is DSL code - parse and translate to REAPER API actions
+	log.Printf("✅ Found DSL code in response: %s", truncate(dslCode, MaxDSLPreviewLength))
 
-		parser, err := NewFunctionalDSLParser()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
-		}
-		// Pass state directly - SetState handles both {"state": {...}} and {...} formats
-		parser.SetState(state)
-		actions, err := parser.ParseDSL(dslCode)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse DSL: %w", err)
-		}
+	parser, err := NewFunctionalDSLParser()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
+	}
+	// Pass state directly - SetState handles both {"state": {...}} and {...} formats
+	parser.SetState(state)
+	actions, err := parser.ParseDSL(dslCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DSL: %w", err)
+	}
 
-		log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
-		return actions, nil
+	log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
+	return actions, nil
 }
 
 // truncate truncates a string to a maximum length
@@ -398,29 +398,29 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 	hasForEach := strings.Contains(text, ".for_each(")
 	hasDelete := strings.Contains(text, ".delete(")
 	hasDeleteClip := strings.Contains(text, ".delete_clip(")
-	
+
 	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip
-	
-	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, isDSL=%v", 
+
+	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, isDSL=%v",
 		hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, isDSL)
-	
+
 	if !isDSL {
 		const maxLogLength = 500
 		log.Printf("❌ LLM did not generate DSL code in stream. Text (first %d chars): %s", maxLogLength, truncate(text, maxLogLength))
 		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
 	}
 
-		// This is DSL code - parse and translate to REAPER API actions
-		log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
-		log.Printf("📋 FULL DSL CODE (all %d chars, NO TRUNCATION):\n%s", len(text), text)
+	// This is DSL code - parse and translate to REAPER API actions
+	log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
+	log.Printf("📋 FULL DSL CODE (all %d chars, NO TRUNCATION):\n%s", len(text), text)
 
-		parser, err := NewFunctionalDSLParser()
-		if err != nil {
+	parser, err := NewFunctionalDSLParser()
+	if err != nil {
 		return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
 	}
-			// Pass state directly - SetState handles both {"state": {...}} and {...} formats
-			parser.SetState(state)
-			actions, err := parser.ParseDSL(text)
+	// Pass state directly - SetState handles both {"state": {...}} and {...} formats
+	parser.SetState(state)
+	actions, err := parser.ParseDSL(text)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse DSL: %w", err)
 	}

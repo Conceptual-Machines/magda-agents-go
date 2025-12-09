@@ -122,9 +122,9 @@ func TestNewClip(t *testing.T) {
 			dslCode: `track(instrument="Serum").new_clip(bar=1)`,
 			want: []map[string]interface{}{
 				{
-					"action":      "create_track",
-					"instrument":  "Serum",
-					"index":       0,
+					"action":     "create_track",
+					"instrument": "Serum",
+					"index":      0,
 				},
 				{
 					"action":      "create_clip_at_bar",
@@ -292,9 +292,9 @@ func TestAddFX(t *testing.T) {
 					"index":  0,
 				},
 				{
-					"action":     "add_instrument",
-					"track":      0,
-					"fxname":     "Serum",
+					"action": "add_instrument",
+					"track":  0,
+					"fxname": "Serum",
 				},
 			},
 			wantErr: false,
@@ -735,4 +735,3 @@ func TestMethodChaining(t *testing.T) {
 		})
 	}
 }
-
