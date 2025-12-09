@@ -503,71 +503,86 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 func (r *ReaperDSL) Filter(args gs.Args) error {
 	p := r.parser
 
+	// Log all args for debugging
+	log.Printf("🔍 Filter: Received args with %d keys: %v", len(args), getArgsKeys(args))
+	for k, v := range args {
+		log.Printf("   Filter arg[%s] = %+v (Kind: %v, Str: '%s', Num: %v)", k, v, v.Kind, v.Str, v.Num)
+	}
+
 	// Get collection name or value
 	var collection []interface{}
 	var collectionName string
 
-	// Check for named argument first
+	// Try multiple ways to find the collection argument
+	// 1. Named argument "collection"
 	if collectionValue, ok := args["collection"]; ok {
 		if collectionValue.Kind == gs.ValueString {
 			collectionName = collectionValue.Str
 			var err error
 			collection, err = p.resolveCollection(collectionName)
-			if err != nil {
-				return fmt.Errorf("failed to resolve collection: %w", err)
+			if err == nil {
+				log.Printf("✅ Filter: Found collection '%s' via named arg 'collection'", collectionName)
+			} else {
+				log.Printf("⚠️  Filter: Failed to resolve collection '%s' from named arg: %v", collectionName, err)
 			}
 		}
-	} else if collectionValue, ok := args["_positional"]; ok {
-		// Check for _positional key (if parser sets it)
-		if collectionValue.Kind == gs.ValueString {
-			collectionName = collectionValue.Str
-			var err error
-			collection, err = p.resolveCollection(collectionName)
-			if err != nil {
-				return fmt.Errorf("failed to resolve collection: %w", err)
-			}
-		}
-	} else if collectionValue, ok := args[""]; ok {
-		// Check for positional argument with empty name (first positional arg)
-		if collectionValue.Kind == gs.ValueString {
-			collectionName = collectionValue.Str
-			var err error
-			collection, err = p.resolveCollection(collectionName)
-			if err != nil {
-				return fmt.Errorf("failed to resolve collection: %w", err)
-			}
-		}
-	} else {
-		// Try to find first positional argument by checking for empty name key
-		// The parser sets args[""] for positional arguments without "="
-		if collectionValue, ok := args[""]; ok && collectionValue.Kind == gs.ValueString {
-			collectionName = collectionValue.Str
-			var err error
-			collection, err = p.resolveCollection(collectionName)
-			if err != nil {
-				return fmt.Errorf("failed to resolve collection '%s': %w", collectionName, err)
-			}
-		} else {
-			// Last resort: iterate and find first string value that resolves to a collection
-			for key, value := range args {
-				// Skip known named arguments that are not collections
-				if key == "predicate" || key == "property" || key == "operator" || key == "value" {
-					continue
-				}
-				// Try to resolve as collection
-				if value.Kind == gs.ValueString {
-					potentialName := value.Str
-					if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
-						collectionName = potentialName
-						collection = resolved
-						break
-					}
+	}
+
+	// 2. First positional argument (empty key or _positional)
+	if collection == nil {
+		if collectionValue, ok := args[""]; ok {
+			if collectionValue.Kind == gs.ValueString {
+				collectionName = collectionValue.Str
+				var err error
+				collection, err = p.resolveCollection(collectionName)
+				if err == nil {
+					log.Printf("✅ Filter: Found collection '%s' via positional arg (empty key)", collectionName)
+				} else {
+					log.Printf("⚠️  Filter: Failed to resolve collection '%s' from positional arg: %v", collectionName, err)
 				}
 			}
-			if collection == nil {
-				return fmt.Errorf("filter requires a collection argument (got args: %v)", args)
+		} else if collectionValue, ok := args["_positional"]; ok {
+			if collectionValue.Kind == gs.ValueString {
+				collectionName = collectionValue.Str
+				var err error
+				collection, err = p.resolveCollection(collectionName)
+				if err == nil {
+					log.Printf("✅ Filter: Found collection '%s' via _positional key", collectionName)
+				} else {
+					log.Printf("⚠️  Filter: Failed to resolve collection '%s' from _positional: %v", collectionName, err)
+				}
 			}
 		}
+	}
+
+	// 3. Last resort: iterate and find first string value that resolves to a collection
+	if collection == nil {
+		log.Printf("🔍 Filter: Trying to find collection by iterating all args...")
+		for key, value := range args {
+			// Skip known named arguments that are not collections
+			if key == "predicate" || key == "property" || key == "operator" || key == "value" {
+				continue
+			}
+			// Try to resolve as collection
+			if value.Kind == gs.ValueString {
+				potentialName := value.Str
+				log.Printf("🔍 Filter: Trying to resolve '%s' (from key '%s') as collection...", potentialName, key)
+				if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
+					collectionName = potentialName
+					collection = resolved
+					log.Printf("✅ Filter: Found collection '%s' via iteration (key: '%s')", collectionName, key)
+					break
+				} else {
+					log.Printf("⚠️  Filter: '%s' is not a valid collection: %v", potentialName, err)
+				}
+			}
+		}
+	}
+
+	// Check if we found a collection
+	if collection == nil {
+		log.Printf("❌ Filter: Could not find collection argument. Available data keys: %v", getDataKeys(p.data))
+		return fmt.Errorf("filter requires a collection argument (got args: %v, available collections: %v)", args, getDataKeys(p.data))
 	}
 
 	if collection == nil {
@@ -845,6 +860,14 @@ func (p *FunctionalDSLParser) getSelectedTrackIndex() int {
 func getArgsKeys(args gs.Args) []string {
 	keys := make([]string, 0, len(args))
 	for k := range args {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func getDataKeys(data map[string]interface{}) []string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
 		keys = append(keys, k)
 	}
 	return keys
