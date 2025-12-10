@@ -735,3 +735,140 @@ func TestMethodChaining(t *testing.T) {
 		})
 	}
 }
+
+// TestCompoundActions tests compound actions after filter() - the core feature
+func TestCompoundActions(t *testing.T) {
+	tests := []struct {
+		name    string
+		dslCode string
+		state   map[string]interface{}
+		want    []map[string]interface{}
+		wantErr bool
+	}{
+		{
+			name:    "filter clips and set name",
+			dslCode: `filter(clips, clip.length < 1.5).set_clip_name(name="Short Clip")`,
+			state: map[string]interface{}{
+				"tracks": []interface{}{
+					map[string]interface{}{
+						"index": 0,
+						"name":  "Track 1",
+						"clips": []interface{}{
+							map[string]interface{}{"index": 0, "position": 1.0, "length": 3.0},
+							map[string]interface{}{"index": 1, "position": 5.0, "length": 1.0},
+							map[string]interface{}{"index": 2, "position": 8.0, "length": 1.2},
+						},
+					},
+				},
+			},
+			want: []map[string]interface{}{
+				{
+					"action":   "set_clip_name",
+					"track":    0,
+					"name":     "Short Clip",
+					"position": 5.0,
+				},
+				{
+					"action":   "set_clip_name",
+					"track":    0,
+					"name":     "Short Clip",
+					"position": 8.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "filter clips and set color",
+			dslCode: `filter(clips, clip.length < 1.5).set_clip_color(color="#ff0000")`,
+			state: map[string]interface{}{
+				"tracks": []interface{}{
+					map[string]interface{}{
+						"index": 0,
+						"name":  "Track 1",
+						"clips": []interface{}{
+							map[string]interface{}{"index": 0, "position": 1.0, "length": 1.0},
+							map[string]interface{}{"index": 1, "position": 5.0, "length": 2.0},
+						},
+					},
+				},
+			},
+			want: []map[string]interface{}{
+				{
+					"action":   "set_clip_color",
+					"track":    0,
+					"color":    "#ff0000",
+					"position": 1.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "filter clips and delete",
+			dslCode: `filter(clips, clip.length < 1.5).delete_clip()`,
+			state: map[string]interface{}{
+				"tracks": []interface{}{
+					map[string]interface{}{
+						"index": 0,
+						"name":  "Track 1",
+						"clips": []interface{}{
+							map[string]interface{}{"index": 0, "position": 1.0, "length": 1.0},
+							map[string]interface{}{"index": 1, "position": 5.0, "length": 2.0},
+							map[string]interface{}{"index": 2, "position": 8.0, "length": 1.2},
+						},
+					},
+				},
+			},
+			want: []map[string]interface{}{
+				{
+					"action":   "delete_clip",
+					"track":    0,
+					"position": 1.0,
+				},
+				{
+					"action":   "delete_clip",
+					"track":    0,
+					"position": 8.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "filter tracks and set name",
+			dslCode: `filter(tracks, track.muted == true).set_name(name="Muted")`,
+			state: map[string]interface{}{
+				"tracks": []interface{}{
+					map[string]interface{}{"index": 0, "name": "Track 1", "muted": true},
+					map[string]interface{}{"index": 1, "name": "Track 2", "muted": false},
+					map[string]interface{}{"index": 2, "name": "Track 3", "muted": true},
+				},
+			},
+			want: []map[string]interface{}{
+				{"action": "set_track_name", "track": 0, "name": "Muted"},
+				{"action": "set_track_name", "track": 2, "name": "Muted"},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser, err := NewFunctionalDSLParser()
+			if err != nil {
+				t.Fatalf("Failed to create parser: %v", err)
+			}
+
+			if tt.state != nil {
+				parser.SetState(tt.state)
+			}
+
+			got, err := parser.ParseDSL(tt.dslCode)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseDSL() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParseDSL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

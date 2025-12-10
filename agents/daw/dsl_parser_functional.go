@@ -438,14 +438,127 @@ func (r *ReaperDSL) SetSolo(args gs.Args) error {
 	return nil
 }
 
+// SetName handles .set_name() calls to set the track or clip name.
+// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
 func (r *ReaperDSL) SetName(args gs.Args) error {
 	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for name call")
-	}
 	nameValue, ok := args["name"]
 	if !ok || nameValue.Kind != gs.ValueString {
 		return fmt.Errorf("name must be a string")
+	}
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 SetName: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 SetName: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				// Check if this is a tracks collection or clips collection
+				firstItem, ok := filtered[0].(map[string]interface{})
+				if !ok {
+					log.Printf("⚠️  SetName: First item is not a map: %T", filtered[0])
+				} else {
+					_, hasTrackField := firstItem["track"]
+					_, hasIndexField := firstItem["index"]
+					_, hasLengthField := firstItem["length"]
+					_, hasPositionField := firstItem["position"]
+					
+					isClip := hasTrackField && (hasLengthField || hasPositionField)
+					isTrack := hasIndexField && !hasTrackField
+					
+					if isClip {
+						// This is a clips collection - set clip name
+						log.Printf("🔍 SetName: Detected clips collection")
+						for _, item := range filtered {
+							clipMap, ok := item.(map[string]interface{})
+							if !ok {
+								log.Printf("⚠️  SetName: Clip item is not a map: %T", item)
+								continue
+							}
+							trackIndex := -1
+							if trackVal, ok := clipMap["track"].(int); ok {
+								trackIndex = trackVal
+							} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+								trackIndex = int(trackValFloat)
+							}
+							
+							var clipIndex *int
+							var position *float64
+							
+							if idx, ok := clipMap["index"].(int); ok {
+								clipIndex = &idx
+							} else if idxFloat, ok := clipMap["index"].(float64); ok {
+								idxInt := int(idxFloat)
+								clipIndex = &idxInt
+							}
+							
+							if pos, ok := clipMap["position"].(float64); ok {
+								position = &pos
+							}
+							
+							if trackIndex < 0 {
+								log.Printf("⚠️  SetName: Could not extract track index from clip %+v", clipMap)
+								continue
+							}
+							
+							action := map[string]interface{}{
+								"action": "set_clip_name",
+								"track":  trackIndex,
+								"name":   nameValue.Str,
+							}
+							
+							if position != nil {
+								action["position"] = *position
+							} else if clipIndex != nil {
+								action["clip"] = *clipIndex
+							} else {
+								log.Printf("⚠️  SetName: Could not identify clip (no index or position): %+v", clipMap)
+								continue
+							}
+							
+							log.Printf("✅ SetName: Adding action for clip on track %d, name='%s'", trackIndex, nameValue.Str)
+							p.actions = append(p.actions, action)
+						}
+						delete(p.data, "current_filtered")
+						log.Printf("✅ SetName: Applied set_clip_name to %d filtered clips", len(filtered))
+						return nil
+					} else if isTrack {
+						// This is a tracks collection
+						log.Printf("🔍 SetName: Detected tracks collection")
+						for _, item := range filtered {
+							trackMap, ok := item.(map[string]interface{})
+							if !ok {
+								log.Printf("⚠️  SetName: Item is not a map: %T", item)
+								continue
+							}
+							trackIndex, ok := trackMap["index"].(int)
+							if !ok {
+								if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+									trackIndex = int(trackIndexFloat)
+								} else {
+									log.Printf("⚠️  SetName: Could not extract track index from %+v", trackMap)
+									continue
+								}
+							}
+							action := map[string]interface{}{
+								"action": "set_track_name",
+								"track":  trackIndex,
+								"name":   nameValue.Str,
+							}
+							p.actions = append(p.actions, action)
+						}
+						delete(p.data, "current_filtered")
+						log.Printf("✅ SetName: Applied set_track_name to %d filtered tracks", len(filtered))
+						return nil
+					}
+				}
+			}
+		}
+	}
+
+	// Normal single-track operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for name call")
 	}
 	action := map[string]interface{}{
 		"action": "set_track_name",
@@ -692,8 +805,98 @@ func (r *ReaperDSL) Delete(args gs.Args) error {
 }
 
 // DeleteClip handles .deleteClip() calls to delete a clip from the current track.
+// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
 func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 	p := r.parser
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 DeleteClip: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 DeleteClip: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				// Check if this is a clips collection
+				firstItem, ok := filtered[0].(map[string]interface{})
+				if !ok {
+					log.Printf("⚠️  DeleteClip: First item is not a map: %T", filtered[0])
+				} else {
+					_, hasTrackField := firstItem["track"]
+					_, hasLengthField := firstItem["length"]
+					_, hasPositionField := firstItem["position"]
+					isClip := hasTrackField && (hasLengthField || hasPositionField)
+					
+					if isClip {
+						// This is a clips collection
+						log.Printf("🔍 DeleteClip: Detected clips collection")
+						for _, item := range filtered {
+							clipMap, ok := item.(map[string]interface{})
+							if !ok {
+								log.Printf("⚠️  DeleteClip: Clip item is not a map: %T", item)
+								continue
+							}
+							// Get track index from clip
+							trackIndex := -1
+							if trackVal, ok := clipMap["track"].(int); ok {
+								trackIndex = trackVal
+							} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+								trackIndex = int(trackValFloat)
+							}
+							
+							// Get clip identifier (prefer position, then index)
+							var clipIndex *int
+							var position *float64
+							
+							if idx, ok := clipMap["index"].(int); ok {
+								clipIndex = &idx
+							} else if idxFloat, ok := clipMap["index"].(float64); ok {
+								idxInt := int(idxFloat)
+								clipIndex = &idxInt
+							}
+							
+							if pos, ok := clipMap["position"].(float64); ok {
+								position = &pos
+							}
+							
+							if trackIndex < 0 {
+								log.Printf("⚠️  DeleteClip: Could not extract track index from clip %+v", clipMap)
+								continue
+							}
+							
+							action := map[string]interface{}{
+								"action": "delete_clip",
+								"track":  trackIndex,
+							}
+							
+							// Add clip identifier (prefer position, then index)
+							if position != nil {
+								action["position"] = *position
+							} else if clipIndex != nil {
+								action["clip"] = *clipIndex
+							} else {
+								log.Printf("⚠️  DeleteClip: Could not identify clip (no index or position): %+v", clipMap)
+								continue
+							}
+							
+							log.Printf("✅ DeleteClip: Adding action for clip on track %d", trackIndex)
+							p.actions = append(p.actions, action)
+						}
+						// Clear filtered collection after applying
+						delete(p.data, "current_filtered")
+						log.Printf("✅ DeleteClip: Applied delete_clip to %d filtered clips", len(filtered))
+						return nil
+					} else {
+						log.Printf("⚠️  DeleteClip: Filtered collection is not clips (isClip=%v)", isClip)
+					}
+				}
+			} else {
+				log.Printf("⚠️  DeleteClip: Filtered collection is empty!")
+			}
+		} else {
+			log.Printf("⚠️  DeleteClip: Filtered collection is not a []interface{}: %T", filteredCollection)
+		}
+	}
+
+	// Normal single-clip operation
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for deleteClip call")
 	}
@@ -713,6 +916,324 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 		return fmt.Errorf("deleteClip requires one of: clip (index), position (seconds), or bar (number)")
 	}
 
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// SetClipName handles .set_clip_name() calls to set a clip's name.
+// If there's a filtered collection, applies to all clips; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) SetClipName(args gs.Args) error {
+	p := r.parser
+	nameValue, ok := args["name"]
+	if !ok || nameValue.Kind != gs.ValueString {
+		return fmt.Errorf("name must be a string")
+	}
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 SetClipName: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 SetClipName: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				for _, item := range filtered {
+					clipMap, ok := item.(map[string]interface{})
+					if !ok {
+						log.Printf("⚠️  SetClipName: Clip item is not a map: %T", item)
+						continue
+					}
+					trackIndex := -1
+					if trackVal, ok := clipMap["track"].(int); ok {
+						trackIndex = trackVal
+					} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+						trackIndex = int(trackValFloat)
+					}
+					
+					var clipIndex *int
+					var position *float64
+					
+					if idx, ok := clipMap["index"].(int); ok {
+						clipIndex = &idx
+					} else if idxFloat, ok := clipMap["index"].(float64); ok {
+						idxInt := int(idxFloat)
+						clipIndex = &idxInt
+					}
+					
+					if pos, ok := clipMap["position"].(float64); ok {
+						position = &pos
+					}
+					
+					if trackIndex < 0 {
+						log.Printf("⚠️  SetClipName: Could not extract track index from clip %+v", clipMap)
+						continue
+					}
+					
+					action := map[string]interface{}{
+						"action": "set_clip_name",
+						"track":  trackIndex,
+						"name":   nameValue.Str,
+					}
+					
+					if position != nil {
+						action["position"] = *position
+					} else if clipIndex != nil {
+						action["clip"] = *clipIndex
+					} else {
+						log.Printf("⚠️  SetClipName: Could not identify clip (no index or position): %+v", clipMap)
+						continue
+					}
+					
+					log.Printf("✅ SetClipName: Adding action for clip on track %d, name='%s'", trackIndex, nameValue.Str)
+					p.actions = append(p.actions, action)
+				}
+				delete(p.data, "current_filtered")
+				log.Printf("✅ SetClipName: Applied set_clip_name to %d filtered clips", len(filtered))
+				return nil
+			}
+		}
+	}
+
+	// Normal single-clip operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for set_clip_name call")
+	}
+	action := map[string]interface{}{
+		"action": "set_clip_name",
+		"track":  p.currentTrackIndex,
+		"name":   nameValue.Str,
+	}
+	
+	// Clip identification
+	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
+		action["clip"] = int(clipValue.Num)
+	} else if positionValue, ok := args["position"]; ok && positionValue.Kind == gs.ValueNumber {
+		action["position"] = positionValue.Num
+	} else if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+		action["bar"] = int(barValue.Num)
+	} else {
+		return fmt.Errorf("set_clip_name requires one of: clip (index), position (seconds), or bar (number)")
+	}
+	
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// SetClipColor handles .set_clip_color() calls to set a clip's color.
+// If there's a filtered collection, applies to all clips; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) SetClipColor(args gs.Args) error {
+	p := r.parser
+	colorValue, ok := args["color"]
+	if !ok {
+		return fmt.Errorf("color parameter is required")
+	}
+	
+	var color string
+	if colorValue.Kind == gs.ValueString {
+		color = colorValue.Str
+	} else if colorValue.Kind == gs.ValueNumber {
+		// Convert number to hex color string
+		color = fmt.Sprintf("#%06x", int(colorValue.Num))
+	} else {
+		return fmt.Errorf("color must be a string or number")
+	}
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 SetClipColor: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 SetClipColor: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				for _, item := range filtered {
+					clipMap, ok := item.(map[string]interface{})
+					if !ok {
+						log.Printf("⚠️  SetClipColor: Clip item is not a map: %T", item)
+						continue
+					}
+					trackIndex := -1
+					if trackVal, ok := clipMap["track"].(int); ok {
+						trackIndex = trackVal
+					} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+						trackIndex = int(trackValFloat)
+					}
+					
+					var clipIndex *int
+					var position *float64
+					
+					if idx, ok := clipMap["index"].(int); ok {
+						clipIndex = &idx
+					} else if idxFloat, ok := clipMap["index"].(float64); ok {
+						idxInt := int(idxFloat)
+						clipIndex = &idxInt
+					}
+					
+					if pos, ok := clipMap["position"].(float64); ok {
+						position = &pos
+					}
+					
+					if trackIndex < 0 {
+						log.Printf("⚠️  SetClipColor: Could not extract track index from clip %+v", clipMap)
+						continue
+					}
+					
+					action := map[string]interface{}{
+						"action": "set_clip_color",
+						"track":  trackIndex,
+						"color":  color,
+					}
+					
+					if position != nil {
+						action["position"] = *position
+					} else if clipIndex != nil {
+						action["clip"] = *clipIndex
+					} else {
+						log.Printf("⚠️  SetClipColor: Could not identify clip (no index or position): %+v", clipMap)
+						continue
+					}
+					
+					log.Printf("✅ SetClipColor: Adding action for clip on track %d, color='%s'", trackIndex, color)
+					p.actions = append(p.actions, action)
+				}
+				delete(p.data, "current_filtered")
+				log.Printf("✅ SetClipColor: Applied set_clip_color to %d filtered clips", len(filtered))
+				return nil
+			}
+		}
+	}
+
+	// Normal single-clip operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for set_clip_color call")
+	}
+	action := map[string]interface{}{
+		"action": "set_clip_color",
+		"track":  p.currentTrackIndex,
+		"color":  color,
+	}
+	
+	// Clip identification
+	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
+		action["clip"] = int(clipValue.Num)
+	} else if positionValue, ok := args["position"]; ok && positionValue.Kind == gs.ValueNumber {
+		action["position"] = positionValue.Num
+	} else if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+		action["bar"] = int(barValue.Num)
+	} else {
+		return fmt.Errorf("set_clip_color requires one of: clip (index), position (seconds), or bar (number)")
+	}
+	
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// MoveClip handles .move_clip() or .set_clip_position() calls to move a clip.
+// If there's a filtered collection, applies to all clips; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) MoveClip(args gs.Args) error {
+	p := r.parser
+	
+	// Get position (required)
+	positionValue, ok := args["position"]
+	if !ok {
+		// Try "bar" as alternative
+		if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+			// Convert bar to position (would need BPM, but for now just use bar number)
+			// This is a placeholder - in real implementation would convert bar to seconds
+			positionValue = barValue
+		} else {
+			return fmt.Errorf("move_clip requires position (seconds) or bar (number)")
+		}
+	}
+	
+	var position float64
+	if positionValue.Kind == gs.ValueNumber {
+		position = positionValue.Num
+	} else {
+		return fmt.Errorf("position must be a number")
+	}
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 MoveClip: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]interface{}); ok {
+			log.Printf("🔍 MoveClip: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				for _, item := range filtered {
+					clipMap, ok := item.(map[string]interface{})
+					if !ok {
+						log.Printf("⚠️  MoveClip: Clip item is not a map: %T", item)
+						continue
+					}
+					trackIndex := -1
+					if trackVal, ok := clipMap["track"].(int); ok {
+						trackIndex = trackVal
+					} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+						trackIndex = int(trackValFloat)
+					}
+					
+					var clipIndex *int
+					var oldPosition *float64
+					
+					if idx, ok := clipMap["index"].(int); ok {
+						clipIndex = &idx
+					} else if idxFloat, ok := clipMap["index"].(float64); ok {
+						idxInt := int(idxFloat)
+						clipIndex = &idxInt
+					}
+					
+					if pos, ok := clipMap["position"].(float64); ok {
+						oldPosition = &pos
+					}
+					
+					if trackIndex < 0 {
+						log.Printf("⚠️  MoveClip: Could not extract track index from clip %+v", clipMap)
+						continue
+					}
+					
+					action := map[string]interface{}{
+						"action":   "set_clip_position",
+						"track":    trackIndex,
+						"position": position,
+					}
+					
+					// Use old position or index to identify the clip
+					if oldPosition != nil {
+						action["old_position"] = *oldPosition
+					} else if clipIndex != nil {
+						action["clip"] = *clipIndex
+					} else {
+						log.Printf("⚠️  MoveClip: Could not identify clip (no index or position): %+v", clipMap)
+						continue
+					}
+					
+					log.Printf("✅ MoveClip: Adding action for clip on track %d, new position=%v", trackIndex, position)
+					p.actions = append(p.actions, action)
+				}
+				delete(p.data, "current_filtered")
+				log.Printf("✅ MoveClip: Applied set_clip_position to %d filtered clips", len(filtered))
+				return nil
+			}
+		}
+	}
+
+	// Normal single-clip operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for move_clip call")
+	}
+	action := map[string]interface{}{
+		"action":   "set_clip_position",
+		"track":    p.currentTrackIndex,
+		"position": position,
+	}
+	
+	// Clip identification
+	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
+		action["clip"] = int(clipValue.Num)
+	} else if oldPositionValue, ok := args["old_position"]; ok && oldPositionValue.Kind == gs.ValueNumber {
+		action["old_position"] = oldPositionValue.Num
+	} else if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+		action["bar"] = int(barValue.Num)
+	} else {
+		return fmt.Errorf("move_clip requires one of: clip (index), old_position (seconds), or bar (number)")
+	}
+	
 	p.actions = append(p.actions, action)
 	return nil
 }
@@ -870,10 +1391,6 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	if collection == nil {
 		log.Printf("❌ Filter: Could not find collection argument. Available data keys: %v", getDataKeys(p.data))
 		return fmt.Errorf("filter requires a collection argument (got args: %v, available collections: %v)", args, getDataKeys(p.data))
-	}
-
-	if collection == nil {
-		return fmt.Errorf("collection not found or is empty")
 	}
 
 	// Derive iteration variable name
@@ -1396,6 +1913,12 @@ func (p *FunctionalDSLParser) executeMethodOnItem(methodName string, methodArgs 
 		return p.reaperDSL.Delete(methodArgs)
 	case "DeleteClip":
 		return p.reaperDSL.DeleteClip(methodArgs)
+	case "SetClipName":
+		return p.reaperDSL.SetClipName(methodArgs)
+	case "SetClipColor":
+		return p.reaperDSL.SetClipColor(methodArgs)
+	case "MoveClip", "SetClipPosition":
+		return p.reaperDSL.MoveClip(methodArgs)
 	default:
 		return fmt.Errorf("unknown method: %s (converted from %s)", methodNameCamel, methodName)
 	}
@@ -1953,8 +2476,20 @@ delete_clip_param: "clip" "=" NUMBER
                  | "position" "=" NUMBER
                  | "bar" "=" NUMBER
 
+// Clip editing operations
+clip_name_chain: ".set_clip_name" "(" "name" "=" STRING ")"
+clip_color_chain: ".set_clip_color" "(" "color" "=" (STRING | NUMBER) ")"
+clip_move_chain: ".move_clip" "(" move_clip_params? ")"
+                | ".set_clip_position" "(" move_clip_params? ")"
+move_clip_params: move_clip_param ("," SP move_clip_param)*
+move_clip_param: "position" "=" NUMBER
+               | "bar" "=" NUMBER
+               | "clip" "=" NUMBER
+               | "old_position" "=" NUMBER
+
 // Functional operations
-functional_call: filter_call chain?
+functional_call: filter_call chain+
+                 | filter_call chain? ";" filter_call chain?
                  | map_call
                  | for_each_call
 
