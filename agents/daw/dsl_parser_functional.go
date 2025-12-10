@@ -489,17 +489,30 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 			log.Printf("🔍 SetSelected: Filtered collection has %d items, selected=%v", len(filtered), selected)
 			if len(filtered) > 0 {
 				// Check if this is a clips collection or tracks collection
-				// Clips have a "track" field and "position"/"length" fields
-				// Tracks have an "index" field
+				// Clips have a "track" field (the track index they belong to) and "position"/"length" fields
+				// Tracks have an "index" field (their own index)
+				// Note: Clips might also have an "index" field (their index within the track),
+				// so we check for "track" field first to identify clips
 				firstItem, ok := filtered[0].(map[string]interface{})
 				if !ok {
 					log.Printf("⚠️  SetSelected: First item is not a map: %T", filtered[0])
 				} else {
-					// Check if it's a clip (has "track" field) or track (has "index" field)
-					_, isClip := firstItem["track"]
-					_, isTrack := firstItem["index"]
+					// Check if it's a clip (has "track" field indicating which track it belongs to)
+					// or track (has "index" field but no "track" field)
+					_, hasTrackField := firstItem["track"]
+					_, hasIndexField := firstItem["index"]
+					_, hasLengthField := firstItem["length"]
+					_, hasPositionField := firstItem["position"]
 					
-					if isClip && !isTrack {
+					// Clips have "track" field (belongs to a track) and usually "length"/"position"
+					// Tracks have "index" field (their own index) but no "track" field
+					isClip := hasTrackField && (hasLengthField || hasPositionField)
+					isTrack := hasIndexField && !hasTrackField
+					
+					log.Printf("🔍 SetSelected: Item detection - hasTrackField=%v, hasIndexField=%v, hasLengthField=%v, hasPositionField=%v, isClip=%v, isTrack=%v", 
+						hasTrackField, hasIndexField, hasLengthField, hasPositionField, isClip, isTrack)
+					
+					if isClip {
 						// This is a clips collection
 						log.Printf("🔍 SetSelected: Detected clips collection")
 						for _, item := range filtered {
@@ -1536,14 +1549,29 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 	// - track.name=="value"
 	// - track.name != "value"
 
-	// Find the operator
+	// Find the operator (check longer operators first to avoid partial matches)
 	var op string
 	var opIndex int
-	if idx := strings.Index(predStr, "=="); idx != -1 {
+	if idx := strings.Index(predStr, "<="); idx != -1 {
+		op = "<="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, ">="); idx != -1 {
+		op = ">="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, "=="); idx != -1 {
 		op = "=="
 		opIndex = idx
 	} else if idx := strings.Index(predStr, "!="); idx != -1 {
 		op = "!="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, " in "); idx != -1 {
+		op = "in"
+		opIndex = idx
+	} else if idx := strings.Index(predStr, "<"); idx != -1 {
+		op = "<"
+		opIndex = idx
+	} else if idx := strings.Index(predStr, ">"); idx != -1 {
+		op = ">"
 		opIndex = idx
 	} else {
 		return false
@@ -1552,6 +1580,11 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 	// Split into left (property) and right (value)
 	left := strings.TrimSpace(predStr[:opIndex])
 	right := strings.TrimSpace(predStr[opIndex+len(op):])
+	
+	// For "in" operator, remove the extra spaces around it
+	if op == "in" {
+		right = strings.TrimSpace(right)
+	}
 
 	// Extract property name from "track.name" or "iterVar.name"
 	// The left side should be like "track.name" where "track" is the iterVar
@@ -1608,7 +1641,93 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		return false
 	}
 
-	// Compare values (for strings and numbers)
+	// Handle "in" operator: property in [value1, value2, ...]
+	if op == "in" {
+		// Parse the right side as an array: [value1, value2, ...]
+		rightTrimmed := strings.TrimSpace(right)
+		if !strings.HasPrefix(rightTrimmed, "[") || !strings.HasSuffix(rightTrimmed, "]") {
+			return false
+		}
+		
+		// Extract array contents
+		arrayContents := strings.TrimSpace(rightTrimmed[1 : len(rightTrimmed)-1])
+		if arrayContents == "" {
+			return false // Empty array
+		}
+		
+		// Split by comma (simple parsing, doesn't handle nested arrays or quoted commas)
+		values := strings.Split(arrayContents, ",")
+		collectionValues := make([]interface{}, 0, len(values))
+		for _, valStr := range values {
+			valStr = strings.TrimSpace(valStr)
+			valStr = strings.Trim(valStr, "\"") // Remove quotes
+			
+			// Try to parse as number first
+			if num, err := strconv.ParseFloat(valStr, 64); err == nil {
+				collectionValues = append(collectionValues, num)
+			} else if valStr == "true" {
+				collectionValues = append(collectionValues, true)
+			} else if valStr == "false" {
+				collectionValues = append(collectionValues, false)
+			} else {
+				// Treat as string
+				collectionValues = append(collectionValues, valStr)
+			}
+		}
+		
+		// Check if itemValue is in the collection
+		for _, collVal := range collectionValues {
+			if compareValuesForIn(itemValue, collVal) {
+				return true
+			}
+		}
+		return false
+	}
+	
+	// For numeric comparisons (<, >, <=, >=), we need to compare as numbers
+	// For string comparisons (==, !=), we compare as strings
+	if op == "<" || op == ">" || op == "<=" || op == ">=" {
+		// Numeric comparison
+		var itemNum, rightNum float64
+		var itemOk, rightOk bool
+		
+		// Convert item value to number
+		switch v := itemValue.(type) {
+		case float64:
+			itemNum = v
+			itemOk = true
+		case int:
+			itemNum = float64(v)
+			itemOk = true
+		case int64:
+			itemNum = float64(v)
+			itemOk = true
+		}
+		
+		// Parse right side as number
+		rightTrimmed := strings.TrimSpace(right)
+		rightTrimmed = strings.Trim(rightTrimmed, "\"") // Remove quotes if present
+		if parsed, err := strconv.ParseFloat(rightTrimmed, 64); err == nil {
+			rightNum = parsed
+			rightOk = true
+		}
+		
+		if itemOk && rightOk {
+			switch op {
+			case "<":
+				return itemNum < rightNum
+			case ">":
+				return itemNum > rightNum
+			case "<=":
+				return itemNum <= rightNum
+			case ">=":
+				return itemNum >= rightNum
+			}
+		}
+		return false
+	}
+	
+	// String comparison (==, !=)
 	var itemValueStr string
 	switch v := itemValue.(type) {
 	case string:
@@ -1627,8 +1746,45 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 	} else if op == "!=" {
 		return itemValueStr != right
 	}
-
 	return false
+}
+
+// compareValuesForIn compares two values for equality in the context of "in" operator, handling different types
+func compareValuesForIn(a, b interface{}) bool {
+	// Handle numeric comparison
+	aNum, aIsNum := getNumericValue(a)
+	bNum, bIsNum := getNumericValue(b)
+	if aIsNum && bIsNum {
+		return aNum == bNum
+	}
+	
+	// Handle boolean comparison
+	if aBool, ok := a.(bool); ok {
+		if bBool, ok := b.(bool); ok {
+			return aBool == bBool
+		}
+	}
+	
+	// Handle string comparison
+	aStr := fmt.Sprintf("%v", a)
+	bStr := fmt.Sprintf("%v", b)
+	return aStr == bStr
+}
+
+// getNumericValue extracts a numeric value from an interface{}, returning the float64 and true if successful
+func getNumericValue(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	default:
+		return 0, false
+	}
 }
 
 // evaluateSimplePredicate evaluates a simple property-based predicate.
