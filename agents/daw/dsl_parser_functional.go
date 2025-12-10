@@ -935,8 +935,16 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 				if value.Kind == gs.ValueString {
 					predStr := strings.TrimSpace(value.Str)
 					log.Printf("🔍 Filter: Checking predicate string '%s' (key: '%s')", predStr, key)
-					// Check if it looks like a complete predicate: "track.name == \"value\"" or "track.name==\"value\""
-					if strings.Contains(predStr, ".") && (strings.Contains(predStr, "==") || strings.Contains(predStr, "!=")) {
+					// Check if it looks like a complete predicate: "track.name == \"value\"" or "track.name<1.5" or "clip.length<1.5"
+					// Support ==, !=, <, >, <=, >= operators
+					hasDot := strings.Contains(predStr, ".")
+					hasEq := strings.Contains(predStr, "==")
+					hasNe := strings.Contains(predStr, "!=")
+					hasLt := strings.Contains(predStr, "<")
+					hasGt := strings.Contains(predStr, ">")
+					hasIn := strings.Contains(predStr, " in ")
+					log.Printf("🔍 Filter: Predicate check - hasDot=%v, hasEq=%v, hasNe=%v, hasLt=%v, hasGt=%v, hasIn=%v", hasDot, hasEq, hasNe, hasLt, hasGt, hasIn)
+					if hasDot && (hasEq || hasNe || hasLt || hasGt || hasIn) {
 						log.Printf("🔍 Filter: Attempting to parse complete predicate: '%s'", predStr)
 						// Try to parse it manually
 						if matched := p.parseAndEvaluatePredicate(predStr, item, iterVar); matched {
@@ -1543,6 +1551,7 @@ func getDataKeys(data map[string]interface{}) []string {
 func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item interface{}, iterVar string) bool {
 	// Remove quotes and whitespace
 	predStr = strings.TrimSpace(predStr)
+	log.Printf("🔍 parseAndEvaluatePredicate: parsing '%s' with iterVar='%s'", predStr, iterVar)
 
 	// Try to match patterns like:
 	// - track.name == "value"
@@ -1574,8 +1583,10 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		op = ">"
 		opIndex = idx
 	} else {
+		log.Printf("⚠️  parseAndEvaluatePredicate: No operator found in '%s'", predStr)
 		return false
 	}
+	log.Printf("🔍 parseAndEvaluatePredicate: Found operator '%s' at index %d", op, opIndex)
 
 	// Split into left (property) and right (value)
 	left := strings.TrimSpace(predStr[:opIndex])
@@ -1593,9 +1604,11 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		return false
 	}
 
-	// Verify the first part matches the iteration variable (or is just the variable name)
+	// Verify the first part matches the iteration variable (or is a common variable name)
 	// For "track.name", we expect iterVar to be "track"
-	if propParts[0] != iterVar && propParts[0] != "track" {
+	// For "clip.length", we expect iterVar to be "clip"
+	// Allow common variable names: track, clip, fx
+	if propParts[0] != iterVar && propParts[0] != "track" && propParts[0] != "clip" && propParts[0] != "fx" {
 		return false
 	}
 
@@ -1696,13 +1709,29 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		case float64:
 			itemNum = v
 			itemOk = true
+		case float32:
+			itemNum = float64(v)
+			itemOk = true
 		case int:
 			itemNum = float64(v)
 			itemOk = true
 		case int64:
 			itemNum = float64(v)
 			itemOk = true
+		case int32:
+			itemNum = float64(v)
+			itemOk = true
+		default:
+			// Try to convert via string parsing as fallback
+			if strVal := fmt.Sprintf("%v", itemValue); strVal != "" {
+				if parsed, err := strconv.ParseFloat(strVal, 64); err == nil {
+					itemNum = parsed
+					itemOk = true
+				}
+			}
 		}
+		
+		log.Printf("🔍 parseAndEvaluatePredicate: itemValue type=%T, value=%v, converted to num=%v (ok=%v)", itemValue, itemValue, itemNum, itemOk)
 		
 		// Parse right side as number
 		rightTrimmed := strings.TrimSpace(right)
@@ -1710,20 +1739,28 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		if parsed, err := strconv.ParseFloat(rightTrimmed, 64); err == nil {
 			rightNum = parsed
 			rightOk = true
+		} else {
+			log.Printf("⚠️  parseAndEvaluatePredicate: Failed to parse right side '%s' as number: %v", rightTrimmed, err)
 		}
 		
+		log.Printf("🔍 parseAndEvaluatePredicate: right='%s', parsed to num=%v (ok=%v), comparison: %v %s %v", rightTrimmed, rightNum, rightOk, itemNum, op, rightNum)
+		
 		if itemOk && rightOk {
+			var result bool
 			switch op {
 			case "<":
-				return itemNum < rightNum
+				result = itemNum < rightNum
 			case ">":
-				return itemNum > rightNum
+				result = itemNum > rightNum
 			case "<=":
-				return itemNum <= rightNum
+				result = itemNum <= rightNum
 			case ">=":
-				return itemNum >= rightNum
+				result = itemNum >= rightNum
 			}
+			log.Printf("✅ parseAndEvaluatePredicate: Comparison result: %v %s %v = %v", itemNum, op, rightNum, result)
+			return result
 		}
+		log.Printf("⚠️  parseAndEvaluatePredicate: Cannot compare - itemOk=%v, rightOk=%v", itemOk, rightOk)
 		return false
 	}
 	
