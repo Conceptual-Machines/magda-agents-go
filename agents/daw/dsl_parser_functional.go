@@ -1004,43 +1004,47 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 	}
 
 	// Check for method call string (e.g., "track.add_fx(fxname=\"ReaEQ\")")
-	// For for_each(tracks, track.method()), the method call is the second positional argument
-	// which overwrites the first in args[""], so args[""] will contain the method call
-	// Try positional argument first (this is where the method call will be)
-	if value, ok := args[""]; ok && value.Kind == gs.ValueString {
-		// Check if it looks like a method call (contains "." and "(")
-		if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
-			methodCallStr = value.Str
-			log.Printf("🔄 ForEach: Found method call in positional arg: %s", methodCallStr)
-		}
-	}
-
-	// Try other argument names
-	if methodCallStr == "" {
-		for _, key := range []string{"method", "call", "action"} {
-			if value, ok := args[key]; ok {
-				if value.Kind == gs.ValueString {
-					// Check if it looks like a method call (contains "." and "(")
-					if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
-						methodCallStr = value.Str
-						log.Printf("🔄 ForEach: Found method call string in arg[%s]: %s", key, methodCallStr)
-						break
-					}
+	// The parser may split method calls on "=", so we need to reconstruct them
+	// Look for args that start with a method call pattern (contains "." and "(")
+	var methodCallParts []string
+	var methodCallValue string
+	
+	for key, value := range args {
+		if value.Kind == gs.ValueString {
+			// Check if this looks like the start of a method call (contains "." and "(")
+			if strings.Contains(key, ".") && strings.Contains(key, "(") {
+				// This is a split method call - the key is the method part, value is the parameter value
+				methodCallParts = append(methodCallParts, key)
+				methodCallValue = value.Str
+				log.Printf("🔄 ForEach: Found split method call - key='%s', value='%s'", key, methodCallValue)
+			} else if key != "" && key != "collection" && key != "func" {
+				// Check if it's a complete method call string
+				if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") && strings.Contains(value.Str, ")") {
+					methodCallStr = value.Str
+					log.Printf("🔄 ForEach: Found complete method call in arg[%s]: %s", key, methodCallStr)
+					break
 				}
 			}
 		}
 	}
-
-	// Last resort: check all string values that look like method calls
+	
+	// If we found a split method call, reconstruct it
+	if methodCallStr == "" && len(methodCallParts) > 0 {
+		// Reconstruct: "track.add_fx(fxname" + "=" + "\"ReaEQ\")"
+		methodCallKey := methodCallParts[0]
+		// Reconstruct the full method call
+		// The key is like "track.add_fx(fxname" and value is like "\"ReaEQ\""
+		methodCallStr = methodCallKey + "=" + methodCallValue + ")"
+		log.Printf("🔄 ForEach: Reconstructed method call: %s", methodCallStr)
+	}
+	
+	// Try positional argument as fallback
 	if methodCallStr == "" {
-		for key, value := range args {
-			if value.Kind == gs.ValueString {
-				// Skip if it's the collection name
-				if value.Str != collectionName && strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
-					methodCallStr = value.Str
-					log.Printf("🔄 ForEach: Found method call in arg[%s]: %s", key, methodCallStr)
-					break
-				}
+		if value, ok := args[""]; ok && value.Kind == gs.ValueString {
+			// Check if it looks like a method call (contains "." and "(")
+			if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
+				methodCallStr = value.Str
+				log.Printf("🔄 ForEach: Found method call in positional arg: %s", methodCallStr)
 			}
 		}
 	}
