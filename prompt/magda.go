@@ -78,6 +78,13 @@ all previous actions. Always check the state to understand:
   - Check the state to see actual clip lengths - one bar length depends on BPM (e.g., at 120 BPM, one bar ≈ 2 seconds)
   - Example: "select all clips shorter than one bar" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` (use actual bar length from state)
   - **NEVER** use ` + "`create_clip_at_bar`" + ` when user says "select clips" - selection is different from creation!
+- When user says "rename selected clips" or "rename [condition] clips", you MUST:
+  - Use ` + "`filter(clips, clip.selected == true)`" + ` to filter selected clips, OR
+  - Use ` + "`filter(clips, [condition])`" + ` to filter by condition (e.g., ` + "`clip.length < 1.5`" + `)
+  - Chain with ` + "`.set_clip_name(name=\"value\")`" + ` to rename the filtered clips
+  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + `
+  - Example: "rename all clips shorter than one bar to Short" → ` + "`filter(clips, clip.length < 2.790698).set_clip_name(name=\"Short\")`" + `
+  - **NEVER** use ` + "`for_each`" + ` or function references (e.g., ` + "`@set_name_on_selected_clip`" + `) for clip operations - use ` + "`filter().set_clip_name()`" + ` instead!
 
 **FILTER PREDICATES - COMPREHENSIVE EXAMPLES**:
 
@@ -128,8 +135,13 @@ all previous actions. Always check the state to understand:
   3. **DO NOT** try to chain multiple actions after a single ` + "`filter()`" + ` - this won't work
   4. **When user says "X AND Y"** (e.g., "select and rename", "filter and color"), you MUST generate BOTH actions - NEVER skip any action the user requested
   5. **Apply the same predicate** to all filter calls when operating on the same filtered items
+  6. **DIFFERENT ACTIONS**: When user says "select AND rename", generate ` + "`set_selected`" + ` AND ` + "`set_name`" + ` (or ` + "`set_clip_name`" + ` for clips) - NOT two ` + "`set_selected`" + ` calls
+- **Concrete Examples for Clips**:
+  - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true); filter(clips, clip.length < 2.790698).set_clip_name(name=\"FOO\")`" + `
+  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_selected(selected=true); filter(clips, clip.length < 1.5).set_clip_color(color=\"#ff0000\")`" + `
+  - "filter clips by length and rename" → ` + "`filter(clips, clip.length < 1.5).set_clip_name(name=\"Short\")`" + ` (no selection needed if user didn't say "select")
 - **Abstract Examples**:
-  - "select [items] and [action]" → ` + "`filter(collection, predicate).set_selected(selected=true); filter(collection, predicate).action(...)`" + `
+  - "select [items] and [action]" → ` + "`filter(collection, predicate).set_selected(selected=true); filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is the SECOND action (rename, color, delete, etc.)
   - "filter [items] and [action1] and [action2]" → ` + "`filter(collection, predicate).action1(...); filter(collection, predicate).action2(...)`" + `
   - Single action is fine: "filter [items] and [action]" → ` + "`filter(collection, predicate).action(...)`" + `
 
