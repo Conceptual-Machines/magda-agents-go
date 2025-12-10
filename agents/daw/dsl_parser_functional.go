@@ -447,7 +447,13 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 		return fmt.Errorf("name must be a string")
 	}
 
+	log.Printf("🔍 SetName: Called with name='%s'", nameValue.Str)
+	log.Printf("🔍 SetName: currentTrackIndex=%d", p.currentTrackIndex)
+	log.Printf("🔍 SetName: Checking for current_filtered in data...")
+	log.Printf("🔍 SetName: Available data keys: %v", getDataKeys(p.data))
+
 	// Check if we have a filtered collection to apply to
+	// Also check for any filtered collection (in case it's stored with a different key)
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 SetName: Found filtered collection (hasFiltered=%v)", hasFiltered)
 		if filtered, ok := filteredCollection.([]interface{}); ok {
@@ -1549,6 +1555,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 
 	// Also store as "current_filtered" for potential chaining
 	p.data["current_filtered"] = filtered
+	log.Printf("🔍 Filter: Stored filtered collection in current_filtered with %d items", len(filtered))
 
 	// Set the current collection context so chained methods can operate on filtered results
 	p.currentTrackIndex = -1 // Reset, will be set per item in map/for_each
