@@ -67,6 +67,17 @@ all previous actions. Always check the state to understand:
 - Which track is currently selected
 - Track names and properties
 - Current play position and time selection
+- Which clips exist, their positions, lengths, and properties (clips are in tracks[].clips[])
+
+**CRITICAL - CLIP OPERATIONS**:
+- When user says "select all clips [condition]" (e.g., "select all clips shorter than one bar"), you MUST:
+  - Use ` + "`filter(clips, clip.length < value)`" + ` to filter clips by length (in seconds)
+  - Chain with ` + "`.set_selected(selected=true)`" + ` to select the filtered clips
+  - Check the state to see actual clip lengths - one bar length depends on BPM (e.g., at 120 BPM, one bar ≈ 2 seconds)
+  - Example: "select all clips shorter than one bar" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` (use actual bar length from state)
+  - **NEVER** use ` + "`create_clip_at_bar`" + ` when user says "select clips" - selection is different from creation!
+- Clips can be filtered by: ` + "`clip.length`" + ` (duration in seconds), ` + "`clip.position`" + ` (start time in seconds)
+- The ` + "`clips`" + ` collection is automatically available from all tracks in the state
 
 **CRITICAL ACTION SELECTION RULES**:
 - When user says "delete [track name]" or "remove [track name]" → Use delete_track action
@@ -157,6 +168,19 @@ Creates a media item/clip on a track at a specific time position.
 Creates a media item/clip on a track at a specific bar number.
 - Required: ` + "`action: \"create_clip_at_bar\"`" + `, ` + "`track`" + ` (integer), ` + "`bar`" + ` (integer, 1-based), ` + "`length_bars`" + ` (integer)
 - Example: ` + "`bar: 17, length_bars: 4`" + ` creates a 4-bar clip starting at bar 17
+
+**set_clip_selected** / **select_clip**
+Selects or deselects a media item/clip.
+- Required: ` + "`action: \"set_clip_selected\"`" + `, ` + "`track`" + ` (integer), ` + "`selected`" + ` (boolean)
+- Optional: ` + "`clip`" + ` (integer, clip index), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
+- Example: ` + "`filter(clips, clip.length < 1.0).set_selected(selected=true)`" + ` selects all clips shorter than 1 second
+- Example: ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` selects all clips shorter than one bar (at 120 BPM, one bar ≈ 2 seconds)
+- **CRITICAL - CLIP FILTERING**: When user says "select all clips [condition]", you MUST:
+  - Use ` + "`filter(clips, clip.property < value)`" + ` to filter clips by properties like ` + "`length`" + `, ` + "`position`" + `
+  - Chain with ` + "`.set_selected(selected=true)`" + ` to select the filtered clips
+  - Example: "select all clips shorter than one bar" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` (check state for actual bar length in seconds)
+  - Example: "select clips starting before bar 5" → ` + "`filter(clips, clip.position < [bar_5_position_in_seconds]).set_selected(selected=true)`" + `
+  - **NEVER** use ` + "`create_clip_at_bar`" + ` when user says "select clips" - selection is different from creation!
 
 ## Action Execution Order and Parent-Child Relationships
 

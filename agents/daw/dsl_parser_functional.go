@@ -488,36 +488,111 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 		if filtered, ok := filteredCollection.([]interface{}); ok {
 			log.Printf("🔍 SetSelected: Filtered collection has %d items, selected=%v", len(filtered), selected)
 			if len(filtered) > 0 {
-				// Apply to all filtered tracks
-				for _, item := range filtered {
-					trackMap, ok := item.(map[string]interface{})
-					if !ok {
-						log.Printf("⚠️  SetSelected: Item is not a map: %T", item)
-						continue
-					}
-					trackIndex, ok := trackMap["index"].(int)
-					if !ok {
-						// Try float64 (JSON numbers are float64)
-						if trackIndexFloat, ok := trackMap["index"].(float64); ok {
-							trackIndex = int(trackIndexFloat)
-						} else {
-							log.Printf("⚠️  SetSelected: Could not extract track index from %+v", trackMap)
-							continue
+				// Check if this is a clips collection or tracks collection
+				// Clips have a "track" field and "position"/"length" fields
+				// Tracks have an "index" field
+				firstItem, ok := filtered[0].(map[string]interface{})
+				if !ok {
+					log.Printf("⚠️  SetSelected: First item is not a map: %T", filtered[0])
+				} else {
+					// Check if it's a clip (has "track" field) or track (has "index" field)
+					_, isClip := firstItem["track"]
+					_, isTrack := firstItem["index"]
+					
+					if isClip && !isTrack {
+						// This is a clips collection
+						log.Printf("🔍 SetSelected: Detected clips collection")
+						for _, item := range filtered {
+							clipMap, ok := item.(map[string]interface{})
+							if !ok {
+								log.Printf("⚠️  SetSelected: Clip item is not a map: %T", item)
+								continue
+							}
+							// Get track index from clip
+							trackIndex := -1
+							if trackVal, ok := clipMap["track"].(int); ok {
+								trackIndex = trackVal
+							} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+								trackIndex = int(trackValFloat)
+							}
+							
+							// Get clip identifier (prefer position, then index)
+							var clipIndex *int
+							var position *float64
+							
+							if idx, ok := clipMap["index"].(int); ok {
+								clipIndex = &idx
+							} else if idxFloat, ok := clipMap["index"].(float64); ok {
+								idxInt := int(idxFloat)
+								clipIndex = &idxInt
+							}
+							
+							if pos, ok := clipMap["position"].(float64); ok {
+								position = &pos
+							}
+							
+							if trackIndex < 0 {
+								log.Printf("⚠️  SetSelected: Could not extract track index from clip %+v", clipMap)
+								continue
+							}
+							
+							action := map[string]interface{}{
+								"action":   "set_clip_selected",
+								"track":    trackIndex,
+								"selected": selected,
+							}
+							
+							// Add clip identifier (prefer position, then index)
+							if position != nil {
+								action["position"] = *position
+							} else if clipIndex != nil {
+								action["clip"] = *clipIndex
+							} else {
+								log.Printf("⚠️  SetSelected: Could not identify clip (no index or position): %+v", clipMap)
+								continue
+							}
+							
+							log.Printf("✅ SetSelected: Adding action for clip on track %d, selected=%v", trackIndex, selected)
+							p.actions = append(p.actions, action)
 						}
+						// Clear filtered collection after applying
+						delete(p.data, "current_filtered")
+						log.Printf("✅ SetSelected: Applied set_clip_selected to %d filtered clips", len(filtered))
+						return nil
+					} else {
+						// This is a tracks collection
+						log.Printf("🔍 SetSelected: Detected tracks collection")
+						for _, item := range filtered {
+							trackMap, ok := item.(map[string]interface{})
+							if !ok {
+								log.Printf("⚠️  SetSelected: Item is not a map: %T", item)
+								continue
+							}
+							trackIndex, ok := trackMap["index"].(int)
+							if !ok {
+								// Try float64 (JSON numbers are float64)
+								if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+									trackIndex = int(trackIndexFloat)
+								} else {
+									log.Printf("⚠️  SetSelected: Could not extract track index from %+v", trackMap)
+									continue
+								}
+							}
+							trackName, _ := trackMap["name"].(string)
+							log.Printf("✅ SetSelected: Adding action for track %d (name='%s'), selected=%v", trackIndex, trackName, selected)
+							action := map[string]interface{}{
+								"action":   "set_track_selected",
+								"track":    trackIndex,
+								"selected": selected,
+							}
+							p.actions = append(p.actions, action)
+						}
+						// Clear filtered collection after applying
+						delete(p.data, "current_filtered")
+						log.Printf("✅ SetSelected: Applied set_selected to %d filtered tracks", len(filtered))
+						return nil
 					}
-					trackName, _ := trackMap["name"].(string)
-					log.Printf("✅ SetSelected: Adding action for track %d (name='%s'), selected=%v", trackIndex, trackName, selected)
-					action := map[string]interface{}{
-						"action":   "set_track_selected",
-						"track":    trackIndex,
-						"selected": selected,
-					}
-					p.actions = append(p.actions, action)
 				}
-				// Clear filtered collection after applying
-				delete(p.data, "current_filtered")
-				log.Printf("✅ SetSelected: Applied set_selected to %d filtered tracks", len(filtered))
-				return nil
 			} else {
 				log.Printf("⚠️  SetSelected: Filtered collection is empty! This means filter() returned 0 results.")
 			}
