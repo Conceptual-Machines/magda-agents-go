@@ -767,21 +767,45 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	}
 
 	// 3. Last resort: iterate and find first string value that resolves to a collection
+	// This handles the case where multiple positional arguments exist and the last one overwrote the first
+	// We need to check ALL args to find which one is the collection name
 	if collection == nil {
 		log.Printf("🔍 Filter: Trying to find collection by iterating all args...")
+		// First, try to find a collection by checking all string values
+		// We prioritize the positional argument (empty key) if it resolves to a collection
+		// Otherwise, check all other args
+		candidates := []struct {
+			key   string
+			value gs.Value
+		}{}
+		
+		// Add positional arg first (if it exists)
+		if posValue, ok := args[""]; ok {
+			candidates = append(candidates, struct {
+				key   string
+				value gs.Value
+			}{"", posValue})
+		}
+		
+		// Add all other args
 		for key, value := range args {
-			// Skip known named arguments that are not collections
-			if key == "predicate" || key == "property" || key == "operator" || key == "value" {
-				continue
+			if key != "" && key != "predicate" && key != "property" && key != "operator" && key != "value" {
+				candidates = append(candidates, struct {
+					key   string
+					value gs.Value
+				}{key, value})
 			}
-			// Try to resolve as collection
-			if value.Kind == gs.ValueString {
-				potentialName := value.Str
-				log.Printf("🔍 Filter: Trying to resolve '%s' (from key '%s') as collection...", potentialName, key)
+		}
+		
+		// Try each candidate to see if it resolves to a collection
+		for _, candidate := range candidates {
+			if candidate.value.Kind == gs.ValueString {
+				potentialName := candidate.value.Str
+				log.Printf("🔍 Filter: Trying to resolve '%s' (from key '%s') as collection...", potentialName, candidate.key)
 				if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
 					collectionName = potentialName
 					collection = resolved
-					log.Printf("✅ Filter: Found collection '%s' via iteration (key: '%s')", collectionName, key)
+					log.Printf("✅ Filter: Found collection '%s' via iteration (key: '%s')", collectionName, candidate.key)
 					break
 				} else {
 					log.Printf("⚠️  Filter: '%s' is not a valid collection: %v", potentialName, err)
@@ -791,6 +815,45 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	}
 
 	// Check if we found a collection
+	// If not, try to infer from predicate (e.g., "clip.length<1.5" suggests collection is "clips")
+	if collection == nil {
+		log.Printf("🔍 Filter: Could not find collection directly, trying to infer from predicate...")
+		// Check the positional argument - it might be the predicate, not the collection
+		if posValue, ok := args[""]; ok && posValue.Kind == gs.ValueString {
+			predicateStr := posValue.Str
+			log.Printf("🔍 Filter: Positional arg looks like predicate: '%s'", predicateStr)
+			// Try to extract collection name from predicate (e.g., "clip.length<1.5" -> "clips")
+			// Pattern: collection_item.property operator value
+			// We look for patterns like "track.name", "clip.length", etc.
+			if strings.Contains(predicateStr, ".") {
+				parts := strings.SplitN(predicateStr, ".", 2)
+				if len(parts) == 2 {
+					itemName := strings.TrimSpace(parts[0])
+					// Try to pluralize common item names
+					var potentialCollection string
+					switch itemName {
+					case "track":
+						potentialCollection = "tracks"
+					case "clip":
+						potentialCollection = "clips"
+					case "fx":
+						potentialCollection = "fx_chain"
+					default:
+						// Try simple pluralization (add 's')
+						potentialCollection = itemName + "s"
+					}
+					log.Printf("🔍 Filter: Inferred collection '%s' from predicate item '%s'", potentialCollection, itemName)
+					if resolved, err := p.resolveCollection(potentialCollection); err == nil && resolved != nil {
+						collectionName = potentialCollection
+						collection = resolved
+						log.Printf("✅ Filter: Found collection '%s' via predicate inference", collectionName)
+					}
+				}
+			}
+		}
+	}
+	
+	// Final check
 	if collection == nil {
 		log.Printf("❌ Filter: Could not find collection argument. Available data keys: %v", getDataKeys(p.data))
 		return fmt.Errorf("filter requires a collection argument (got args: %v, available collections: %v)", args, getDataKeys(p.data))
