@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/Conceptual-Machines/grammar-school-go/gs"
@@ -945,6 +946,8 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 	var collectionName string
 
 	// Try to get collection from various argument positions
+	// Note: for_each(tracks, track.method()) has two positional args, both with Name=""
+	// The second one overwrites the first in the map, so we need to check both
 	if collectionValue, ok := args["collection"]; ok && collectionValue.Kind == gs.ValueString {
 		collectionName = collectionValue.Str
 		var err error
@@ -952,19 +955,19 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 		if err != nil {
 			return fmt.Errorf("failed to resolve collection: %w", err)
 		}
-	} else if collectionValue, ok := args[""]; ok && collectionValue.Kind == gs.ValueString {
-		// Positional first argument
-		collectionName = collectionValue.Str
-		var err error
-		collection, err = p.resolveCollection(collectionName)
-		if err != nil {
-			return fmt.Errorf("failed to resolve collection: %w", err)
-		}
 	} else {
-		// Try to find collection by iterating through args
+		// Check positional argument (Name="")
+		// For for_each(tracks, track.method()), the second arg overwrites the first
+		// So args[""] will be the method call, not the collection name
+		// We need to find the collection by checking which string value is a valid collection name
 		for _, value := range args {
 			if value.Kind == gs.ValueString {
 				potentialName := value.Str
+				// Skip if it looks like a method call (contains "." and "(")
+				if strings.Contains(potentialName, ".") && strings.Contains(potentialName, "(") {
+					continue // This is the method call, not the collection
+				}
+				// Try to resolve as collection
 				if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
 					collectionName = potentialName
 					collection = resolved
@@ -981,31 +984,117 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 	// Derive iteration variable name
 	iterVar := p.getIterVarFromCollection(collectionName)
 
-	// For now, for_each will iterate and set iteration context
-	// The actual function/method execution would happen in a chained call or via function reference
-	// This is a placeholder implementation - full implementation would:
-	// 1. Parse function reference (@func_name) and call it
-	// 2. Parse method call (item.method()) and execute it
-	// 3. Apply side effects to each item
+	// Get the function/method to execute
+	var methodCallStr string
+	var funcRef string
+
+	// Log all arguments for debugging
+	log.Printf("🔄 ForEach: Received args: %v", getArgsKeys(args))
+	for key, value := range args {
+		log.Printf("  ForEach arg[%s]: Kind=%s, Str=%s", key, value.Kind, value.Str)
+	}
+
+	// Check for function reference (@func_name)
+	if funcValue, ok := args["func"]; ok && funcValue.Kind == gs.ValueFunction {
+		funcRef = funcValue.Str
+		log.Printf("🔄 ForEach: Found function reference: @%s", funcRef)
+		// TODO: Implement function registry and execution
+		// For now, function references are not yet supported
+		return fmt.Errorf("function references (@%s) are not yet implemented in for_each", funcRef)
+	}
+
+	// Check for method call string (e.g., "track.add_fx(fxname=\"ReaEQ\")")
+	// For for_each(tracks, track.method()), the method call is the second positional argument
+	// which overwrites the first in args[""], so args[""] will contain the method call
+	// Try positional argument first (this is where the method call will be)
+	if value, ok := args[""]; ok && value.Kind == gs.ValueString {
+		// Check if it looks like a method call (contains "." and "(")
+		if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
+			methodCallStr = value.Str
+			log.Printf("🔄 ForEach: Found method call in positional arg: %s", methodCallStr)
+		}
+	}
+
+	// Try other argument names
+	if methodCallStr == "" {
+		for _, key := range []string{"method", "call", "action"} {
+			if value, ok := args[key]; ok {
+				if value.Kind == gs.ValueString {
+					// Check if it looks like a method call (contains "." and "(")
+					if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
+						methodCallStr = value.Str
+						log.Printf("🔄 ForEach: Found method call string in arg[%s]: %s", key, methodCallStr)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Last resort: check all string values that look like method calls
+	if methodCallStr == "" {
+		for key, value := range args {
+			if value.Kind == gs.ValueString {
+				// Skip if it's the collection name
+				if value.Str != collectionName && strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
+					methodCallStr = value.Str
+					log.Printf("🔄 ForEach: Found method call in arg[%s]: %s", key, methodCallStr)
+					break
+				}
+			}
+		}
+	}
 
 	log.Printf("🔄 ForEach: Iterating over %d items in collection '%s'", len(collection), collectionName)
+	log.Printf("🔄 ForEach: methodCallStr='%s', collectionName='%s'", methodCallStr, collectionName)
 
-	// Store collection for potential chaining
-	p.data["current_for_each"] = collection
-	p.currentTrackIndex = -1 // Reset, will be set per item
+	// If we have a method call, parse and execute it for each item
+	if methodCallStr != "" {
+		// Parse method call: track.add_fx(fxname="ReaEQ")
+		// Extract method name and parameters
+		methodName, methodArgs, err := p.parseMethodCallString(methodCallStr)
+		if err != nil {
+			return fmt.Errorf("failed to parse method call '%s': %w", methodCallStr, err)
+		}
 
-	// For now, just iterate and set context - actual method execution would happen in chained calls
-	// This allows patterns like: for_each(tracks, track.set_selected(selected=true))
-	// But that would need to be parsed as: for_each(tracks).set_selected(selected=true) or similar
-	
-	// Basic implementation: just iterate and log
-	// Full implementation would need to parse and execute the function/method argument
+		log.Printf("  ForEach: Executing method '%s' on each item", methodName)
+
+		// Execute method for each item
+		for i, item := range collection {
+			// Set iteration context
+			p.setIterationContext(map[string]interface{}{
+				iterVar: item,
+			})
+
+			// If item is a track, set currentTrackIndex for method execution
+			if trackMap, ok := item.(map[string]interface{}); ok {
+				if index, ok := trackMap["index"].(int); ok {
+					p.currentTrackIndex = index
+				} else if indexFloat, ok := trackMap["index"].(float64); ok {
+					p.currentTrackIndex = int(indexFloat)
+				}
+			}
+
+			// Execute the method
+			if err := p.executeMethodOnItem(methodName, methodArgs); err != nil {
+				log.Printf("  ⚠️  ForEach[%d]: Error executing method '%s': %v", i, methodName, err)
+				// Continue with next item instead of failing completely
+			}
+
+			p.clearIterationContext()
+		}
+
+		log.Printf("✅ ForEach: Processed %d items from '%s' with method '%s'", len(collection), collectionName, methodName)
+		return nil
+	}
+
+	// If no function or method specified, just iterate and set context (for chaining)
+	log.Printf("⚠️  ForEach: No function or method specified, only setting iteration context")
 	for i, item := range collection {
 		p.setIterationContext(map[string]interface{}{
 			iterVar: item,
 		})
-		
-		// If item is a track, set currentTrackIndex for chained methods
+
 		if trackMap, ok := item.(map[string]interface{}); ok {
 			if index, ok := trackMap["index"].(int); ok {
 				p.currentTrackIndex = index
@@ -1015,15 +1104,155 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 		}
 
 		log.Printf("  ForEach[%d]: Processing item (index=%d)", i, p.currentTrackIndex)
-		
-		// TODO: Execute function reference or method call here
-		// For now, this is a placeholder that allows the iteration context to be set
-		
 		p.clearIterationContext()
 	}
 
 	log.Printf("✅ ForEach: Processed %d items from '%s'", len(collection), collectionName)
 	return nil
+}
+
+// parseMethodCallString parses a method call string like "track.add_fx(fxname=\"ReaEQ\")"
+// Returns the method name (e.g., "add_fx") and parsed arguments
+func (p *FunctionalDSLParser) parseMethodCallString(methodCallStr string) (string, gs.Args, error) {
+	methodCallStr = strings.TrimSpace(methodCallStr)
+
+	// Find the dot that separates object from method
+	dotIndex := strings.Index(methodCallStr, ".")
+	if dotIndex < 0 {
+		return "", nil, fmt.Errorf("method call must contain a dot (e.g., track.add_fx(...))")
+	}
+
+	// Extract method name and parameters
+	methodPart := methodCallStr[dotIndex+1:]
+	
+	// Find opening parenthesis
+	parenIndex := strings.Index(methodPart, "(")
+	if parenIndex < 0 {
+		return "", nil, fmt.Errorf("method call must contain parentheses")
+	}
+
+	methodName := methodPart[:parenIndex]
+	methodName = strings.TrimSpace(methodName)
+
+	// Extract parameters string
+	paramsStr := methodPart[parenIndex+1:]
+	// Find matching closing parenthesis
+	depth := 1
+	closeIndex := -1
+	for i, char := range paramsStr {
+		if char == '(' {
+			depth++
+		} else if char == ')' {
+			depth--
+			if depth == 0 {
+				closeIndex = i
+				break
+			}
+		}
+	}
+
+	if closeIndex < 0 {
+		return "", nil, fmt.Errorf("unclosed parentheses in method call")
+	}
+
+	paramsStr = paramsStr[:closeIndex]
+	paramsStr = strings.TrimSpace(paramsStr)
+
+	// Parse parameters into gs.Args
+	args := make(gs.Args)
+	if paramsStr != "" {
+		// Simple parameter parsing: key="value" or key=value
+		parts := strings.Split(paramsStr, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+
+			// Split by = to get key and value
+			eqIndex := strings.Index(part, "=")
+			if eqIndex < 0 {
+				continue
+			}
+
+			key := strings.TrimSpace(part[:eqIndex])
+			valueStr := strings.TrimSpace(part[eqIndex+1:])
+
+			// Parse value
+			var value gs.Value
+			if strings.HasPrefix(valueStr, "\"") && strings.HasSuffix(valueStr, "\"") {
+				// String value
+				value = gs.Value{
+					Kind: gs.ValueString,
+					Str:  valueStr[1 : len(valueStr)-1], // Remove quotes
+				}
+			} else if valueStr == "true" {
+				value = gs.Value{Kind: gs.ValueBool, Bool: true}
+			} else if valueStr == "false" {
+				value = gs.Value{Kind: gs.ValueBool, Bool: false}
+			} else if num, err := strconv.ParseFloat(valueStr, 64); err == nil {
+				value = gs.Value{Kind: gs.ValueNumber, Num: num}
+			} else {
+				value = gs.Value{Kind: gs.ValueString, Str: valueStr}
+			}
+
+			args[key] = value
+		}
+	}
+
+	return methodName, args, nil
+}
+
+// executeMethodOnItem executes a method on the current item in the iteration context
+func (p *FunctionalDSLParser) executeMethodOnItem(methodName string, methodArgs gs.Args) error {
+	// Convert snake_case to CamelCase for method name
+	methodNameCamel := capitalizeMethodName(methodName)
+
+	// Call the appropriate method on ReaperDSL
+	// We need to use reflection or a switch statement
+	switch methodNameCamel {
+	case "SetSelected":
+		return p.reaperDSL.SetSelected(methodArgs)
+	case "SetMute":
+		return p.reaperDSL.SetMute(methodArgs)
+	case "SetSolo":
+		return p.reaperDSL.SetSolo(methodArgs)
+	case "SetVolume":
+		return p.reaperDSL.SetVolume(methodArgs)
+	case "SetPan":
+		return p.reaperDSL.SetPan(methodArgs)
+	case "SetName":
+		return p.reaperDSL.SetName(methodArgs)
+	case "AddFx":
+		return p.reaperDSL.AddFx(methodArgs)
+	case "AddMidi":
+		return p.reaperDSL.AddMidi(methodArgs)
+	case "NewClip":
+		return p.reaperDSL.NewClip(methodArgs)
+	case "Delete":
+		return p.reaperDSL.Delete(methodArgs)
+	case "DeleteClip":
+		return p.reaperDSL.DeleteClip(methodArgs)
+	default:
+		return fmt.Errorf("unknown method: %s (converted from %s)", methodNameCamel, methodName)
+	}
+}
+
+// capitalizeMethodName converts snake_case to CamelCase (track -> Track, set_selected -> SetSelected)
+func capitalizeMethodName(name string) string {
+	if name == "" {
+		return name
+	}
+
+	parts := strings.Split(name, "_")
+	var result strings.Builder
+	for _, part := range parts {
+		if part != "" {
+			result.WriteString(strings.ToUpper(part[:1]) + strings.ToLower(part[1:]))
+		}
+	}
+
+	return result.String()
 }
 
 // Store stores a value in data storage.
