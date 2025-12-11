@@ -246,15 +246,15 @@ Selects or deselects a media item/clip.
 
 **set_clip_name**
 Sets the name/label for a clip.
-- Required: ` + "`action: \"set_clip_name\"`" + `, ` + "`track`" + ` (integer), ` + "`name`" + ` (string)
+- Required: ` + "`action: \"set_clip\"`" + `, ` + "`track`" + ` (integer), ` + "`name`" + ` (string)
 - Optional: ` + "`clip`" + ` (integer), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
-- Example: ` + "`filter(clips, clip.length < 1.5).set_clip_name(name=\"Short Clip\")`" + ` renames all clips shorter than 1.5 seconds
+- Example: ` + "`filter(clips, clip.length < 1.5).set_clip_name(name=\"Short Clip\")`" + ` renames all clips shorter than 1.5 seconds (generates ` + "`set_clip`" + ` action with ` + "`name`" + ` field)
 
 **set_clip_color**
 Sets the color for a clip.
-- Required: ` + "`action: \"set_clip_color\"`" + `, ` + "`track`" + ` (integer), ` + "`color`" + ` (string, hex color like "#ff0000")
+- Required: ` + "`action: \"set_clip\"`" + `, ` + "`track`" + ` (integer), ` + "`color`" + ` (string, hex color like "#ff0000")
 - Optional: ` + "`clip`" + ` (integer), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
-- Example: ` + "`filter(clips, clip.length < 1.5).set_clip_color(color=\"#ff0000\")`" + ` colors all short clips red
+- Example: ` + "`filter(clips, clip.length < 1.5).set_clip_color(color=\"#ff0000\")`" + ` colors all short clips red (generates ` + "`set_clip`" + ` action with ` + "`color`" + ` field)
 
 **set_clip_position** / **move_clip**
 Moves a clip to a different time position.
