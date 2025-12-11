@@ -69,7 +69,7 @@ func TestTrackCreation(t *testing.T) {
 		},
 		{
 			name:    "reference track by id",
-			dslCode: `track(id=1).set_name(name="Renamed")`,
+			dslCode: `track(id=1).set_track(name="Renamed")`,
 			state: map[string]any{
 				"tracks": []any{
 					map[string]any{
@@ -331,7 +331,7 @@ func TestTrackProperties(t *testing.T) {
 	}{
 		{
 			name:    "set volume",
-			dslCode: `track(instrument="Serum").set_volume(volume_db=-3.0)`,
+			dslCode: `track(instrument="Serum").set_track(volume_db=-3.0)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -348,7 +348,7 @@ func TestTrackProperties(t *testing.T) {
 		},
 		{
 			name:    "set pan",
-			dslCode: `track(instrument="Piano").set_pan(pan=0.5)`,
+			dslCode: `track(instrument="Piano").set_track(pan=0.5)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -365,7 +365,7 @@ func TestTrackProperties(t *testing.T) {
 		},
 		{
 			name:    "set mute",
-			dslCode: `track(instrument="Drums").set_mute(mute=true)`,
+			dslCode: `track(instrument="Drums").set_track(mute=true)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -382,7 +382,7 @@ func TestTrackProperties(t *testing.T) {
 		},
 		{
 			name:    "set solo",
-			dslCode: `track(instrument="Bass").set_solo(solo=true)`,
+			dslCode: `track(instrument="Bass").set_track(solo=true)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -399,7 +399,7 @@ func TestTrackProperties(t *testing.T) {
 		},
 		{
 			name:    "set name",
-			dslCode: `track(instrument="Serum").set_name(name="Lead")`,
+			dslCode: `track(instrument="Serum").set_track(name="Lead")`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -416,7 +416,7 @@ func TestTrackProperties(t *testing.T) {
 		},
 		{
 			name:    "set selected",
-			dslCode: `track(instrument="Piano").set_selected(selected=true)`,
+			dslCode: `track(instrument="Piano").set_track(selected=true)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -599,7 +599,7 @@ func TestFilterOperations(t *testing.T) {
 		},
 		{
 			name:    "filter tracks by name and set selected",
-			dslCode: `filter(tracks, track.name=="FX Track").set_selected(selected=true)`,
+			dslCode: `filter(tracks, track.name=="FX Track").set_track(selected=true)`,
 			state: map[string]any{
 				"tracks": []any{
 					map[string]any{
@@ -623,7 +623,7 @@ func TestFilterOperations(t *testing.T) {
 		},
 		{
 			name:    "filter tracks by mute status",
-			dslCode: `filter(tracks, track.muted==true).set_mute(mute=false)`,
+			dslCode: `filter(tracks, track.muted==true).set_track(mute=false)`,
 			state: map[string]any{
 				"tracks": []any{
 					map[string]any{
@@ -683,7 +683,7 @@ func TestMethodChaining(t *testing.T) {
 	}{
 		{
 			name:    "create track with multiple operations",
-			dslCode: `track(instrument="Serum", name="Lead").new_clip(bar=1, length_bars=4).add_midi(notes=[]).set_volume(volume_db=-3.0).set_pan(pan=0.5)`,
+			dslCode: `track(instrument="Serum", name="Lead").new_clip(bar=1, length_bars=4).add_midi(notes=[]).set_track(volume_db=-3.0, pan=0.5)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -706,11 +706,7 @@ func TestMethodChaining(t *testing.T) {
 					"action":    "set_track",
 					"track":     0,
 					"volume_db": -3.0,
-				},
-				{
-					"action": "set_track",
-					"track":  0,
-					"pan":    0.5,
+					"pan":       0.5,
 				},
 			},
 			wantErr: false,
@@ -747,7 +743,7 @@ func TestCompoundActions(t *testing.T) {
 	}{
 		{
 			name:    "filter clips and set name",
-			dslCode: `filter(clips, clip.length < 1.5).set_clip_name(name="Short Clip")`,
+			dslCode: `filter(clips, clip.length < 1.5).set_clip(name="Short Clip")`,
 			state: map[string]any{
 				"tracks": []any{
 					map[string]any{
@@ -779,7 +775,7 @@ func TestCompoundActions(t *testing.T) {
 		},
 		{
 			name:    "filter clips and set color",
-			dslCode: `filter(clips, clip.length < 1.5).set_clip_color(color="#ff0000")`,
+			dslCode: `filter(clips, clip.length < 1.5).set_clip(color="#ff0000")`,
 			state: map[string]any{
 				"tracks": []any{
 					map[string]any{
@@ -834,7 +830,7 @@ func TestCompoundActions(t *testing.T) {
 		},
 		{
 			name:    "filter tracks and set name",
-			dslCode: `filter(tracks, track.muted == true).set_name(name="Muted")`,
+			dslCode: `filter(tracks, track.muted == true).set_track(name="Muted")`,
 			state: map[string]any{
 				"tracks": []any{
 					map[string]any{"index": 0, "name": "Track 1", "muted": true},

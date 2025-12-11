@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestFunctionalDSLParser_SetSelected(t *testing.T) {
+func TestFunctionalDSLParser_SetTrack(t *testing.T) {
 	tests := []struct {
 		name    string
 		dslCode string
@@ -13,8 +13,8 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "track with set_selected true",
-			dslCode: `track(instrument="Serum").set_selected(selected=true)`,
+			name:    "track with set_track selected true",
+			dslCode: `track(instrument="Serum").set_track(selected=true)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -30,8 +30,8 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "track with set_selected false",
-			dslCode: `track(instrument="Piano").set_selected(selected=false)`,
+			name:    "track with set_track selected false",
+			dslCode: `track(instrument="Piano").set_track(selected=false)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -48,7 +48,7 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 		},
 		{
 			name:    "track with multiple operations including selection",
-			dslCode: `track(instrument="Serum").set_name(name="Bass").set_selected(selected=true)`,
+			dslCode: `track(instrument="Serum").set_track(name="Bass", selected=true)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -56,13 +56,9 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action": "set_track",
-					"track":  0,
-					"name":   "Bass",
-				},
-				{
 					"action":   "set_track",
 					"track":    0,
+					"name":     "Bass",
 					"selected": true,
 				},
 			},

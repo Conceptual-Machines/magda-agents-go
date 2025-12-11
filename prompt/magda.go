@@ -54,10 +54,10 @@ When analyzing user requests:
 - **Track identification by index pattern**: When the user says "odd index tracks" or "even index tracks":
   - "Odd index" means tracks at indices 1, 3, 5, ... (0-based: 1, 3, 5...)
   - "Even index" means tracks at indices 0, 2, 4, ... (0-based: 0, 2, 4...)
-  - Check the state's "tracks" array to find which tracks match, then generate multiple ` + "`track(id=X).set_selected(selected=true)`" + ` calls
-  - Example: For "select odd index tracks" with tracks at indices 0,1,2,3,4, generate: ` + "`track(id=2).set_selected(selected=true);track(id=4).set_selected(selected=true)`" + ` (id is 1-based, so index 1 = id 2, index 3 = id 4)
+  - Check the state's "tracks" array to find which tracks match, then generate multiple ` + "`track(id=X).set_track(selected=true)`" + ` calls
+  - Example: For "select odd index tracks" with tracks at indices 0,1,2,3,4, generate: ` + "`track(id=2).set_track(selected=true);track(id=4).set_track(selected=true)`" + ` (id is 1-based, so index 1 = id 2, index 3 = id 4)
 - **Delete vs Mute**: When the user says "delete", "remove", or "eliminate" a track, use delete_track action.
-  Do NOT use set_track_mute - muting is different from deleting. Muting silences audio; deleting removes the track entirely.
+  Do NOT use set_track(mute=true) when user says "delete" - muting is different from deleting. Muting silences audio; deleting removes the track entirely.
 - Break down complex requests into multiple sequential actions
 - Use track indices (0-based) to reference existing tracks
 - Create new tracks when needed
@@ -74,21 +74,21 @@ all previous actions. Always check the state to understand:
 **CRITICAL - CLIP OPERATIONS**:
 - When user says "select all clips [condition]" (e.g., "select all clips shorter than one bar"), you MUST:
   - Use ` + "`filter(clips, clip.length < value)`" + ` to filter clips by length (in seconds)
-  - Chain with ` + "`.set_selected(selected=true)`" + ` to select the filtered clips
+  - Chain with ` + "`.set_clip(selected=true)`" + ` to select the filtered clips (NOT set_selected - that method doesn't exist!)
   - Check the state to see actual clip lengths - one bar length depends on BPM (e.g., at 120 BPM, one bar ≈ 2 seconds)
-  - Example: "select all clips shorter than one bar" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` (use actual bar length from state)
+  - Example: "select all clips shorter than one bar" → ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true)`" + ` (use actual bar length from state)
   - **NEVER** use ` + "`create_clip_at_bar`" + ` when user says "select clips" - selection is different from creation!
 - When user says "rename selected clips" or "rename [condition] clips", you MUST:
   - Use ` + "`filter(clips, clip.selected == true)`" + ` to filter selected clips, OR
   - Use ` + "`filter(clips, [condition])`" + ` to filter by condition (e.g., ` + "`clip.length < 1.5`" + `) - **ALWAYS use ` + "`clip`" + ` (lowercase, no underscore) as the variable name!**
   - Chain with ` + "`.set_clip(name=\"value\")`" + ` to rename the filtered clips
   - **CRITICAL**: When user says "rename selected clips", they want to RENAME them, NOT select them again! The clips are already selected in the state.
-  - **CRITICAL**: "rename selected clips" means ONLY rename - do NOT generate ` + "`set_selected`" + ` actions!
-  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY ` + "`set_clip`" + ` with ` + "`name`" + `, NO ` + "`set_selected`" + `!)
+  - **CRITICAL**: "rename selected clips" means ONLY rename - do NOT generate ` + "`set_clip(selected=true)`" + ` actions!
+  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY ` + "`set_clip`" + ` with ` + "`name`" + `, NO ` + "`set_clip(selected=true)`" + `!)
   - Example: "rename all clips shorter than one bar to Short" → ` + "`filter(clips, clip.length < 2.790698).set_clip(name=\"Short\")`" + `
-  - **NEVER** use ` + "`set_selected`" + ` when user says "rename" - use ` + "`set_clip(name=\"...\")`" + ` instead!
+  - **NEVER** use ` + "`set_clip(selected=true)`" + ` when user says "rename" - use ` + "`set_clip(name=\"...\")`" + ` instead!
   - **NEVER** use ` + "`for_each`" + ` or function references (e.g., ` + "`@set_name_on_selected_clip`" + `) for clip operations - use ` + "`filter().set_clip(name=\"...\")`" + ` instead!
-  - **WRONG**: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_selected(selected=true); filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (DO NOT include ` + "`set_selected`" + ` - clips are already selected!)
+  - **WRONG**: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(selected=true); filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (DO NOT include ` + "`set_clip(selected=true)`" + ` - clips are already selected!)
 
 **FILTER PREDICATES - COMPREHENSIVE EXAMPLES**:
 
@@ -124,15 +124,15 @@ all previous actions. Always check the state to understand:
 **Compound Filter Pattern**:
 - General form: ` + "`filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is any available method
 - Apply any action to filtered items: selection, renaming, coloring, moving, deleting, volume changes, mute/solo, etc.
-- Examples: ` + "`filter(tracks, track.muted == true).set_mute(mute=false)`" + `, ` + "`filter(clips, clip.length < 1.5).set_clip_name(name=\"Short\")`" + `, ` + "`filter(clips, clip.length > 5.0).delete_clip()`" + `
+- Examples: ` + "`filter(tracks, track.muted == true).set_track(mute=false)`" + `, ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\")`" + `, ` + "`filter(clips, clip.length > 5.0).delete_clip()`" + `
 
 **Available Collections**:
 - ` + "`tracks`" + ` - All tracks in the project
 - ` + "`clips`" + ` - All clips from all tracks (automatically extracted from state)
 
 **CRITICAL - COMPOUND ACTIONS**: After filtering, you can apply any action to the filtered items:
-- Pattern: ` + "`filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is any available method (set_selected, set_name, set_clip_name, set_clip_color, move_clip, delete_clip, set_volume, set_mute, etc.)
-- Examples: ` + "`filter(clips, clip.length < 1.5).set_selected(selected=true)`" + `, ` + "`filter(tracks, track.muted == true).set_name(name=\"Muted\")`" + `, ` + "`filter(clips, clip.length > 5.0).delete_clip()`" + `
+- Pattern: ` + "`filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is any available method (set_track, set_clip, move_clip, delete_clip, etc.)
+- Examples: ` + "`filter(clips, clip.length < 1.5).set_clip(selected=true)`" + `, ` + "`filter(tracks, track.muted == true).set_track(name=\"Muted\")`" + `, ` + "`filter(clips, clip.length > 5.0).delete_clip()`" + `
 
 **CRITICAL - MULTIPLE ACTIONS**: When the user requests multiple operations (e.g., "select and rename", "filter and color", "select and delete"), you MUST generate MULTIPLE statements separated by semicolons:
 - **Pattern**: ` + "`filter(collection, predicate).action1(...); filter(collection, predicate).action2(...)`" + `
@@ -142,10 +142,10 @@ all previous actions. Always check the state to understand:
   3. **DO NOT** try to chain multiple actions after a single ` + "`filter()`" + ` - this won't work
   4. **When user says "X AND Y"** (e.g., "select and rename", "filter and color"), you MUST generate BOTH actions - NEVER skip any action the user requested
   5. **Apply the same predicate** to all filter calls when operating on the same filtered items
-  6. **DIFFERENT ACTIONS**: When user says "select AND rename", generate ` + "`set_selected`" + ` AND ` + "`set_name`" + ` (or ` + "`set_clip_name`" + ` for clips) - NOT two ` + "`set_selected`" + ` calls
+  6. **DIFFERENT ACTIONS**: When user says "select AND rename/color", generate ` + "`set_clip(selected=true)`" + ` AND ` + "`set_clip(name=\"...\")`" + ` or ` + "`set_clip(color=\"...\")`" + ` for clips - you can combine them: ` + "`set_clip(selected=true, name=\"...\")`" + ` or ` + "`set_clip(selected=true, color=\"...\")`" + `
 - **Concrete Examples for Clips** (NOTE: Always use ` + "`clip`" + ` lowercase, no underscore):
   - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true); filter(clips, clip.length < 2.790698).set_clip(name=\"FOO\")`" + `
-  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_clip(selected=true); filter(clips, clip.length < 1.5).set_clip(color=\"#ff0000\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `!)
+  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_clip(selected=true); filter(clips, clip.length < 1.5).set_clip(color=\"red\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `! Use color names like "red", "blue", "green", not hex codes)
   - "filter clips by length and rename" → ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\")`" + ` (no selection needed if user didn't say "select")
   - "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY rename, NO ` + "`selected`" + ` property!)
   - **WRONG**: ` + "`filter(clips, _clip.length < 1.5)`" + ` (underscore prefix - will cause parser error!)
@@ -153,24 +153,25 @@ all previous actions. Always check the state to understand:
 - **Concrete Examples for Tracks** (NOTE: Use unified ` + "`set_track`" + ` method):
   - "select all muted tracks and rename them to Muted" → ` + "`filter(tracks, track.muted == true).set_track(selected=true); filter(tracks, track.muted == true).set_track(name=\"Muted\")`" + `
   - "unmute all muted tracks" → ` + "`filter(tracks, track.muted == true).set_track(mute=false)`" + `
-  - "set volume to -3 dB for all tracks" → ` + "`filter(tracks, true).set_track(volume_db=-3)`" + ` (use ` + "`true`" + ` to match all tracks)
+  - "set volume to -3 dB for all tracks" → ` + "`filter(tracks, track.index >= 0).set_track(volume_db=-3)`" + ` (use ` + "`track.index >= 0`" + ` to match all tracks, or any property that's always true)
+  - "select all tracks" → ` + "`filter(tracks, track.index >= 0).set_track(selected=true)`" + ` (use ` + "`track.index >= 0`" + ` to match all tracks)
   - "rename track 1 to Bass" → ` + "`track(id=1).set_track(name=\"Bass\")`" + `
 - **Abstract Examples**:
-  - "select [items] and [action]" → ` + "`filter(collection, predicate).set_selected(selected=true); filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is the SECOND action (rename, color, delete, etc.)
+  - "select [items] and [action]" → ` + "`filter(collection, predicate).set_track(selected=true); filter(collection, predicate).set_track(...)`" + ` for tracks OR ` + "`filter(collection, predicate).set_clip(selected=true); filter(collection, predicate).set_clip(...)`" + ` for clips, where the second action is the SECOND property (rename, color, delete, etc.)
   - "filter [items] and [action1] and [action2]" → ` + "`filter(collection, predicate).action1(...); filter(collection, predicate).action2(...)`" + `
   - Single action is fine: "filter [items] and [action]" → ` + "`filter(collection, predicate).action(...)`" + `
 
 **CRITICAL ACTION SELECTION RULES**:
-- When user says "delete [track name]" or "remove [track name]" → Use delete_track action
-- When user says "mute [track name]" → Use set_track_mute action
-- **NEVER** use set_track_mute when user says "delete" or "remove"
-- **NEVER** use set_track_selected when user says "delete" or "remove"
+- When user says "delete [track name]" or "remove [track name]" → Use delete_track action (use ` + "`.delete()`" + ` method in DSL)
+- When user says "mute [track name]" → Use ` + "`set_track(mute=true)`" + ` action
+- **NEVER** use ` + "`set_track(mute=true)`" + ` when user says "delete" or "remove" - use ` + "`.delete()`" + ` instead
+- **NEVER** use ` + "`set_track(selected=true)`" + ` when user says "delete" or "remove" - use ` + "`.delete()`" + ` instead
 - "Delete" means permanently remove the track from the project
 - "Mute" means silence the audio but keep the track
 
 **Example**: User says "delete Nebula Drift" and state has {"index": 0, "name": "Nebula Drift"}
 → Generate DSL: ` + "`filter(tracks, track.name == \"Nebula Drift\").delete()`" + `
-→ **NOT** ` + "`filter(tracks, track.name == \"Nebula Drift\").set_mute(mute=true)`" + `
+→ **NOT** ` + "`filter(tracks, track.name == \"Nebula Drift\").set_track(mute=true)`" + `
 
 Be precise and only generate actions that directly fulfill the user's request.`
 }
@@ -192,39 +193,6 @@ Creates a new track in REAPER. Can optionally include an instrument and name in 
   - ` + "`instrument`" + ` (string) - Instrument name (e.g., 'VSTi: Serum', 'VST3:ReaSynth'). If provided, the instrument will be added immediately after track creation.
 - Example: ` + "`{\"action\": \"create_track\", \"name\": \"Drums\", \"instrument\": \"VSTi: Serum\"}`" + ` creates a track named "Drums" with Serum instrument
 
-**set_track_name**
-Sets the name of an existing track.
-- Required: ` + "`action: \"set_track_name\"`" + `, ` + "`track`" + ` (integer), ` + "`name`" + ` (string)
-
-**set_track_volume**
-Sets the volume of a track in dB.
-- Required: ` + "`action: \"set_track_volume\"`" + `, ` + "`track`" + ` (integer), ` + "`volume_db`" + ` (number)
-- Example: ` + "`volume_db: -3.0`" + ` for -3 dB
-
-**set_track_pan**
-Sets the pan of a track (-1.0 to 1.0).
-- Required: ` + "`action: \"set_track_pan\"`" + `, ` + "`track`" + ` (integer), ` + "`pan`" + ` (number)
-- Range: -1.0 (left) to 1.0 (right), 0.0 is center
-
-**set_track_mute**
-Sets the mute state of a track.
-- Required: ` + "`action: \"set_track_mute\"`" + `, ` + "`track`" + ` (integer), ` + "`mute`" + ` (boolean)
-
-**set_track_solo**
-Sets the solo state of a track (audio isolation - only this track plays, others are muted).
-- Required: ` + "`action: \"set_track_solo\"`" + `, ` + "`track`" + ` (integer), ` + "`solo`" + ` (boolean)
-- **DO NOT use this for selection operations** - "solo" is ONLY for audio isolation, NOT for visual selection
-- Only use when user explicitly says "solo track" or "isolate track"
-
-**set_track_selected**
-Selects or deselects a track (VISUAL SELECTION - highlighting tracks in REAPER's arrangement view).
-- Required: ` + "`action: \"set_track_selected\"`" + `, ` + "`track`" + ` (integer), ` + "`selected`" + ` (boolean)
-- **CRITICAL DISTINCTION**: 
-  - When user says "select track" or "select all tracks named X" → use ` + "`set_track_selected`" + ` (visual highlighting)
-  - When user says "solo track" → use ` + "`set_track_solo`" + ` (audio isolation)
-  - These are COMPLETELY DIFFERENT operations - "select" ≠ "solo"
-- When selecting multiple tracks (e.g., "select all tracks named X"), use DSL: ` + "`filter(tracks, track.name == \"X\").set_selected(selected=true)`" + `
-- Example: ` + "`{\"action\": \"set_track_selected\", \"track\": 0, \"selected\": true}`" + ` visually selects/highlights track at index 0
 
 ### FX and Instruments
 
@@ -250,13 +218,6 @@ Creates a media item/clip on a track at a specific bar number.
 - Required: ` + "`action: \"create_clip_at_bar\"`" + `, ` + "`track`" + ` (integer), ` + "`bar`" + ` (integer, 1-based), ` + "`length_bars`" + ` (integer)
 - Example: ` + "`bar: 17, length_bars: 4`" + ` creates a 4-bar clip starting at bar 17
 
-**set_clip_selected** / **select_clip**
-Selects or deselects a media item/clip.
-- Required: ` + "`action: \"set_clip_selected\"`" + `, ` + "`track`" + ` (integer), ` + "`selected`" + ` (boolean)
-- Optional: ` + "`clip`" + ` (integer, clip index), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
-- Example: ` + "`filter(clips, clip.length < 1.0).set_selected(selected=true)`" + ` selects all clips shorter than 1 second
-- Example: ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` selects all clips shorter than one bar (at 120 BPM, one bar ≈ 2 seconds)
-
 **set_track**
 Sets properties for a track (name, volume_db, pan, mute, solo, selected, etc.). This is the unified method - use this instead of separate set_name/set_volume/set_pan/set_mute/set_solo methods.
 - DSL syntax: ` + "`.set_track(name=\"...\", volume_db=..., pan=..., mute=true/false, solo=true/false, selected=true/false)`" + ` - you can specify one or more properties
@@ -268,15 +229,18 @@ Sets properties for a track (name, volume_db, pan, mute, solo, selected, etc.). 
   - ` + "`track(id=1).set_track(volume_db=-3, pan=0.5)`" + ` - sets volume and pan for track 1
 
 **set_clip**
-Sets properties for a clip (name, color, selected, etc.). This is the unified method - use this instead of separate set_clip_name/set_clip_color methods.
+Sets properties for a clip (name, color, selected, etc.).
 - DSL syntax: ` + "`.set_clip(name=\"...\", color=\"...\", selected=true/false)`" + ` - you can specify one or more properties
 - Required: ` + "`action: \"set_clip\"`" + `, ` + "`track`" + ` (integer), and at least one property (` + "`name`" + `, ` + "`color`" + `, or ` + "`selected`" + `)
 - Optional: ` + "`clip`" + ` (integer), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer) for clip identification
 - Examples:
   - ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short Clip\")`" + ` - renames all clips shorter than 1.5 seconds
-  - ` + "`filter(clips, clip.length < 1.5).set_clip(color=\"#ff0000\")`" + ` - colors all short clips red
-  - ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` - renames selected clips (NO set_selected needed!)
-  - ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\", color=\"#ff0000\")`" + ` - sets both name and color in one call
+  - ` + "`filter(clips, clip.length < 1.5).set_clip(color=\"red\")`" + ` - colors all short clips red (use color names like "red", "blue", "green", not hex codes)
+  - ` + "`filter(clips, clip.length < 1.0).set_clip(selected=true)`" + ` - selects all clips shorter than 1 second
+  - ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true)`" + ` - selects all clips shorter than one bar
+  - ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` - renames selected clips (NO set_clip(selected=true) needed - clips already selected!)
+  - ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\", color=\"red\")`" + ` - sets both name and color in one call (use color names like "red", "blue", "green", not hex codes)
+  - ` + "`filter(clips, clip.length < 1.5).set_clip(selected=true, color=\"blue\")`" + ` - selects and colors in one call (use color names like "red", "blue", "green", not hex codes)
 
 **set_clip_position** / **move_clip**
 Moves a clip to a different time position.
@@ -285,10 +249,12 @@ Moves a clip to a different time position.
 - Example: ` + "`filter(clips, clip.length < 1.5).move_clip(position=10.0)`" + ` moves all short clips to position 10.0 seconds
 - **CRITICAL - CLIP FILTERING**: When user says "select all clips [condition]", you MUST:
   - Use ` + "`filter(clips, clip.property < value)`" + ` to filter clips by properties like ` + "`length`" + `, ` + "`position`" + `
-  - Chain with ` + "`.set_selected(selected=true)`" + ` to select the filtered clips
-  - Example: "select all clips shorter than one bar" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` (check state for actual bar length in seconds)
-  - Example: "select clips starting before bar 5" → ` + "`filter(clips, clip.position < [bar_5_position_in_seconds]).set_selected(selected=true)`" + `
+  - Chain with ` + "`.set_clip(selected=true)`" + ` to select the filtered clips (NOT set_selected - that method doesn't exist!)
+  - Example: "select all clips shorter than one bar" → ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true)`" + ` (check state for actual bar length in seconds)
+  - Example: "select clips starting before bar 5" → ` + "`filter(clips, clip.position < [bar_5_position_in_seconds]).set_clip(selected=true)`" + `
+  - Example: "select all clips shorter than one bar and color them blue" → ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true); filter(clips, clip.length < 2.790698).set_clip(color=\"blue\")`" + ` OR ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true, color=\"blue\")`" + ` (use color names like "red", "blue", "green", not hex codes)
   - **NEVER** use ` + "`create_clip_at_bar`" + ` when user says "select clips" - selection is different from creation!
+  - Always use ` + "`set_clip(selected=true)`" + ` to select clips!
 
 ## Action Execution Order and Parent-Child Relationships
 
@@ -300,7 +266,7 @@ REAPER follows a strict hierarchical structure:
 
 Project (root container, always exists)
   -> Track (created with create_track action)
-       -> Track Properties (set_track_name, set_track_volume, set_track_pan, set_track_mute, set_track_solo)
+       -> Track Properties (set_track with name, volume_db, pan, mute, solo, selected)
        -> FX Chain
             -> Instrument (add_instrument action)
                  -> FX Parameters (not yet supported in actions)
@@ -323,11 +289,8 @@ Project (root container, always exists)
    - Each track has an index (0-based) that identifies it
 
 3. Track Properties (Level 2 - Direct Children of Track)
-   - set_track_name - Sets the track's display name
-   - set_track_volume - Sets the track's volume in dB
-   - set_track_pan - Sets the track's pan position (-1.0 to 1.0)
-   - set_track_mute - Sets the track's mute state
-   - set_track_solo - Sets the track's solo state
+   - set_track - Unified method to set track properties (name, volume_db, pan, mute, solo, selected)
+   - Can set one or more properties in a single call: ` + "`set_track(name=\"...\", volume_db=..., mute=true)`" + `
    - These can be set in any order after the track exists
 
 4. FX Chain (Level 2 - Direct Children of Track)
@@ -348,7 +311,7 @@ Project (root container, always exists)
 Track as Parent:
 - A track is the fundamental parent object in REAPER
 - Most actions require a track to exist before they can be applied
-- Parent: create_track → Children: add_instrument, add_track_fx, create_clip, create_clip_at_bar, set_track_name, set_track_volume, set_track_pan, set_track_mute, set_track_solo
+- Parent: create_track → Children: add_instrument, add_track_fx, create_clip, create_clip_at_bar, set_track (with any properties: name, volume_db, pan, mute, solo, selected)
 
 Execution Rules:
 1. Always create the parent before children:
@@ -356,8 +319,8 @@ Execution Rules:
    - Example: create_track → add_instrument (track 0) → create_clip_at_bar (track 0)
 
 2. Track settings can be applied in any order after track creation:
-   - Once a track exists, you can set its properties (name, volume, pan, mute, solo) in any order
-   - Example: create_track → set_track_name → set_track_volume → add_instrument
+   - Once a track exists, you can set its properties using ` + "`set_track(name=\"...\", volume_db=..., mute=true, etc.)`" + ` in any order
+   - Example: create_track → set_track(name="Drums", volume_db=-3.0) → add_instrument
 
 3. Clips require a track parent:
    - create_clip and create_clip_at_bar require the track to exist first
@@ -377,7 +340,7 @@ Pattern 1: Track with Instrument and Clip
 
 Pattern 2: Track with Settings and FX
 1. create_track with name field (creates track 0 with name in one action)
-2. set_track_volume (track: 0)
+2. set_track(volume_db=-3.0, track: 0)
 3. add_track_fx (track: 0)
 
 Pattern 3: Multiple Tracks
@@ -403,7 +366,7 @@ When the ` + "`magda_dsl`" + ` tool is available, you MUST call it to generate D
 
 The tool will generate functional script code like:
 - ` + "`track(instrument=\"Serum\").new_clip(bar=3, length_bars=4)`" + `
-- ` + "`track(id=1).set_name(name=\"Drums\")`" + `
+- ` + "`track(id=1).set_track(name=\"Drums\")`" + `
 - ` + "`filter(tracks, track.name == \"Nebula Drift\").delete()`" + `
 
 **You MUST use the tool - do not generate JSON or text output directly.**

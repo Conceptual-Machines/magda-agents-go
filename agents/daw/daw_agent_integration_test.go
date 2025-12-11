@@ -23,19 +23,19 @@ func TestSelectionActionsIntegration(t *testing.T) {
 	}{
 		{
 			name:        "select track via DSL",
-			dslCode:     `track(index=0).set_selected(selected=true)`,
+			dslCode:     `track(index=0).set_track(selected=true)`,
 			expectType:  "set_track",
 			expectCount: 2, // create_track + set_track_selected
 		},
 		{
 			name:        "deselect track via DSL",
-			dslCode:     `track(index=1).set_selected(selected=false)`,
+			dslCode:     `track(index=1).set_track(selected=false)`,
 			expectType:  "set_track",
 			expectCount: 2,
 		},
 		{
 			name:        "create and select track",
-			dslCode:     `track(instrument="Serum").set_selected(selected=true)`,
+			dslCode:     `track(instrument="Serum").set_track(selected=true)`,
 			expectType:  "set_track",
 			expectCount: 2,
 		},
@@ -101,7 +101,7 @@ func TestSelectionWithStateIntegration(t *testing.T) {
 	parser.SetState(state)
 
 	// Test selecting an existing track by index
-	dslCode := `track(id=1).set_selected(selected=true)`
+	dslCode := `track(id=1).set_track(selected=true)`
 
 	actions, err := parser.ParseDSL(dslCode)
 	require.NoError(t, err, "Failed to parse DSL")
@@ -140,12 +140,12 @@ func TestSelectionActionChainIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to create parser")
 
 	// Test: Create track, name it, set volume, then select it
-	dslCode := `track(instrument="Serum").set_name(name="Bass").set_volume(volume_db=-3.0).set_selected(selected=true)`
+	dslCode := `track(instrument="Serum").set_track(name="Bass", volume_db=-3.0, selected=true)`
 
 	actions, err := parser.ParseDSL(dslCode)
 	require.NoError(t, err, "Failed to parse DSL")
-	require.GreaterOrEqual(t, len(actions), 4,
-		"Should have at least 4 actions (create, name, volume, select)")
+	require.GreaterOrEqual(t, len(actions), 2,
+		"Should have at least 2 actions (create_track, set_track with all properties)")
 
 	// Verify action sequence
 	actionSequence := make([]string, len(actions))

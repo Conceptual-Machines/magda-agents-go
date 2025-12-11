@@ -6,7 +6,7 @@ import (
 )
 
 // TestDSLDetection ensures all DSL methods are properly detected
-// This test would have caught the missing set_selected() detection
+// This test ensures DSL detection works for unified set_track and set_clip methods
 func TestDSLDetection(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -29,19 +29,19 @@ func TestDSLDetection(t *testing.T) {
 		{"map()", "map(tracks, @get_name)", true},
 		{"for_each()", "for_each(tracks, @add_reverb)", true},
 		
-		// Track property setters - CRITICAL: These were missing before!
-		{"set_selected()", "track().set_selected(selected=true)", true},
-		{"set_selected() with filter", "filter(tracks, track.name == \"X\").set_selected(selected=true)", true},
-		{"set_mute()", "track().set_mute(mute=true)", true},
-		{"set_solo()", "track().set_solo(solo=true)", true},
-		{"set_volume()", "track().set_volume(volume_db=-3.0)", true},
-		{"set_pan()", "track().set_pan(pan=0.5)", true},
-		{"set_name()", "track().set_name(name=\"Bass\")", true},
+		// Track property setters - Unified methods
+		{"set_track()", "track().set_track(selected=true)", true},
+		{"set_track() with filter", "filter(tracks, track.name == \"X\").set_track(selected=true)", true},
+		{"set_track() with multiple properties", "track().set_track(mute=true, solo=true)", true},
+		{"set_track() volume", "track().set_track(volume_db=-3.0)", true},
+		{"set_track() pan", "track().set_track(pan=0.5)", true},
+		{"set_track() name", "track().set_track(name=\"Bass\")", true},
+		{"set_clip()", "track().set_clip(name=\"Clip\")", true},
 		{"add_fx()", "track().add_fx(fxname=\"ReaEQ\")", true},
 		
 		// Complex chains
-		{"complex chain with set_selected", "track(instrument=\"Serum\").set_name(name=\"Bass\").set_selected(selected=true)", true},
-		{"filter with set_selected", "filter(tracks, track.muted == false).set_selected(selected=true)", true},
+		{"complex chain with set_track", "track(instrument=\"Serum\").set_track(name=\"Bass\", selected=true)", true},
+		{"filter with set_track", "filter(tracks, track.muted == false).set_track(selected=true)", true},
 		
 		// Invalid DSL
 		{"empty string", "", false},
@@ -60,25 +60,19 @@ func TestDSLDetection(t *testing.T) {
 			hasForEach := strings.Contains(tt.dslCode, ".for_each(") || strings.HasPrefix(tt.dslCode, "for_each(")
 			hasDelete := strings.Contains(tt.dslCode, ".delete(")
 			hasDeleteClip := strings.Contains(tt.dslCode, ".delete_clip(")
-			hasSetSelected := strings.Contains(tt.dslCode, ".set_selected(")
-			hasSetMute := strings.Contains(tt.dslCode, ".set_mute(")
-			hasSetSolo := strings.Contains(tt.dslCode, ".set_solo(")
-			hasSetVolume := strings.Contains(tt.dslCode, ".set_volume(")
-			hasSetPan := strings.Contains(tt.dslCode, ".set_pan(")
-			hasSetName := strings.Contains(tt.dslCode, ".set_name(")
+			hasSetTrack := strings.Contains(tt.dslCode, ".set_track(")
+			hasSetClip := strings.Contains(tt.dslCode, ".set_clip(")
 			hasAddFx := strings.Contains(tt.dslCode, ".add_fx(")
 
 			isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
-				hasSetSelected || hasSetMute || hasSetSolo || hasSetVolume || hasSetPan || hasSetName || hasAddFx
+				hasSetTrack || hasSetClip || hasAddFx
 
 			if isDSL != tt.expected {
 				t.Errorf("DSL detection for %q = %v, want %v", tt.dslCode, isDSL, tt.expected)
 				t.Logf("  hasTrackPrefix=%v, hasNewClip=%v, hasAddMidi=%v, hasFilter=%v, hasMap=%v, hasForEach=%v",
 					hasTrackPrefix, hasNewClip, hasAddMidi, hasFilter, hasMap, hasForEach)
-				t.Logf("  hasDelete=%v, hasDeleteClip=%v, hasSetSelected=%v, hasSetMute=%v, hasSetSolo=%v",
-					hasDelete, hasDeleteClip, hasSetSelected, hasSetMute, hasSetSolo)
-				t.Logf("  hasSetVolume=%v, hasSetPan=%v, hasSetName=%v, hasAddFx=%v",
-					hasSetVolume, hasSetPan, hasSetName, hasAddFx)
+				t.Logf("  hasDelete=%v, hasDeleteClip=%v, hasSetTrack=%v, hasSetClip=%v, hasAddFx=%v",
+					hasDelete, hasDeleteClip, hasSetTrack, hasSetClip, hasAddFx)
 			}
 		})
 	}

@@ -104,14 +104,14 @@ func (a *DawAgent) GenerateActions(
 			"- For delete by track id: track(id=1).delete() where id is 1-based " +
 			"- Example: 'delete Nebula Drift' → filter(tracks, track.name == \"Nebula Drift\").delete() " +
 			"- Example: 'remove track 1' → track(id=1).delete() " +
-			"- NEVER use set_mute or set_selected for delete operations - 'delete' means permanently remove the track " +
+			"- NEVER use set_track(mute=true) or set_track(selected=true) for delete operations - 'delete' means permanently remove the track " +
 			"**CRITICAL - SELECTION OPERATIONS**: " +
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
-			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
-			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
-			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
-			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_track(selected=true) " +
+			"- NEVER generate set_track(solo=true) for selection - 'select' ≠ 'solo'. " +
+			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_track(selected=true) " +
+			"- 'solo' means audio isolation and uses set_track(solo=true), but 'select' means visual highlighting and uses set_track(selected=true). " +
+			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_track(selected=true). " +
 			"This efficiently filters the collection and applies the action to all matching tracks. " +
 			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
@@ -220,16 +220,12 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 	hasAddMidi := strings.Contains(dslCode, ".add_midi(")
 	hasDelete := strings.Contains(dslCode, ".delete(")
 	hasDeleteClip := strings.Contains(dslCode, ".delete_clip(")
-	hasSetSelected := strings.Contains(dslCode, ".set_selected(")
-	hasSetMute := strings.Contains(dslCode, ".set_mute(")
-	hasSetSolo := strings.Contains(dslCode, ".set_solo(")
-	hasSetVolume := strings.Contains(dslCode, ".set_volume(")
-	hasSetPan := strings.Contains(dslCode, ".set_pan(")
-	hasSetName := strings.Contains(dslCode, ".set_name(")
+	hasSetTrack := strings.Contains(dslCode, ".set_track(")
+	hasSetClip := strings.Contains(dslCode, ".set_clip(")
 	hasAddFx := strings.Contains(dslCode, ".add_fx(")
 	
 	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
-		hasSetSelected || hasSetMute || hasSetSolo || hasSetVolume || hasSetPan || hasSetName || hasAddFx
+		hasSetTrack || hasSetClip || hasAddFx
 	
 	if !isDSL {
 		const maxLogLength = 500
@@ -312,14 +308,14 @@ func (a *DawAgent) GenerateActionsStream(
 			"- For delete by track id: track(id=1).delete() where id is 1-based " +
 			"- Example: 'delete Nebula Drift' → filter(tracks, track.name == \"Nebula Drift\").delete() " +
 			"- Example: 'remove track 1' → track(id=1).delete() " +
-			"- NEVER use set_mute or set_selected for delete operations - 'delete' means permanently remove the track " +
+			"- NEVER use set_track(mute=true) or set_track(selected=true) for delete operations - 'delete' means permanently remove the track " +
 			"**CRITICAL - SELECTION OPERATIONS**: " +
 			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
-			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_selected(selected=true) " +
-			"- NEVER generate set_track_solo for selection - 'select' ≠ 'solo'. " +
-			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_selected(selected=true) " +
-			"- 'solo' means audio isolation and uses set_track_solo, but 'select' means visual highlighting and uses set_track_selected. " +
-			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
+			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_track(selected=true) " +
+			"- NEVER generate set_track(solo=true) for selection - 'select' ≠ 'solo'. " +
+			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_track(selected=true) " +
+			"- 'solo' means audio isolation and uses set_track(solo=true), but 'select' means visual highlighting and uses set_track(selected=true). " +
+			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_track(selected=true). " +
 			"This efficiently filters the collection and applies the action to all matching tracks. " +
 			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
 			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
@@ -417,19 +413,15 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]any) ([
 	hasForEach := strings.Contains(text, ".for_each(")
 	hasDelete := strings.Contains(text, ".delete(")
 	hasDeleteClip := strings.Contains(text, ".delete_clip(")
-	hasSetSelected := strings.Contains(text, ".set_selected(")
-	hasSetMute := strings.Contains(text, ".set_mute(")
-	hasSetSolo := strings.Contains(text, ".set_solo(")
-	hasSetVolume := strings.Contains(text, ".set_volume(")
-	hasSetPan := strings.Contains(text, ".set_pan(")
-	hasSetName := strings.Contains(text, ".set_name(")
+	hasSetTrack := strings.Contains(text, ".set_track(")
+	hasSetClip := strings.Contains(text, ".set_clip(")
 	hasAddFx := strings.Contains(text, ".add_fx(")
 
 	isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
-		hasSetSelected || hasSetMute || hasSetSolo || hasSetVolume || hasSetPan || hasSetName || hasAddFx
+		hasSetTrack || hasSetClip || hasAddFx
 
-	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, hasSetSelected=%v, hasSetMute=%v, hasSetSolo=%v, hasSetVolume=%v, hasSetPan=%v, hasSetName=%v, hasAddFx=%v, isDSL=%v",
-		hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, hasSetSelected, hasSetMute, hasSetSolo, hasSetVolume, hasSetPan, hasSetName, hasAddFx, isDSL)
+	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, hasSetTrack=%v, hasSetClip=%v, hasAddFx=%v, isDSL=%v",
+		hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, hasSetTrack, hasSetClip, hasAddFx, isDSL)
 
 	if !isDSL {
 		const maxLogLength = 500
