@@ -26,8 +26,8 @@ func TestFilterDSLGeneration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	state := map[string]interface{}{
-		"tracks": []map[string]interface{}{
+	state := map[string]any{
+		"tracks": []map[string]any{
 			{"index": 0, "name": "foo", "selected": false},
 			{"index": 1, "name": "bar", "selected": false},
 			{"index": 2, "name": "foo", "selected": false},

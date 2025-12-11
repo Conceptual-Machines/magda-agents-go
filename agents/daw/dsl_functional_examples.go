@@ -6,38 +6,38 @@ import (
 )
 
 // ExampleREAPERState is example REAPER state structure for testing.
-var ExampleREAPERState = map[string]interface{}{
-	"state": map[string]interface{}{
-		"tracks": []interface{}{
-			map[string]interface{}{
+var ExampleREAPERState = map[string]any{
+	"state": map[string]any{
+		"tracks": []any{
+			map[string]any{
 				"index":    0,
 				"name":     "Drums",
 				"selected": false,
-				"fx": []interface{}{
-					map[string]interface{}{"name": "ReaEQ", "enabled": true},
-					map[string]interface{}{"name": "ReaComp", "enabled": false},
+				"fx": []any{
+					map[string]any{"name": "ReaEQ", "enabled": true},
+					map[string]any{"name": "ReaComp", "enabled": false},
 				},
-				"clips": []interface{}{
-					map[string]interface{}{"start": 0.0, "length": 4.0, "name": "Kick"},
-					map[string]interface{}{"start": 4.0, "length": 4.0, "name": "Snare"},
+				"clips": []any{
+					map[string]any{"start": 0.0, "length": 4.0, "name": "Kick"},
+					map[string]any{"start": 4.0, "length": 4.0, "name": "Snare"},
 				},
 			},
-			map[string]interface{}{
+			map[string]any{
 				"index":    1,
 				"name":     "FX",
 				"selected": true,
-				"fx": []interface{}{
-					map[string]interface{}{"name": "ReaVerb", "enabled": true},
+				"fx": []any{
+					map[string]any{"name": "ReaVerb", "enabled": true},
 				},
-				"clips": []interface{}{},
+				"clips": []any{},
 			},
-			map[string]interface{}{
+			map[string]any{
 				"index":    2,
 				"name":     "Bass",
 				"selected": false,
-				"fx":       []interface{}{},
-				"clips": []interface{}{
-					map[string]interface{}{"start": 0.0, "length": 8.0, "name": "BassLine"},
+				"fx":       []any{},
+				"clips": []any{
+					map[string]any{"start": 0.0, "length": 8.0, "name": "BassLine"},
 				},
 			},
 		},
@@ -47,23 +47,23 @@ var ExampleREAPERState = map[string]interface{}{
 // ExampleFilterTracks shows low-level filter implementation for tracks.
 // This demonstrates what happens internally when calling: filter(tracks, track.name == "FX")
 func ExampleFilterTracks() {
-	stateMap := ExampleREAPERState["state"].(map[string]interface{})
-	tracks := stateMap["tracks"].([]interface{})
-	filtered := make([]interface{}, 0)
+	stateMap := ExampleREAPERState["state"].(map[string]any)
+	tracks := stateMap["tracks"].([]any)
+	filtered := make([]any, 0)
 
 	// This is what happens internally in filter():
 	for _, trackInterface := range tracks {
-		track := trackInterface.(map[string]interface{})
+		track := trackInterface.(map[string]any)
 
 		// Set iteration context: track = current track dict
-		iterationContext := map[string]interface{}{
+		iterationContext := map[string]any{
 			"track": track,
 		}
 		_ = iterationContext // Use in predicate evaluation
 
 		// Evaluate predicate: track.name == "FX"
 		// 1. Resolve "track" from iteration context -> {...}
-		trackObj := iterationContext["track"].(map[string]interface{})
+		trackObj := iterationContext["track"].(map[string]any)
 
 		// 2. Access property "name" -> "FX"
 		trackName := trackObj["name"].(string)
@@ -79,7 +79,7 @@ func ExampleFilterTracks() {
 
 	trackNames := make([]string, len(filtered))
 	for i, t := range filtered {
-		trackNames[i] = t.(map[string]interface{})["name"].(string)
+		trackNames[i] = t.(map[string]any)["name"].(string)
 	}
 	log.Printf("Filtered tracks: %v", trackNames)
 	// Output: Filtered tracks: [FX]
@@ -88,24 +88,24 @@ func ExampleFilterTracks() {
 // ExampleFilterFXChain shows low-level filter implementation for FX chain.
 // This demonstrates: filter(fx_chain, fx.enabled == true)
 func ExampleFilterFXChain() {
-	stateMap := ExampleREAPERState["state"].(map[string]interface{})
-	tracks := stateMap["tracks"].([]interface{})
-	track := tracks[0].(map[string]interface{})
-	fxChain := track["fx"].([]interface{})
-	filtered := make([]interface{}, 0)
+	stateMap := ExampleREAPERState["state"].(map[string]any)
+	tracks := stateMap["tracks"].([]any)
+	track := tracks[0].(map[string]any)
+	fxChain := track["fx"].([]any)
+	filtered := make([]any, 0)
 
 	// This is what happens internally in filter():
 	for _, fxInterface := range fxChain {
-		fx := fxInterface.(map[string]interface{})
+		fx := fxInterface.(map[string]any)
 
 		// Set iteration context: fx = current FX dict
-		iterationContext := map[string]interface{}{
+		iterationContext := map[string]any{
 			"fx": fx,
 		}
 		_ = iterationContext
 
 		// Evaluate predicate: fx.enabled == true
-		fxObj := iterationContext["fx"].(map[string]interface{})
+		fxObj := iterationContext["fx"].(map[string]any)
 		fxEnabled := fxObj["enabled"].(bool)
 		predicateResult := fxEnabled
 
@@ -116,7 +116,7 @@ func ExampleFilterFXChain() {
 
 	fxNames := make([]string, len(filtered))
 	for i, f := range filtered {
-		fxNames[i] = f.(map[string]interface{})["name"].(string)
+		fxNames[i] = f.(map[string]any)["name"].(string)
 	}
 	log.Printf("Enabled FX: %v", fxNames)
 	// Output: Enabled FX: [ReaEQ]
@@ -125,24 +125,24 @@ func ExampleFilterFXChain() {
 // ExampleFilterClips shows low-level filter implementation for clips.
 // This demonstrates: filter(clips, clip.start < 4.0)
 func ExampleFilterClips() {
-	stateMap := ExampleREAPERState["state"].(map[string]interface{})
-	tracks := stateMap["tracks"].([]interface{})
-	track := tracks[0].(map[string]interface{})
-	clips := track["clips"].([]interface{})
-	filtered := make([]interface{}, 0)
+	stateMap := ExampleREAPERState["state"].(map[string]any)
+	tracks := stateMap["tracks"].([]any)
+	track := tracks[0].(map[string]any)
+	clips := track["clips"].([]any)
+	filtered := make([]any, 0)
 
 	// This is what happens internally in filter():
 	for _, clipInterface := range clips {
-		clip := clipInterface.(map[string]interface{})
+		clip := clipInterface.(map[string]any)
 
 		// Set iteration context: clip = current clip dict
-		iterationContext := map[string]interface{}{
+		iterationContext := map[string]any{
 			"clip": clip,
 		}
 		_ = iterationContext
 
 		// Evaluate predicate: clip.start < 4.0
-		clipObj := iterationContext["clip"].(map[string]interface{})
+		clipObj := iterationContext["clip"].(map[string]any)
 		clipStart := clipObj["start"].(float64)
 		predicateResult := clipStart < 4.0
 
@@ -153,7 +153,7 @@ func ExampleFilterClips() {
 
 	clipNames := make([]string, len(filtered))
 	for i, c := range filtered {
-		clipNames[i] = c.(map[string]interface{})["name"].(string)
+		clipNames[i] = c.(map[string]any)["name"].(string)
 	}
 	log.Printf("Clips starting before 4.0: %v", clipNames)
 	// Output: Clips starting before 4.0: [Kick]
@@ -162,21 +162,21 @@ func ExampleFilterClips() {
 // ExampleMapOverTracks shows low-level map implementation.
 // This demonstrates: map(@get_name, tracks)
 func ExampleMapOverTracks() {
-	getName := func(track interface{}) interface{} {
-		trackMap := track.(map[string]interface{})
+	getName := func(track any) any {
+		trackMap := track.(map[string]any)
 		return trackMap["name"]
 	}
 
-	stateMap := ExampleREAPERState["state"].(map[string]interface{})
-	tracks := stateMap["tracks"].([]interface{})
-	mapped := make([]interface{}, 0, len(tracks))
+	stateMap := ExampleREAPERState["state"].(map[string]any)
+	tracks := stateMap["tracks"].([]any)
+	mapped := make([]any, 0, len(tracks))
 
 	// This is what happens internally in map():
 	for _, trackInterface := range tracks {
 		track := trackInterface
 
 		// Set iteration context
-		iterationContext := map[string]interface{}{
+		iterationContext := map[string]any{
 			"track": track,
 		}
 		_ = iterationContext
@@ -199,13 +199,13 @@ func ExampleMapOverTracks() {
 // ExampleForEachWithSideEffects shows low-level for_each implementation.
 // This demonstrates: for_each(filter(tracks, track.selected == true), @add_fx)
 func ExampleForEachWithSideEffects() {
-	stateMap := ExampleREAPERState["state"].(map[string]interface{})
-	tracks := stateMap["tracks"].([]interface{})
-	actions := make([]map[string]interface{}, 0)
+	stateMap := ExampleREAPERState["state"].(map[string]any)
+	tracks := stateMap["tracks"].([]any)
+	actions := make([]map[string]any, 0)
 
-	addFX := func(track interface{}) {
-		trackMap := track.(map[string]interface{})
-		action := map[string]interface{}{
+	addFX := func(track any) {
+		trackMap := track.(map[string]any)
+		action := map[string]any{
 			"action": "add_track_fx",
 			"track":  trackMap["index"],
 			"fxname": "ReaVerb",
@@ -214,9 +214,9 @@ func ExampleForEachWithSideEffects() {
 	}
 
 	// Filter tracks first
-	filteredTracks := make([]interface{}, 0)
+	filteredTracks := make([]any, 0)
 	for _, trackInterface := range tracks {
-		track := trackInterface.(map[string]interface{})
+		track := trackInterface.(map[string]any)
 		if selected, ok := track["selected"].(bool); ok && selected {
 			filteredTracks = append(filteredTracks, track)
 		}
@@ -227,7 +227,7 @@ func ExampleForEachWithSideEffects() {
 		track := trackInterface
 
 		// Set iteration context
-		iterationContext := map[string]interface{}{
+		iterationContext := map[string]any{
 			"track": track,
 		}
 		_ = iterationContext
@@ -243,13 +243,13 @@ func ExampleForEachWithSideEffects() {
 // ExampleComplexFilterExpression shows complex filter with multiple conditions.
 // This demonstrates: filter(tracks, track.name == "FX" && track.selected == true)
 func ExampleComplexFilterExpression() {
-	stateMap := ExampleREAPERState["state"].(map[string]interface{})
-	tracks := stateMap["tracks"].([]interface{})
-	filtered := make([]interface{}, 0)
+	stateMap := ExampleREAPERState["state"].(map[string]any)
+	tracks := stateMap["tracks"].([]any)
+	filtered := make([]any, 0)
 
 	for _, trackInterface := range tracks {
-		track := trackInterface.(map[string]interface{})
-		iterationContext := map[string]interface{}{
+		track := trackInterface.(map[string]any)
+		iterationContext := map[string]any{
 			"track": track,
 		}
 		_ = iterationContext
@@ -268,7 +268,7 @@ func ExampleComplexFilterExpression() {
 
 	trackNames := make([]string, len(filtered))
 	for i, t := range filtered {
-		trackNames[i] = t.(map[string]interface{})["name"].(string)
+		trackNames[i] = t.(map[string]any)["name"].(string)
 	}
 	log.Printf("Complex filter result: %v", trackNames)
 	// Output: Complex filter result: [FX]
@@ -277,13 +277,13 @@ func ExampleComplexFilterExpression() {
 // ExampleNestedPropertyAccess shows nested property access in predicate.
 // This demonstrates: filter(tracks, track.fx[0].name == "ReaEQ")
 func ExampleNestedPropertyAccess() {
-	stateMap := ExampleREAPERState["state"].(map[string]interface{})
-	tracks := stateMap["tracks"].([]interface{})
-	filtered := make([]interface{}, 0)
+	stateMap := ExampleREAPERState["state"].(map[string]any)
+	tracks := stateMap["tracks"].([]any)
+	filtered := make([]any, 0)
 
 	for _, trackInterface := range tracks {
-		track := trackInterface.(map[string]interface{})
-		iterationContext := map[string]interface{}{
+		track := trackInterface.(map[string]any)
+		iterationContext := map[string]any{
 			"track": track,
 		}
 		_ = iterationContext
@@ -292,9 +292,9 @@ func ExampleNestedPropertyAccess() {
 
 		// Evaluate: track.fx[0].name == "ReaEQ"
 		// Navigate nested properties
-		fxList, ok := trackObj["fx"].([]interface{})
+		fxList, ok := trackObj["fx"].([]any)
 		if ok && len(fxList) > 0 {
-			firstFX := fxList[0].(map[string]interface{})
+			firstFX := fxList[0].(map[string]any)
 			fxName := firstFX["name"].(string)
 			predicateResult := fxName == "ReaEQ"
 
@@ -306,7 +306,7 @@ func ExampleNestedPropertyAccess() {
 
 	trackNames := make([]string, len(filtered))
 	for i, t := range filtered {
-		trackNames[i] = t.(map[string]interface{})["name"].(string)
+		trackNames[i] = t.(map[string]any)["name"].(string)
 	}
 	log.Printf("Tracks with ReaEQ as first FX: %v", trackNames)
 	// Output: Tracks with ReaEQ as first FX: [Drums]

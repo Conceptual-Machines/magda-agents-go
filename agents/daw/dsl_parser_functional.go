@@ -17,10 +17,10 @@ type FunctionalDSLParser struct {
 	reaperDSL         *ReaperDSL
 	currentTrackIndex int
 	trackCounter      int
-	state             map[string]interface{}
-	data              map[string]interface{} // Storage for collections
-	iterationContext  map[string]interface{} // Current iteration variables (track, fx, clip, etc.)
-	actions           []map[string]interface{}
+	state             map[string]any
+	data              map[string]any // Storage for collections
+	iterationContext  map[string]any // Current iteration variables (track, fx, clip, etc.)
+	actions           []map[string]any
 }
 
 // ReaperDSL implements the DSL methods for REAPER operations.
@@ -34,9 +34,9 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 		reaperDSL:         &ReaperDSL{},
 		currentTrackIndex: -1,
 		trackCounter:      0,
-		data:              make(map[string]interface{}),
-		iterationContext:  make(map[string]interface{}),
-		actions:           make([]map[string]interface{}, 0),
+		data:              make(map[string]any),
+		iterationContext:  make(map[string]any),
+		actions:           make([]map[string]any, 0),
 	}
 
 	parser.reaperDSL.parser = parser
@@ -59,30 +59,30 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 }
 
 // SetState sets the current REAPER state.
-func (p *FunctionalDSLParser) SetState(state map[string]interface{}) {
+func (p *FunctionalDSLParser) SetState(state map[string]any) {
 	p.state = state
 	// Populate data with collections from state
 	if state != nil {
-		stateMap, ok := state["state"].(map[string]interface{})
+		stateMap, ok := state["state"].(map[string]any)
 		if !ok {
 			stateMap = state
 		}
-		if tracks, ok := stateMap["tracks"].([]interface{}); ok {
+		if tracks, ok := stateMap["tracks"].([]any); ok {
 			p.data["tracks"] = tracks
 
 			// Extract all clips from all tracks into a global clips collection
 			// This allows filter(clips, ...) to work on all clips across all tracks
-			allClips := make([]interface{}, 0)
+			allClips := make([]any, 0)
 			for _, trackInterface := range tracks {
-				if track, ok := trackInterface.(map[string]interface{}); ok {
-					if clips, ok := track["clips"].([]interface{}); ok {
+				if track, ok := trackInterface.(map[string]any); ok {
+					if clips, ok := track["clips"].([]any); ok {
 						// Add track index to each clip for reference
 						trackIndex, _ := track["index"].(int)
 						if trackIndexFloat, ok := track["index"].(float64); ok {
 							trackIndex = int(trackIndexFloat)
 						}
 						for _, clip := range clips {
-							if clipMap, ok := clip.(map[string]interface{}); ok {
+							if clipMap, ok := clip.(map[string]any); ok {
 								// Ensure clip has track reference
 								clipMap["track"] = trackIndex
 							}
@@ -97,21 +97,21 @@ func (p *FunctionalDSLParser) SetState(state map[string]interface{}) {
 			}
 		}
 		// Also check for top-level clips collection (if state provides it directly)
-		if clips, ok := stateMap["clips"].([]interface{}); ok {
+		if clips, ok := stateMap["clips"].([]any); ok {
 			p.data["clips"] = clips
 		}
 	}
 }
 
 // ParseDSL parses DSL code and returns REAPER API actions.
-func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]interface{}, error) {
+func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 	if dslCode == "" {
 		return nil, fmt.Errorf("empty DSL code")
 	}
 
 
 	// Reset actions for new parse
-	p.actions = make([]map[string]interface{}, 0)
+	p.actions = make([]map[string]any, 0)
 	p.currentTrackIndex = -1
 	p.trackCounter = 0
 	p.clearIterationContext()
@@ -131,13 +131,13 @@ func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]interface{}
 }
 
 // setIterationContext sets the current iteration variables.
-func (p *FunctionalDSLParser) setIterationContext(context map[string]interface{}) {
+func (p *FunctionalDSLParser) setIterationContext(context map[string]any) {
 	p.iterationContext = context
 }
 
 // clearIterationContext clears iteration context.
 func (p *FunctionalDSLParser) clearIterationContext() {
-	p.iterationContext = make(map[string]interface{})
+	p.iterationContext = make(map[string]any)
 }
 
 // getIterVarFromCollection derives iteration variable name from collection name.
@@ -158,10 +158,10 @@ func (p *FunctionalDSLParser) getIterVarFromCollection(collectionName string) st
 }
 
 // resolveCollection resolves a collection name to actual data.
-func (p *FunctionalDSLParser) resolveCollection(name string) ([]interface{}, error) {
+func (p *FunctionalDSLParser) resolveCollection(name string) ([]any, error) {
 	// Check if it's in data storage
 	if collection, ok := p.data[name]; ok {
-		if list, ok := collection.([]interface{}); ok {
+		if list, ok := collection.([]any); ok {
 			return list, nil
 		}
 		return nil, fmt.Errorf("collection %s is not a list", name)
@@ -197,7 +197,7 @@ func (r *ReaperDSL) Track(args gs.Args) error {
 	}
 
 	// This is a track creation
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "create_track",
 	}
 
@@ -234,7 +234,7 @@ func (r *ReaperDSL) NewClip(args gs.Args) error {
 		}
 	}
 
-	action := map[string]interface{}{
+	action := map[string]any{
 		"track": trackIndex,
 	}
 
@@ -278,16 +278,16 @@ func (r *ReaperDSL) AddMidi(args gs.Args) error {
 		return fmt.Errorf("no track context for midi call")
 	}
 
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "add_midi",
 		"track":  p.currentTrackIndex,
-		"notes":  []interface{}{},
+		"notes":  []any{},
 	}
 
 	if _, ok := args["notes"]; ok {
 		// Handle notes array (would need more complex Value type)
 		// For now, placeholder
-		action["notes"] = []interface{}{}
+		action["notes"] = []any{}
 	}
 
 	p.actions = append(p.actions, action)
@@ -303,7 +303,7 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 		return fmt.Errorf("no track context for FX call")
 	}
 
-	action := map[string]interface{}{
+	action := map[string]any{
 		"track": p.currentTrackIndex,
 	}
 
@@ -331,8 +331,8 @@ func (r *ReaperDSL) SetVolume(args gs.Args) error {
 	if !ok || volumeValue.Kind != gs.ValueNumber {
 		return fmt.Errorf("volume_db must be a number")
 	}
-	action := map[string]interface{}{
-		"action":    "set_track_volume",
+	action := map[string]any{
+		"action":    "set_track",
 		"track":     p.currentTrackIndex,
 		"volume_db": volumeValue.Num,
 	}
@@ -350,8 +350,8 @@ func (r *ReaperDSL) SetPan(args gs.Args) error {
 	if !ok || panValue.Kind != gs.ValueNumber {
 		return fmt.Errorf("pan must be a number")
 	}
-	action := map[string]interface{}{
-		"action": "set_track_pan",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  p.currentTrackIndex,
 		"pan":    panValue.Num,
 	}
@@ -370,12 +370,12 @@ func (r *ReaperDSL) SetMute(args gs.Args) error {
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 SetMute: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 SetMute: Filtered collection has %d items, mute=%v", len(filtered), mute)
 			if len(filtered) > 0 {
 				// Apply to all filtered tracks
 				for _, item := range filtered {
-					trackMap, ok := item.(map[string]interface{})
+					trackMap, ok := item.(map[string]any)
 					if !ok {
 						log.Printf("⚠️  SetMute: Item is not a map: %T", item)
 						continue
@@ -392,8 +392,8 @@ func (r *ReaperDSL) SetMute(args gs.Args) error {
 					}
 					trackName, _ := trackMap["name"].(string)
 					log.Printf("✅ SetMute: Adding action for track %d (name='%s'), mute=%v", trackIndex, trackName, mute)
-					action := map[string]interface{}{
-						"action": "set_track_mute",
+					action := map[string]any{
+						"action": "set_track",
 						"track":  trackIndex,
 						"mute":   mute,
 					}
@@ -411,8 +411,8 @@ func (r *ReaperDSL) SetMute(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for mute call")
 	}
-	action := map[string]interface{}{
-		"action": "set_track_mute",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  p.currentTrackIndex,
 		"mute":   mute,
 	}
@@ -429,8 +429,8 @@ func (r *ReaperDSL) SetSolo(args gs.Args) error {
 	if !ok || soloValue.Kind != gs.ValueBool {
 		return fmt.Errorf("solo must be a boolean")
 	}
-	action := map[string]interface{}{
-		"action": "set_track_solo",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  p.currentTrackIndex,
 		"solo":   soloValue.Bool,
 	}
@@ -456,11 +456,11 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 	// Also check for any filtered collection (in case it's stored with a different key)
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 SetName: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 SetName: Filtered collection has %d items", len(filtered))
 			if len(filtered) > 0 {
 				// Check if this is a tracks collection or clips collection
-				firstItem, ok := filtered[0].(map[string]interface{})
+				firstItem, ok := filtered[0].(map[string]any)
 				if !ok {
 					log.Printf("⚠️  SetName: First item is not a map: %T", filtered[0])
 				} else {
@@ -476,7 +476,7 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 						// This is a clips collection - set clip name
 						log.Printf("🔍 SetName: Detected clips collection")
 						for _, item := range filtered {
-							clipMap, ok := item.(map[string]interface{})
+							clipMap, ok := item.(map[string]any)
 							if !ok {
 								log.Printf("⚠️  SetName: Clip item is not a map: %T", item)
 								continue
@@ -507,8 +507,8 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 								continue
 							}
 							
-							action := map[string]interface{}{
-								"action": "set_clip_name",
+							action := map[string]any{
+								"action": "set_clip",
 								"track":  trackIndex,
 								"name":   nameValue.Str,
 							}
@@ -532,7 +532,7 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 						// This is a tracks collection
 						log.Printf("🔍 SetName: Detected tracks collection")
 						for _, item := range filtered {
-							trackMap, ok := item.(map[string]interface{})
+							trackMap, ok := item.(map[string]any)
 							if !ok {
 								log.Printf("⚠️  SetName: Item is not a map: %T", item)
 								continue
@@ -546,8 +546,8 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 									continue
 								}
 							}
-							action := map[string]interface{}{
-								"action": "set_track_name",
+							action := map[string]any{
+								"action": "set_track",
 								"track":  trackIndex,
 								"name":   nameValue.Str,
 							}
@@ -566,8 +566,8 @@ func (r *ReaperDSL) SetName(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for name call")
 	}
-	action := map[string]interface{}{
-		"action": "set_track_name",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  p.currentTrackIndex,
 		"name":   nameValue.Str,
 	}
@@ -604,7 +604,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 SetSelected: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 SetSelected: Filtered collection has %d items, selected=%v", len(filtered), selected)
 			if len(filtered) > 0 {
 				// Check if this is a clips collection or tracks collection
@@ -612,7 +612,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 				// Tracks have an "index" field (their own index)
 				// Note: Clips might also have an "index" field (their index within the track),
 				// so we check for "track" field first to identify clips
-				firstItem, ok := filtered[0].(map[string]interface{})
+				firstItem, ok := filtered[0].(map[string]any)
 				if !ok {
 					log.Printf("⚠️  SetSelected: First item is not a map: %T", filtered[0])
 				} else {
@@ -635,7 +635,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 						// This is a clips collection
 						log.Printf("🔍 SetSelected: Detected clips collection")
 						for _, item := range filtered {
-							clipMap, ok := item.(map[string]interface{})
+							clipMap, ok := item.(map[string]any)
 							if !ok {
 								log.Printf("⚠️  SetSelected: Clip item is not a map: %T", item)
 								continue
@@ -668,7 +668,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 								continue
 							}
 							
-							action := map[string]interface{}{
+							action := map[string]any{
 								"action":   "set_clip_selected",
 								"track":    trackIndex,
 								"selected": selected,
@@ -695,7 +695,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 						// This is a tracks collection
 						log.Printf("🔍 SetSelected: Detected tracks collection")
 						for _, item := range filtered {
-							trackMap, ok := item.(map[string]interface{})
+							trackMap, ok := item.(map[string]any)
 							if !ok {
 								log.Printf("⚠️  SetSelected: Item is not a map: %T", item)
 								continue
@@ -712,7 +712,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 							}
 							trackName, _ := trackMap["name"].(string)
 							log.Printf("✅ SetSelected: Adding action for track %d (name='%s'), selected=%v", trackIndex, trackName, selected)
-							action := map[string]interface{}{
+							action := map[string]any{
 								"action":   "set_track_selected",
 								"track":    trackIndex,
 								"selected": selected,
@@ -729,7 +729,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 				log.Printf("⚠️  SetSelected: Filtered collection is empty! This means filter() returned 0 results.")
 			}
 		} else {
-			log.Printf("⚠️  SetSelected: Filtered collection is not a []interface{}: %T", filteredCollection)
+			log.Printf("⚠️  SetSelected: Filtered collection is not a []any: %T", filteredCollection)
 		}
 	} else {
 		log.Printf("🔍 SetSelected: No filtered collection found, using single-track mode (currentTrackIndex=%d)", p.currentTrackIndex)
@@ -739,7 +739,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for selected call")
 	}
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action":   "set_track_selected",
 		"track":    p.currentTrackIndex,
 		"selected": selected,
@@ -756,12 +756,12 @@ func (r *ReaperDSL) Delete(args gs.Args) error {
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 Delete: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 Delete: Filtered collection has %d items", len(filtered))
 			if len(filtered) > 0 {
 				// Apply to all filtered tracks
 				for _, item := range filtered {
-					trackMap, ok := item.(map[string]interface{})
+					trackMap, ok := item.(map[string]any)
 					if !ok {
 						log.Printf("⚠️  Delete: Item is not a map: %T", item)
 						continue
@@ -778,7 +778,7 @@ func (r *ReaperDSL) Delete(args gs.Args) error {
 					}
 					trackName, _ := trackMap["name"].(string)
 					log.Printf("✅ Delete: Adding action for track %d (name='%s')", trackIndex, trackName)
-					action := map[string]interface{}{
+					action := map[string]any{
 						"action": "delete_track",
 						"track":  trackIndex,
 					}
@@ -792,7 +792,7 @@ func (r *ReaperDSL) Delete(args gs.Args) error {
 				log.Printf("⚠️  Delete: Filtered collection is empty! This means filter() returned 0 results.")
 			}
 		} else {
-			log.Printf("⚠️  Delete: Filtered collection is not a []interface{}: %T", filteredCollection)
+			log.Printf("⚠️  Delete: Filtered collection is not a []any: %T", filteredCollection)
 		}
 	} else {
 		log.Printf("🔍 Delete: No filtered collection found, using single-track mode (currentTrackIndex=%d)", p.currentTrackIndex)
@@ -802,7 +802,7 @@ func (r *ReaperDSL) Delete(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for delete call")
 	}
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "delete_track",
 		"track":  p.currentTrackIndex,
 	}
@@ -818,11 +818,11 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 DeleteClip: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 DeleteClip: Filtered collection has %d items", len(filtered))
 			if len(filtered) > 0 {
 				// Check if this is a clips collection
-				firstItem, ok := filtered[0].(map[string]interface{})
+				firstItem, ok := filtered[0].(map[string]any)
 				if !ok {
 					log.Printf("⚠️  DeleteClip: First item is not a map: %T", filtered[0])
 				} else {
@@ -835,7 +835,7 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 						// This is a clips collection
 						log.Printf("🔍 DeleteClip: Detected clips collection")
 						for _, item := range filtered {
-							clipMap, ok := item.(map[string]interface{})
+							clipMap, ok := item.(map[string]any)
 							if !ok {
 								log.Printf("⚠️  DeleteClip: Clip item is not a map: %T", item)
 								continue
@@ -868,7 +868,7 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 								continue
 							}
 							
-							action := map[string]interface{}{
+							action := map[string]any{
 								"action": "delete_clip",
 								"track":  trackIndex,
 							}
@@ -898,7 +898,7 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 				log.Printf("⚠️  DeleteClip: Filtered collection is empty!")
 			}
 		} else {
-			log.Printf("⚠️  DeleteClip: Filtered collection is not a []interface{}: %T", filteredCollection)
+			log.Printf("⚠️  DeleteClip: Filtered collection is not a []any: %T", filteredCollection)
 		}
 	}
 
@@ -906,7 +906,7 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for deleteClip call")
 	}
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "delete_clip",
 		"track":  p.currentTrackIndex,
 	}
@@ -938,11 +938,11 @@ func (r *ReaperDSL) SetClipName(args gs.Args) error {
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 SetClipName: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 SetClipName: Filtered collection has %d items", len(filtered))
 			if len(filtered) > 0 {
 				for _, item := range filtered {
-					clipMap, ok := item.(map[string]interface{})
+					clipMap, ok := item.(map[string]any)
 					if !ok {
 						log.Printf("⚠️  SetClipName: Clip item is not a map: %T", item)
 						continue
@@ -973,8 +973,8 @@ func (r *ReaperDSL) SetClipName(args gs.Args) error {
 						continue
 					}
 					
-					action := map[string]interface{}{
-						"action": "set_clip_name",
+					action := map[string]any{
+						"action": "set_clip",
 						"track":  trackIndex,
 						"name":   nameValue.Str,
 					}
@@ -1002,8 +1002,8 @@ func (r *ReaperDSL) SetClipName(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for set_clip_name call")
 	}
-	action := map[string]interface{}{
-		"action": "set_clip_name",
+	action := map[string]any{
+		"action": "set_clip",
 		"track":  p.currentTrackIndex,
 		"name":   nameValue.Str,
 	}
@@ -1045,11 +1045,11 @@ func (r *ReaperDSL) SetClipColor(args gs.Args) error {
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 SetClipColor: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 SetClipColor: Filtered collection has %d items", len(filtered))
 			if len(filtered) > 0 {
 				for _, item := range filtered {
-					clipMap, ok := item.(map[string]interface{})
+					clipMap, ok := item.(map[string]any)
 					if !ok {
 						log.Printf("⚠️  SetClipColor: Clip item is not a map: %T", item)
 						continue
@@ -1080,8 +1080,8 @@ func (r *ReaperDSL) SetClipColor(args gs.Args) error {
 						continue
 					}
 					
-					action := map[string]interface{}{
-						"action": "set_clip_color",
+					action := map[string]any{
+						"action": "set_clip",
 						"track":  trackIndex,
 						"color":  color,
 					}
@@ -1109,8 +1109,8 @@ func (r *ReaperDSL) SetClipColor(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for set_clip_color call")
 	}
-	action := map[string]interface{}{
-		"action": "set_clip_color",
+	action := map[string]any{
+		"action": "set_clip",
 		"track":  p.currentTrackIndex,
 		"color":  color,
 	}
@@ -1158,11 +1158,11 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
 		log.Printf("🔍 MoveClip: Found filtered collection (hasFiltered=%v)", hasFiltered)
-		if filtered, ok := filteredCollection.([]interface{}); ok {
+		if filtered, ok := filteredCollection.([]any); ok {
 			log.Printf("🔍 MoveClip: Filtered collection has %d items", len(filtered))
 			if len(filtered) > 0 {
 				for _, item := range filtered {
-					clipMap, ok := item.(map[string]interface{})
+					clipMap, ok := item.(map[string]any)
 					if !ok {
 						log.Printf("⚠️  MoveClip: Clip item is not a map: %T", item)
 						continue
@@ -1193,7 +1193,7 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 						continue
 					}
 					
-					action := map[string]interface{}{
+					action := map[string]any{
 						"action":   "set_clip_position",
 						"track":    trackIndex,
 						"position": position,
@@ -1223,7 +1223,7 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for move_clip call")
 	}
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action":   "set_clip_position",
 		"track":    p.currentTrackIndex,
 		"position": position,
@@ -1261,7 +1261,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	}
 
 	// Get collection name or value
-	var collection []interface{}
+	var collection []any
 	var collectionName string
 
 	// Try multiple ways to find the collection argument
@@ -1405,11 +1405,11 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	// Filter the collection
 	// For now, we'll use a simple predicate evaluation
 	// In a full implementation, you'd evaluate expressions here
-	filtered := make([]interface{}, 0)
+	filtered := make([]any, 0)
 
 	for _, item := range collection {
 		// Set iteration context
-		p.setIterationContext(map[string]interface{}{
+		p.setIterationContext(map[string]any{
 			iterVar: item,
 		})
 
@@ -1576,7 +1576,7 @@ func (r *ReaperDSL) Map(args gs.Args) error {
 	p := r.parser
 
 	// Get collection
-	var collection []interface{}
+	var collection []any
 	var collectionName string
 
 	if collectionValue, ok := args["collection"]; ok && collectionValue.Kind == gs.ValueString {
@@ -1595,10 +1595,10 @@ func (r *ReaperDSL) Map(args gs.Args) error {
 		_ = funcValue.Str // funcName for future use
 		iterVar := p.getIterVarFromCollection(collectionName)
 
-		mapped := make([]interface{}, 0, len(collection))
+		mapped := make([]any, 0, len(collection))
 
 		for _, item := range collection {
-			p.setIterationContext(map[string]interface{}{
+			p.setIterationContext(map[string]any{
 				iterVar: item,
 			})
 
@@ -1625,7 +1625,7 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 	p := r.parser
 
 	// Get collection - similar to Filter and Map
-	var collection []interface{}
+	var collection []any
 	var collectionName string
 
 	// Try to get collection from various argument positions
@@ -1749,12 +1749,12 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 		// Execute method for each item
 		for i, item := range collection {
 			// Set iteration context
-			p.setIterationContext(map[string]interface{}{
+			p.setIterationContext(map[string]any{
 				iterVar: item,
 			})
 
 			// If item is a track, set currentTrackIndex for method execution
-			if trackMap, ok := item.(map[string]interface{}); ok {
+			if trackMap, ok := item.(map[string]any); ok {
 				if index, ok := trackMap["index"].(int); ok {
 					p.currentTrackIndex = index
 				} else if indexFloat, ok := trackMap["index"].(float64); ok {
@@ -1778,11 +1778,11 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 	// If no function or method specified, just iterate and set context (for chaining)
 	log.Printf("⚠️  ForEach: No function or method specified, only setting iteration context")
 	for i, item := range collection {
-		p.setIterationContext(map[string]interface{}{
+		p.setIterationContext(map[string]any{
 			iterVar: item,
 		})
 
-		if trackMap, ok := item.(map[string]interface{}); ok {
+		if trackMap, ok := item.(map[string]any); ok {
 			if index, ok := trackMap["index"].(int); ok {
 				p.currentTrackIndex = index
 			} else if indexFloat, ok := trackMap["index"].(float64); ok {
@@ -1959,8 +1959,8 @@ func (r *ReaperDSL) Store(args gs.Args) error {
 
 	// Get value (would need to handle different types)
 	if valueValue, ok := args["value"]; ok {
-		// Convert Value to interface{}
-		var value interface{}
+		// Convert Value to any
+		var value any
 		switch valueValue.Kind {
 		case gs.ValueString:
 			value = valueValue.Str
@@ -1987,12 +1987,12 @@ func (r *ReaperDSL) GetTracks(args gs.Args) error {
 		return nil
 	}
 
-	stateMap, ok := p.state["state"].(map[string]interface{})
+	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		stateMap = p.state
 	}
 
-	if tracks, ok := stateMap["tracks"].([]interface{}); ok {
+	if tracks, ok := stateMap["tracks"].([]any); ok {
 		p.data["tracks"] = tracks
 	}
 
@@ -2008,22 +2008,22 @@ func (r *ReaperDSL) GetFXChain(args gs.Args) error {
 		return nil
 	}
 
-	stateMap, ok := p.state["state"].(map[string]interface{})
+	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		stateMap = p.state
 	}
 
-	tracks, ok := stateMap["tracks"].([]interface{})
+	tracks, ok := stateMap["tracks"].([]any)
 	if !ok || trackIndex >= len(tracks) {
 		return nil
 	}
 
-	track, ok := tracks[trackIndex].(map[string]interface{})
+	track, ok := tracks[trackIndex].(map[string]any)
 	if !ok {
 		return nil
 	}
 
-	if fxChain, ok := track["fx"].([]interface{}); ok {
+	if fxChain, ok := track["fx"].([]any); ok {
 		p.data["fx_chain"] = fxChain
 	}
 
@@ -2037,18 +2037,18 @@ func (p *FunctionalDSLParser) getSelectedTrackIndex() int {
 		return -1
 	}
 
-	stateMap, ok := p.state["state"].(map[string]interface{})
+	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		stateMap = p.state
 	}
 
-	tracks, ok := stateMap["tracks"].([]interface{})
+	tracks, ok := stateMap["tracks"].([]any)
 	if !ok {
 		return -1
 	}
 
 	for i, track := range tracks {
-		trackMap, ok := track.(map[string]interface{})
+		trackMap, ok := track.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -2069,7 +2069,7 @@ func getArgsKeys(args gs.Args) []string {
 	return keys
 }
 
-func getDataKeys(data map[string]interface{}) []string {
+func getDataKeys(data map[string]any) []string {
 	keys := make([]string, 0, len(data))
 	for k := range data {
 		keys = append(keys, k)
@@ -2078,7 +2078,7 @@ func getDataKeys(data map[string]interface{}) []string {
 }
 
 // parseAndEvaluatePredicate parses a predicate string like "track.name == \"value\"" and evaluates it
-func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item interface{}, iterVar string) bool {
+func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any, iterVar string) bool {
 	// Remove quotes and whitespace
 	predStr = strings.TrimSpace(predStr)
 	log.Printf("🔍 parseAndEvaluatePredicate: parsing '%s' with iterVar='%s'", predStr, iterVar)
@@ -2154,7 +2154,7 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 	}
 
 	// Get the property value from the item
-	itemMap, ok := item.(map[string]interface{})
+	itemMap, ok := item.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -2200,7 +2200,7 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 		
 		// Split by comma (simple parsing, doesn't handle nested arrays or quoted commas)
 		values := strings.Split(arrayContents, ",")
-		collectionValues := make([]interface{}, 0, len(values))
+		collectionValues := make([]any, 0, len(values))
 		for _, valStr := range values {
 			valStr = strings.TrimSpace(valStr)
 			valStr = strings.Trim(valStr, "\"") // Remove quotes
@@ -2317,7 +2317,7 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item int
 }
 
 // compareValuesForIn compares two values for equality in the context of "in" operator, handling different types
-func compareValuesForIn(a, b interface{}) bool {
+func compareValuesForIn(a, b any) bool {
 	// Handle numeric comparison
 	aNum, aIsNum := getNumericValue(a)
 	bNum, bIsNum := getNumericValue(b)
@@ -2338,8 +2338,8 @@ func compareValuesForIn(a, b interface{}) bool {
 	return aStr == bStr
 }
 
-// getNumericValue extracts a numeric value from an interface{}, returning the float64 and true if successful
-func getNumericValue(v interface{}) (float64, bool) {
+// getNumericValue extracts a numeric value from an any, returning the float64 and true if successful
+func getNumericValue(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
 		return n, true
@@ -2355,8 +2355,8 @@ func getNumericValue(v interface{}) (float64, bool) {
 }
 
 // evaluateSimplePredicate evaluates a simple property-based predicate.
-func evaluateSimplePredicate(item interface{}, propName, operator string, compareValue gs.Value) bool {
-	itemMap, ok := item.(map[string]interface{})
+func evaluateSimplePredicate(item any, propName, operator string, compareValue gs.Value) bool {
+	itemMap, ok := item.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -2385,7 +2385,7 @@ func evaluateSimplePredicate(item interface{}, propName, operator string, compar
 }
 
 // compareValues compares two values and returns -1, 0, or 1.
-func compareValues(a interface{}, b gs.Value) int {
+func compareValues(a any, b gs.Value) int {
 	switch b.Kind {
 	case gs.ValueString:
 		aStr, ok := a.(string)

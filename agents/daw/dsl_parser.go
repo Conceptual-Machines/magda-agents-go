@@ -19,7 +19,7 @@ const (
 // DSLParser parses MAGDA DSL code and translates it to REAPER API actions
 type DSLParser struct {
 	trackCounter int                    // Track index counter for implicit track references
-	state        map[string]interface{} // Current REAPER state for track resolution
+	state        map[string]any // Current REAPER state for track resolution
 }
 
 // NewDSLParser creates a new DSL parser
@@ -31,7 +31,7 @@ func NewDSLParser() *DSLParser {
 }
 
 // SetState sets the current REAPER state for track resolution
-func (p *DSLParser) SetState(state map[string]interface{}) {
+func (p *DSLParser) SetState(state map[string]any) {
 	p.state = state
 }
 
@@ -40,13 +40,13 @@ func (p *DSLParser) SetState(state map[string]interface{}) {
 // Returns: [{"action": "create_track", "instrument": "Serum"}, {"action": "create_clip_at_bar", "track": 0, "bar": 3, "length_bars": 4}]
 //
 //nolint:gocyclo // Complex parsing logic is necessary for DSL translation
-func (p *DSLParser) ParseDSL(dslCode string) ([]map[string]interface{}, error) {
+func (p *DSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 	dslCode = strings.TrimSpace(dslCode)
 	if dslCode == "" {
 		return nil, fmt.Errorf("empty DSL code")
 	}
 
-	var actions []map[string]interface{}
+	var actions []map[string]any
 	currentTrackIndex := -1
 
 	// Split by method chains (e.g., track().newClip().addMidi())
@@ -235,8 +235,8 @@ func (p *DSLParser) splitMethodChains(dslCode string) []string {
 }
 
 // parseTrackCall parses track(instrument="Serum", name="Bass")
-func (p *DSLParser) parseTrackCall(call string) (map[string]interface{}, int, error) {
-	action := map[string]interface{}{
+func (p *DSLParser) parseTrackCall(call string) (map[string]any, int, error) {
+	action := map[string]any{
 		"action": "create_track",
 	}
 
@@ -263,7 +263,7 @@ func (p *DSLParser) parseTrackCall(call string) (map[string]interface{}, int, er
 
 // parseClipCall parses .newClip(bar=3, length_bars=4) or .newClip(start=1.5, length=2.0)
 // trackIndex should already be resolved (0-based) before calling this
-func (p *DSLParser) parseClipCall(call string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parseClipCall(call string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		// Try fallback to selected track one more time
 		trackIndex = p.getSelectedTrackIndex()
@@ -273,7 +273,7 @@ func (p *DSLParser) parseClipCall(call string, trackIndex int) (map[string]inter
 	}
 
 	params := p.extractParams(call)
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "create_clip",
 		"track":  trackIndex,
 	}
@@ -323,17 +323,17 @@ func (p *DSLParser) parseClipCall(call string, trackIndex int) (map[string]inter
 }
 
 // parseMidiCall parses .addMidi(notes=[...])
-func (p *DSLParser) parseMidiCall(_ string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parseMidiCall(_ string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		return nil, fmt.Errorf("no track context for midi call")
 	}
 
 	// For now, return a placeholder - MIDI parsing is complex
 	// The extension will need to handle MIDI data
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "add_midi",
 		"track":  trackIndex,
-		"notes":  []interface{}{}, // Placeholder - will be populated from DSL
+		"notes":  []any{}, // Placeholder - will be populated from DSL
 	}
 
 	log.Printf("⚠️  MIDI parsing not yet implemented - returning placeholder")
@@ -341,13 +341,13 @@ func (p *DSLParser) parseMidiCall(_ string, trackIndex int) (map[string]interfac
 }
 
 // parseFXCall parses .addFX(fxname="ReaEQ") or .addInstrument(instrument="Serum")
-func (p *DSLParser) parseFXCall(call string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parseFXCall(call string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		return nil, fmt.Errorf("no track context for FX call")
 	}
 
 	params := p.extractParams(call)
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "add_track_fx",
 		"track":  trackIndex,
 	}
@@ -365,14 +365,14 @@ func (p *DSLParser) parseFXCall(call string, trackIndex int) (map[string]interfa
 }
 
 // parseVolumeCall parses .setVolume(volume_db=-3.0)
-func (p *DSLParser) parseVolumeCall(call string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parseVolumeCall(call string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		return nil, fmt.Errorf("no track context for volume call")
 	}
 
 	params := p.extractParams(call)
-	action := map[string]interface{}{
-		"action": "set_track_volume",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  trackIndex,
 	}
 
@@ -388,14 +388,14 @@ func (p *DSLParser) parseVolumeCall(call string, trackIndex int) (map[string]int
 }
 
 // parsePanCall parses .setPan(pan=0.5)
-func (p *DSLParser) parsePanCall(call string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parsePanCall(call string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		return nil, fmt.Errorf("no track context for pan call")
 	}
 
 	params := p.extractParams(call)
-	action := map[string]interface{}{
-		"action": "set_track_pan",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  trackIndex,
 	}
 
@@ -411,14 +411,14 @@ func (p *DSLParser) parsePanCall(call string, trackIndex int) (map[string]interf
 }
 
 // parseMuteCall parses .setMute(mute=true)
-func (p *DSLParser) parseMuteCall(call string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parseMuteCall(call string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		return nil, fmt.Errorf("no track context for mute call")
 	}
 
 	params := p.extractParams(call)
-	action := map[string]interface{}{
-		"action": "set_track_mute",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  trackIndex,
 	}
 
@@ -432,14 +432,14 @@ func (p *DSLParser) parseMuteCall(call string, trackIndex int) (map[string]inter
 }
 
 // parseSoloCall parses .setSolo(solo=true)
-func (p *DSLParser) parseSoloCall(call string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parseSoloCall(call string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		return nil, fmt.Errorf("no track context for solo call")
 	}
 
 	params := p.extractParams(call)
-	action := map[string]interface{}{
-		"action": "set_track_solo",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  trackIndex,
 	}
 
@@ -453,14 +453,14 @@ func (p *DSLParser) parseSoloCall(call string, trackIndex int) (map[string]inter
 }
 
 // parseNameCall parses .setName(name="Bass")
-func (p *DSLParser) parseNameCall(call string, trackIndex int) (map[string]interface{}, error) {
+func (p *DSLParser) parseNameCall(call string, trackIndex int) (map[string]any, error) {
 	if trackIndex < 0 {
 		return nil, fmt.Errorf("no track context for name call")
 	}
 
 	params := p.extractParams(call)
-	action := map[string]interface{}{
-		"action": "set_track_name",
+	action := map[string]any{
+		"action": "set_track",
 		"track":  trackIndex,
 	}
 
@@ -579,19 +579,19 @@ func (p *DSLParser) getSelectedTrackIndex() int {
 	}
 
 	// Navigate to tracks array - state is wrapped as {"state": {...}}
-	stateMap, ok := p.state["state"].(map[string]interface{})
+	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		return -1
 	}
 
-	tracks, ok := stateMap["tracks"].([]interface{})
+	tracks, ok := stateMap["tracks"].([]any)
 	if !ok {
 		return -1
 	}
 
 	// Find first selected track
 	for i, track := range tracks {
-		trackMap, ok := track.(map[string]interface{})
+		trackMap, ok := track.(map[string]any)
 		if !ok {
 			continue
 		}

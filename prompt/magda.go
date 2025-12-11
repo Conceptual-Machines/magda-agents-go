@@ -82,8 +82,10 @@ all previous actions. Always check the state to understand:
   - Use ` + "`filter(clips, clip.selected == true)`" + ` to filter selected clips, OR
   - Use ` + "`filter(clips, [condition])`" + ` to filter by condition (e.g., ` + "`clip.length < 1.5`" + `)
   - Chain with ` + "`.set_clip_name(name=\"value\")`" + ` to rename the filtered clips
-  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + `
+  - **CRITICAL**: When user says "rename selected clips", they want to RENAME them, NOT select them again! The clips are already selected in the state.
+  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (NOT ` + "`set_selected`" + `!)
   - Example: "rename all clips shorter than one bar to Short" → ` + "`filter(clips, clip.length < 2.790698).set_clip_name(name=\"Short\")`" + `
+  - **NEVER** use ` + "`set_selected`" + ` when user says "rename" - use ` + "`set_clip_name`" + ` instead!
   - **NEVER** use ` + "`for_each`" + ` or function references (e.g., ` + "`@set_name_on_selected_clip`" + `) for clip operations - use ` + "`filter().set_clip_name()`" + ` instead!
 
 **FILTER PREDICATES - COMPREHENSIVE EXAMPLES**:

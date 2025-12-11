@@ -89,9 +89,9 @@ func TestSelectionWithStateIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to create parser")
 
 	// Set up REAPER state with existing tracks
-	state := map[string]interface{}{
-		"state": map[string]interface{}{
-			"tracks": []map[string]interface{}{
+	state := map[string]any{
+		"state": map[string]any{
+			"tracks": []map[string]any{
 				{"index": 0, "name": "Drums", "selected": false},
 				{"index": 1, "name": "Bass", "selected": false},
 				{"index": 2, "name": "Guitar", "selected": false},
@@ -195,8 +195,8 @@ func TestDawAgentSelectionFlow(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	state := map[string]interface{}{
-		"tracks": []map[string]interface{}{
+	state := map[string]any{
+		"tracks": []map[string]any{
 			{"index": 0, "name": "Drums", "selected": false},
 			{"index": 1, "name": "Bass", "selected": false},
 		},

@@ -9,13 +9,13 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 	tests := []struct {
 		name    string
 		dslCode string
-		want    []map[string]interface{}
+		want    []map[string]any
 		wantErr bool
 	}{
 		{
 			name:    "simple track creation",
 			dslCode: `track(instrument="Serum")`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -27,7 +27,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with name",
 			dslCode: `track(instrument="Serum", name="Bass")`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -40,7 +40,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with index",
 			dslCode: `track(instrument="Serum", index=2)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -52,7 +52,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with clip chain",
 			dslCode: `track(instrument="Serum").newClip(bar=3, length_bars=4)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -70,7 +70,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with time-based clip",
 			dslCode: `track(instrument="Serum").newClip(start=1.5, length=2.0)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -88,7 +88,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with clip and volume",
 			dslCode: `track(instrument="Serum").newClip(bar=3, length_bars=4).setVolume(volume_db=-3.0)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -111,14 +111,14 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with pan",
 			dslCode: `track(instrument="Serum").setPan(pan=0.5)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
 					"index":      0,
 				},
 				{
-					"action": "set_track_pan",
+					"action": "set_track",
 					"track":  0,
 					"pan":    0.5,
 				},
@@ -128,14 +128,14 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with mute",
 			dslCode: `track(instrument="Serum").setMute(mute=true)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
 					"index":      0,
 				},
 				{
-					"action": "set_track_mute",
+					"action": "set_track",
 					"track":  0,
 					"mute":   true,
 				},
@@ -145,14 +145,14 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with solo",
 			dslCode: `track(instrument="Serum").setSolo(solo=false)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
 					"index":      0,
 				},
 				{
-					"action": "set_track_solo",
+					"action": "set_track",
 					"track":  0,
 					"solo":   false,
 				},
@@ -162,14 +162,14 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with name setter",
 			dslCode: `track(instrument="Serum").setName(name="My Track")`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
 					"index":      0,
 				},
 				{
-					"action": "set_track_name",
+					"action": "set_track",
 					"track":  0,
 					"name":   "My Track",
 				},
@@ -179,7 +179,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "track with FX",
 			dslCode: `track(instrument="Serum").addFX(fxname="ReaEQ")`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -196,7 +196,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "multiple tracks",
 			dslCode: `track(instrument="Serum").newClip(bar=1, length_bars=4) track(instrument="Piano").newClip(bar=2, length_bars=4)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -225,7 +225,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 		{
 			name:    "clip with default length",
 			dslCode: `track(instrument="Serum").newClip(bar=3)`,
-			want: []map[string]interface{}{
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
@@ -408,7 +408,7 @@ func TestDSLParser_parseTrackCall(t *testing.T) {
 		wantAction  string
 		wantIndex   int
 		wantErr     bool
-		checkFields map[string]interface{}
+		checkFields map[string]any
 	}{
 		{
 			name:       "basic track",
@@ -423,7 +423,7 @@ func TestDSLParser_parseTrackCall(t *testing.T) {
 			wantAction: "create_track",
 			wantIndex:  0,
 			wantErr:    false,
-			checkFields: map[string]interface{}{
+			checkFields: map[string]any{
 				"instrument": "Serum",
 			},
 		},
@@ -433,7 +433,7 @@ func TestDSLParser_parseTrackCall(t *testing.T) {
 			wantAction: "create_track",
 			wantIndex:  0,
 			wantErr:    false,
-			checkFields: map[string]interface{}{
+			checkFields: map[string]any{
 				"name": "Bass",
 			},
 		},
@@ -476,7 +476,7 @@ func TestDSLParser_parseClipCall(t *testing.T) {
 		trackIndex  int
 		wantAction  string
 		wantErr     bool
-		checkFields map[string]interface{}
+		checkFields map[string]any
 	}{
 		{
 			name:       "clip with bar",
@@ -484,7 +484,7 @@ func TestDSLParser_parseClipCall(t *testing.T) {
 			trackIndex: 0,
 			wantAction: "create_clip_at_bar",
 			wantErr:    false,
-			checkFields: map[string]interface{}{
+			checkFields: map[string]any{
 				"track":       0,
 				"bar":         3,
 				"length_bars": 4,
@@ -496,7 +496,7 @@ func TestDSLParser_parseClipCall(t *testing.T) {
 			trackIndex: 0,
 			wantAction: "create_clip",
 			wantErr:    false,
-			checkFields: map[string]interface{}{
+			checkFields: map[string]any{
 				"track":    0,
 				"position": 1.5,
 				"length":   2.0,
@@ -508,7 +508,7 @@ func TestDSLParser_parseClipCall(t *testing.T) {
 			trackIndex: 1,
 			wantAction: "create_clip",
 			wantErr:    false,
-			checkFields: map[string]interface{}{
+			checkFields: map[string]any{
 				"track":    1,
 				"position": 2.5,
 				"length":   1.0,
@@ -520,7 +520,7 @@ func TestDSLParser_parseClipCall(t *testing.T) {
 			trackIndex: 0,
 			wantAction: "create_clip_at_bar",
 			wantErr:    false,
-			checkFields: map[string]interface{}{
+			checkFields: map[string]any{
 				"track":       0,
 				"bar":         3,
 				"length_bars": 4, // Default

@@ -60,12 +60,12 @@ func NewDawAgent(cfg *config.Config) *DawAgent {
 }
 
 type DawResult struct {
-	Actions []map[string]interface{} `json:"actions"`
+	Actions []map[string]any `json:"actions"`
 	Usage   any                      `json:"usage"`
 }
 
 func (a *DawAgent) GenerateActions(
-	ctx context.Context, question string, state map[string]interface{},
+	ctx context.Context, question string, state map[string]any,
 ) (*DawResult, error) {
 	startTime := time.Now()
 	log.Printf("🤖 MAGDA REQUEST STARTED: question=%s", question)
@@ -75,7 +75,7 @@ func (a *DawAgent) GenerateActions(
 	defer transaction.Finish()
 
 	transaction.SetTag("model", "gpt-5.1") // GPT-5.1 for MAGDA
-	transaction.SetContext("magda", map[string]interface{}{
+	transaction.SetContext("magda", map[string]any{
 		"question_length": len(question),
 		"has_state":       state != nil,
 	})
@@ -176,11 +176,11 @@ func (a *DawAgent) GenerateActions(
 }
 
 // buildInputMessages constructs the input array for the LLM
-func (a *DawAgent) buildInputMessages(question string, state map[string]interface{}) []map[string]interface{} {
-	messages := []map[string]interface{}{}
+func (a *DawAgent) buildInputMessages(question string, state map[string]any) []map[string]any {
+	messages := []map[string]any{}
 
 	// Add user question
-	userMessage := map[string]interface{}{
+	userMessage := map[string]any{
 		"role":    "user",
 		"content": question,
 	}
@@ -188,7 +188,7 @@ func (a *DawAgent) buildInputMessages(question string, state map[string]interfac
 
 	// Add REAPER state if provided
 	if len(state) > 0 {
-		stateMessage := map[string]interface{}{
+		stateMessage := map[string]any{
 			"role":    "user",
 			"content": fmt.Sprintf("Current REAPER state: %+v", state),
 		}
@@ -201,7 +201,7 @@ func (a *DawAgent) buildInputMessages(question string, state map[string]interfac
 // parseActionsFromResponse extracts actions from the LLM response
 // For CFG/DSL mode: RawOutput contains DSL code (e.g., track().new_clip().add_midi())
 // For JSON Schema mode: RawOutput contains JSON with actions array
-func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state map[string]interface{}) ([]map[string]interface{}, error) {
+func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state map[string]any) ([]map[string]any, error) {
 	// The provider should have stored the raw output (DSL or JSON) in RawOutput
 	if resp.RawOutput == "" {
 		return nil, fmt.Errorf("no raw output available in response")
@@ -264,14 +264,14 @@ func truncate(s string, maxLen int) string {
 }
 
 // StreamActionCallback is called for each action found in the stream
-type StreamActionCallback func(action map[string]interface{}) error
+type StreamActionCallback func(action map[string]any) error
 
 // GenerateActionsStream generates actions using streaming (without structured output)
 // It parses JSON incrementally from the text stream and calls callback for each action found
 func (a *DawAgent) GenerateActionsStream(
 	ctx context.Context,
 	question string,
-	state map[string]interface{},
+	state map[string]any,
 	callback StreamActionCallback,
 ) (*DawResult, error) {
 	startTime := time.Now()
@@ -283,7 +283,7 @@ func (a *DawAgent) GenerateActionsStream(
 
 	transaction.SetTag("model", "gpt-5.1")
 	transaction.SetTag("streaming", "false")
-	transaction.SetContext("magda", map[string]interface{}{
+	transaction.SetContext("magda", map[string]any{
 		"question_length": len(question),
 		"has_state":       state != nil,
 	})
@@ -393,7 +393,7 @@ func (a *DawAgent) GenerateActionsStream(
 // It looks for complete DSL code or JSON objects in the text and extracts them
 //
 //nolint:gocyclo // Complex parsing logic is necessary for handling both DSL and JSON formats
-func (a *DawAgent) parseActionsIncremental(text string, state map[string]interface{}) ([]map[string]interface{}, error) {
+func (a *DawAgent) parseActionsIncremental(text string, state map[string]any) ([]map[string]any, error) {
 	text = strings.TrimSpace(text)
 
 	log.Printf("🔍 parseActionsIncremental called with %d chars, useDSL=%v", len(text), a.useDSL)
@@ -464,10 +464,10 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]interfa
 func (a *DawAgent) handleStreamEvent(
 	event llm.StreamEvent,
 	accumulatedText *string,
-	allActions *[]map[string]interface{},
+	allActions *[]map[string]any,
 	usage *any,
 	callback StreamActionCallback,
-	state map[string]interface{},
+	state map[string]any,
 ) error {
 	switch event.Type {
 	case "output_text.delta":
@@ -485,9 +485,9 @@ func (a *DawAgent) handleStreamEvent(
 func (a *DawAgent) handleTextDelta(
 	event llm.StreamEvent,
 	accumulatedText *string,
-	allActions *[]map[string]interface{},
+	allActions *[]map[string]any,
 	callback StreamActionCallback,
-	state map[string]interface{},
+	state map[string]any,
 ) error {
 	text, ok := event.Data["text"].(string)
 	if !ok || text == "" {
@@ -524,10 +524,10 @@ func (a *DawAgent) handleTextDelta(
 func (a *DawAgent) handleStreamCompleted(
 	event llm.StreamEvent,
 	accumulatedText *string,
-	allActions *[]map[string]interface{},
+	allActions *[]map[string]any,
 	usage *any,
 	callback StreamActionCallback,
-	state map[string]interface{},
+	state map[string]any,
 ) error {
 	log.Printf("📦 MAGDA: Stream completed, final parse of %d chars", len(*accumulatedText))
 	log.Printf("📋 MAGDA: FULL accumulated text at completion (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
