@@ -669,7 +669,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 							}
 							
 							action := map[string]any{
-								"action":   "set_clip_selected",
+								"action":   "set_clip",
 								"track":    trackIndex,
 								"selected": selected,
 							}
