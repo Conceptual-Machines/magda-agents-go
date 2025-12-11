@@ -24,19 +24,19 @@ func TestSelectionActionsIntegration(t *testing.T) {
 		{
 			name:        "select track via DSL",
 			dslCode:     `track(index=0).set_selected(selected=true)`,
-			expectType:  "set_track_selected",
+			expectType:  "set_track",
 			expectCount: 2, // create_track + set_track_selected
 		},
 		{
 			name:        "deselect track via DSL",
 			dslCode:     `track(index=1).set_selected(selected=false)`,
-			expectType:  "set_track_selected",
+			expectType:  "set_track",
 			expectCount: 2,
 		},
 		{
 			name:        "create and select track",
 			dslCode:     `track(instrument="Serum").set_selected(selected=true)`,
-			expectType:  "set_track_selected",
+			expectType:  "set_track",
 			expectCount: 2,
 		},
 	}
@@ -115,8 +115,9 @@ func TestSelectionWithStateIntegration(t *testing.T) {
 			continue
 		}
 
-		if actionType == "set_track_selected" {
-			foundSelection = true
+		if actionType == "set_track" {
+			if _, ok := action["selected"]; ok {
+				foundSelection = true
 			track, ok := action["track"].(int)
 			assert.True(t, ok, "Action should have 'track' field")
 			// Track id=1 is 0-based index 0 (first track)
@@ -125,11 +126,12 @@ func TestSelectionWithStateIntegration(t *testing.T) {
 
 			selected, ok := action["selected"].(bool)
 			assert.True(t, ok, "Action should have 'selected' field")
-			assert.True(t, selected, "Track should be selected")
+				assert.True(t, selected, "Track should be selected")
+			}
 		}
 	}
 
-	assert.True(t, foundSelection, "Should have found set_track_selected action")
+	assert.True(t, foundSelection, "Should have found set_track action with selected=true")
 }
 
 // TestSelectionActionChainIntegration tests chaining selection with other operations
@@ -160,17 +162,19 @@ func TestSelectionActionChainIntegration(t *testing.T) {
 	// Find selection action
 	hasSelection := false
 	for i, actionType := range actionSequence {
-		if actionType == "set_track_selected" {
-			hasSelection = true
-			// Verify it comes after other operations
-			assert.Greater(t, i, 0,
-				"Selection should come after track creation")
-
-			// Verify selection is true
+		if actionType == "set_track" {
 			action := actions[i]
-			selected, ok := action["selected"].(bool)
-			assert.True(t, ok, "set_track_selected should have 'selected' field")
-			assert.True(t, selected, "Track should be selected")
+			if _, ok := action["selected"]; ok {
+				hasSelection = true
+				// Verify it comes after other operations
+				assert.Greater(t, i, 0,
+					"Selection should come after track creation")
+
+				// Verify selection is true
+				selected, ok := action["selected"].(bool)
+				assert.True(t, ok, "set_track should have 'selected' field")
+				assert.True(t, selected, "Track should be selected")
+			}
 		}
 	}
 
@@ -225,15 +229,17 @@ func TestDawAgentSelectionFlow(t *testing.T) {
 			continue
 		}
 
-		if actionType == "set_track_selected" {
+		if actionType == "set_track" {
+			if _, ok := action["selected"]; ok {
 			hasSelection = true
 			selected, ok := action["selected"].(bool)
 			assert.True(t, ok, "Action should have 'selected' field")
-			assert.True(t, selected, "Track should be selected")
+				assert.True(t, selected, "Track should be selected")
+			}
 		}
 	}
 
-	assert.True(t, hasSelection, "Should have set_track_selected action")
+	assert.True(t, hasSelection, "Should have set_track action with selected=true")
 }
 
 // Helper function to check if a string contains a substring (case-insensitive)

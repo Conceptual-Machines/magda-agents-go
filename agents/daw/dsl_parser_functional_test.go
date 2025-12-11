@@ -22,7 +22,7 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
 					"selected": true,
 				},
@@ -39,7 +39,7 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
 					"selected": false,
 				},
@@ -61,7 +61,7 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 					"name":   "Bass",
 				},
 				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
 					"selected": true,
 				},

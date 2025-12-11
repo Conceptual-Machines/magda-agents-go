@@ -713,7 +713,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 							trackName, _ := trackMap["name"].(string)
 							log.Printf("✅ SetSelected: Adding action for track %d (name='%s'), selected=%v", trackIndex, trackName, selected)
 							action := map[string]any{
-								"action":   "set_track_selected",
+								"action":   "set_track",
 								"track":    trackIndex,
 								"selected": selected,
 							}
@@ -740,7 +740,7 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 		return fmt.Errorf("no track context for selected call")
 	}
 	action := map[string]any{
-		"action":   "set_track_selected",
+		"action":   "set_track",
 		"track":    p.currentTrackIndex,
 		"selected": selected,
 	}

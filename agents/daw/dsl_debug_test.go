@@ -63,17 +63,19 @@ func TestFilterDSLGeneration(t *testing.T) {
 			continue
 		}
 
-		if actionType == "set_track_selected" {
-			selectionCount++
-			track, ok := action["track"].(int)
-			if !ok {
-				if trackFloat, ok := action["track"].(float64); ok {
-					track = int(trackFloat)
+		if actionType == "set_track" {
+			if _, ok := action["selected"]; ok {
+				selectionCount++
+				track, ok := action["track"].(int)
+				if !ok {
+					if trackFloat, ok := action["track"].(float64); ok {
+						track = int(trackFloat)
+					}
 				}
+				selected, ok := action["selected"].(bool)
+				require.True(t, ok, "Action should have 'selected' field")
+				log.Printf("   ✅ Selection action: track=%d, selected=%v", track, selected)
 			}
-			selected, ok := action["selected"].(bool)
-			require.True(t, ok, "Action should have 'selected' field")
-			log.Printf("   ✅ Selection action: track=%d, selected=%v", track, selected)
 		}
 	}
 

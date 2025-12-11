@@ -339,7 +339,7 @@ func TestTrackProperties(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action":    "set_track_volume",
+					"action":    "set_track",
 					"track":     0,
 					"volume_db": -3.0,
 				},
@@ -424,7 +424,7 @@ func TestTrackProperties(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
 					"selected": true,
 				},
@@ -614,7 +614,7 @@ func TestFilterOperations(t *testing.T) {
 			},
 			want: []map[string]any{
 				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
 					"selected": true,
 				},
@@ -703,7 +703,7 @@ func TestMethodChaining(t *testing.T) {
 					"notes":  []any{},
 				},
 				{
-					"action":    "set_track_volume",
+					"action":    "set_track",
 					"track":     0,
 					"volume_db": -3.0,
 				},
@@ -763,13 +763,13 @@ func TestCompoundActions(t *testing.T) {
 			},
 			want: []map[string]any{
 				{
-					"action":   "set_clip_name",
+					"action":   "set_clip",
 					"track":    0,
 					"name":     "Short Clip",
 					"position": 5.0,
 				},
 				{
-					"action":   "set_clip_name",
+					"action":   "set_clip",
 					"track":    0,
 					"name":     "Short Clip",
 					"position": 8.0,
@@ -794,7 +794,7 @@ func TestCompoundActions(t *testing.T) {
 			},
 			want: []map[string]any{
 				{
-					"action":   "set_clip_color",
+					"action":   "set_clip",
 					"track":    0,
 					"color":    "#ff0000",
 					"position": 1.0,
