@@ -35,6 +35,22 @@
   - ✅ `magda-agents-go/agents/daw/dsl_parser_functional.go` - Updated grammar to include `length` in `clip_property_param`
   - ✅ `magda-reaper/src/magda_actions.cpp` - Already supported in `SetClipProperties()`
 
+### 3.5. Clip Position Unification
+**Status**: Not Implemented (TODO for tomorrow)
+**Action**: Add `position` property to unified `set_clip` method
+- **Current State**: Position is set via separate `.move_clip(position=...)` method
+- **Proposed**: Unify into `set_clip(position=...)` similar to how `length` was unified
+- **Use Cases**: 
+  - "move all clips shorter than 2 seconds to position 4.0"
+  - "move clip 0 to bar 8"
+- **DSL**: `filter(clips, clip.length < 2.0).set_clip(position=4.0)` or `set_clip(clip=0, position=8.0)`
+- **C++ Backend**: Already supports position in `SetClipProperties()` when clip is identified by index
+- **Files to Modify**:
+  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Add `position` handling to `SetClip()` method
+  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Update grammar to include `position` in `clip_property_param`
+  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Consider deprecating/removing `MoveClip()` method
+  - `magda-reaper/src/magda_actions.cpp` - Already supported, but may need refinement for position-based identification
+
 ### 4. Track Color Support
 **Status**: Not Implemented
 **Action**: Add `color` property to unified `set_track` method
