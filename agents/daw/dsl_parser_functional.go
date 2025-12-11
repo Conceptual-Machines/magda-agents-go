@@ -321,87 +321,86 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 	return nil
 }
 
-// SetVolume handles .set_volume() calls.
-func (r *ReaperDSL) SetVolume(args gs.Args) error {
+// SetTrack handles .set_track() calls to set track properties (name, volume_db, pan, mute, solo, selected, etc.).
+// If there's a filtered collection, applies to all tracks; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) SetTrack(args gs.Args) error {
 	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for volume call")
+	
+	// Build action with any provided properties
+	actionProps := make(map[string]any)
+	
+	// Handle name
+	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
+		actionProps["name"] = nameValue.Str
 	}
-	volumeValue, ok := args["volume_db"]
-	if !ok || volumeValue.Kind != gs.ValueNumber {
-		return fmt.Errorf("volume_db must be a number")
+	
+	// Handle volume_db
+	if volumeValue, ok := args["volume_db"]; ok && volumeValue.Kind == gs.ValueNumber {
+		actionProps["volume_db"] = volumeValue.Num
 	}
-	action := map[string]any{
-		"action":    "set_track",
-		"track":     p.currentTrackIndex,
-		"volume_db": volumeValue.Num,
+	
+	// Handle pan
+	if panValue, ok := args["pan"]; ok && panValue.Kind == gs.ValueNumber {
+		actionProps["pan"] = panValue.Num
 	}
-	p.actions = append(p.actions, action)
-	return nil
-}
-
-// SetPan, SetMute, SetSolo, SetName methods (similar pattern)
-func (r *ReaperDSL) SetPan(args gs.Args) error {
-	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for pan call")
+	
+	// Handle mute
+	if muteValue, ok := args["mute"]; ok && muteValue.Kind == gs.ValueBool {
+		actionProps["mute"] = muteValue.Bool
 	}
-	panValue, ok := args["pan"]
-	if !ok || panValue.Kind != gs.ValueNumber {
-		return fmt.Errorf("pan must be a number")
+	
+	// Handle solo
+	if soloValue, ok := args["solo"]; ok && soloValue.Kind == gs.ValueBool {
+		actionProps["solo"] = soloValue.Bool
 	}
-	action := map[string]any{
-		"action": "set_track",
-		"track":  p.currentTrackIndex,
-		"pan":    panValue.Num,
+	
+	// Handle selected
+	if selectedValue, ok := args["selected"]; ok && selectedValue.Kind == gs.ValueBool {
+		actionProps["selected"] = selectedValue.Bool
 	}
-	p.actions = append(p.actions, action)
-	return nil
-}
-
-func (r *ReaperDSL) SetMute(args gs.Args) error {
-	p := r.parser
-	muteValue, ok := args["mute"]
-	if !ok || muteValue.Kind != gs.ValueBool {
-		return fmt.Errorf("mute must be a boolean")
+	
+	// Must have at least one property
+	if len(actionProps) == 0 {
+		return fmt.Errorf("set_track requires at least one property: name, volume_db, pan, mute, solo, or selected")
 	}
-	mute := muteValue.Bool
 
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
-		log.Printf("🔍 SetMute: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		log.Printf("🔍 SetTrack: Found filtered collection (hasFiltered=%v)", hasFiltered)
 		if filtered, ok := filteredCollection.([]any); ok {
-			log.Printf("🔍 SetMute: Filtered collection has %d items, mute=%v", len(filtered), mute)
+			log.Printf("🔍 SetTrack: Filtered collection has %d items", len(filtered))
 			if len(filtered) > 0 {
-				// Apply to all filtered tracks
 				for _, item := range filtered {
 					trackMap, ok := item.(map[string]any)
 					if !ok {
-						log.Printf("⚠️  SetMute: Item is not a map: %T", item)
+						log.Printf("⚠️  SetTrack: Item is not a map: %T", item)
 						continue
 					}
 					trackIndex, ok := trackMap["index"].(int)
 					if !ok {
-						// Try float64 (JSON numbers are float64)
 						if trackIndexFloat, ok := trackMap["index"].(float64); ok {
 							trackIndex = int(trackIndexFloat)
 						} else {
-							log.Printf("⚠️  SetMute: Could not extract track index from %+v", trackMap)
+							log.Printf("⚠️  SetTrack: Could not extract track index from %+v", trackMap)
 							continue
 						}
 					}
-					trackName, _ := trackMap["name"].(string)
-					log.Printf("✅ SetMute: Adding action for track %d (name='%s'), mute=%v", trackIndex, trackName, mute)
+					
 					action := map[string]any{
 						"action": "set_track",
 						"track":  trackIndex,
-						"mute":   mute,
 					}
+					
+					// Copy all properties
+					for k, v := range actionProps {
+						action[k] = v
+					}
+					
+					log.Printf("✅ SetTrack: Adding action for track %d, props=%+v", trackIndex, actionProps)
 					p.actions = append(p.actions, action)
 				}
-				// Clear filtered collection after applying
 				delete(p.data, "current_filtered")
-				log.Printf("✅ SetMute: Applied set_mute to %d filtered tracks", len(filtered))
+				log.Printf("✅ SetTrack: Applied to %d filtered tracks", len(filtered))
 				return nil
 			}
 		}
@@ -409,37 +408,52 @@ func (r *ReaperDSL) SetMute(args gs.Args) error {
 
 	// Normal single-track operation
 	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for mute call")
+		return fmt.Errorf("no track context for set_track call")
 	}
 	action := map[string]any{
 		"action": "set_track",
 		"track":  p.currentTrackIndex,
-		"mute":   mute,
 	}
+	
+	// Copy all properties
+	for k, v := range actionProps {
+		action[k] = v
+	}
+	
 	p.actions = append(p.actions, action)
 	return nil
 }
 
+// SetVolume handles .set_volume() calls.
+// DEPRECATED: Use SetTrack instead. Kept for backward compatibility.
+func (r *ReaperDSL) SetVolume(args gs.Args) error {
+	// Delegate to unified SetTrack method
+	return r.SetTrack(args)
+}
+
+// SetPan handles .set_pan() calls.
+// DEPRECATED: Use SetTrack instead. Kept for backward compatibility.
+func (r *ReaperDSL) SetPan(args gs.Args) error {
+	// Delegate to unified SetTrack method
+	return r.SetTrack(args)
+}
+
+// SetMute handles .set_mute() calls.
+// DEPRECATED: Use SetTrack instead. Kept for backward compatibility.
+func (r *ReaperDSL) SetMute(args gs.Args) error {
+	// Delegate to unified SetTrack method
+	return r.SetTrack(args)
+}
+
+// SetSolo handles .set_solo() calls.
+// DEPRECATED: Use SetTrack instead. Kept for backward compatibility.
 func (r *ReaperDSL) SetSolo(args gs.Args) error {
-	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for solo call")
-	}
-	soloValue, ok := args["solo"]
-	if !ok || soloValue.Kind != gs.ValueBool {
-		return fmt.Errorf("solo must be a boolean")
-	}
-	action := map[string]any{
-		"action": "set_track",
-		"track":  p.currentTrackIndex,
-		"solo":   soloValue.Bool,
-	}
-	p.actions = append(p.actions, action)
-	return nil
+	// Delegate to unified SetTrack method
+	return r.SetTrack(args)
 }
 
 // SetName handles .set_name() calls to set the track or clip name.
-// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
+// DEPRECATED: Use SetTrack for tracks or SetClip for clips instead. Kept for backward compatibility.
 func (r *ReaperDSL) SetName(args gs.Args) error {
 	p := r.parser
 	nameValue, ok := args["name"]
@@ -1936,18 +1950,20 @@ func (p *FunctionalDSLParser) executeMethodOnItem(methodName string, methodArgs 
 	// Call the appropriate method on ReaperDSL
 	// We need to use reflection or a switch statement
 	switch methodNameCamel {
+	case "SetTrack":
+		return p.reaperDSL.SetTrack(methodArgs)
 	case "SetSelected":
-		return p.reaperDSL.SetSelected(methodArgs)
+		return p.reaperDSL.SetSelected(methodArgs) // Deprecated, delegates to SetTrack
 	case "SetMute":
-		return p.reaperDSL.SetMute(methodArgs)
+		return p.reaperDSL.SetMute(methodArgs) // Deprecated, delegates to SetTrack
 	case "SetSolo":
-		return p.reaperDSL.SetSolo(methodArgs)
+		return p.reaperDSL.SetSolo(methodArgs) // Deprecated, delegates to SetTrack
 	case "SetVolume":
-		return p.reaperDSL.SetVolume(methodArgs)
+		return p.reaperDSL.SetVolume(methodArgs) // Deprecated, delegates to SetTrack
 	case "SetPan":
-		return p.reaperDSL.SetPan(methodArgs)
+		return p.reaperDSL.SetPan(methodArgs) // Deprecated, delegates to SetTrack
 	case "SetName":
-		return p.reaperDSL.SetName(methodArgs)
+		return p.reaperDSL.SetName(methodArgs) // Deprecated, delegates to SetTrack
 	case "AddFx":
 		return p.reaperDSL.AddFx(methodArgs)
 	case "AddMidi":
@@ -2491,7 +2507,7 @@ track_param: "instrument" "=" STRING
            | "id" "=" NUMBER
            | "selected" "=" BOOLEAN
 
-chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain | selected_chain | delete_chain | delete_clip_chain | clip_properties_chain | clip_move_chain
+chain: clip_chain | midi_chain | fx_chain | track_properties_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain | selected_chain | delete_chain | delete_clip_chain | clip_properties_chain | clip_move_chain
 
 clip_chain: ".new_clip" "(" clip_params? ")"
 clip_params: clip_param ("," SP clip_param)*
@@ -2508,6 +2524,17 @@ fx_chain: ".add_fx" "(" fx_params? ")"
 fx_params: "fxname" "=" STRING
          | "instrument" "=" STRING
 
+// Unified track properties method
+track_properties_chain: ".set_track" "(" track_properties_params? ")"
+track_properties_params: track_property_param ("," SP track_property_param)*
+track_property_param: "name" "=" STRING
+                    | "volume_db" "=" NUMBER
+                    | "pan" "=" NUMBER
+                    | "mute" "=" BOOLEAN
+                    | "solo" "=" BOOLEAN
+                    | "selected" "=" BOOLEAN
+
+// Legacy individual methods (deprecated, kept for backward compatibility)
 volume_chain: ".set_volume" "(" "volume_db" "=" NUMBER ")"
 pan_chain: ".set_pan" "(" "pan" "=" NUMBER ")"
 mute_chain: ".set_mute" "(" "mute" "=" BOOLEAN ")"

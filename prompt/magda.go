@@ -144,11 +144,17 @@ all previous actions. Always check the state to understand:
   5. **Apply the same predicate** to all filter calls when operating on the same filtered items
   6. **DIFFERENT ACTIONS**: When user says "select AND rename", generate ` + "`set_selected`" + ` AND ` + "`set_name`" + ` (or ` + "`set_clip_name`" + ` for clips) - NOT two ` + "`set_selected`" + ` calls
 - **Concrete Examples for Clips** (NOTE: Always use ` + "`clip`" + ` lowercase, no underscore):
-  - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true); filter(clips, clip.length < 2.790698).set_clip(name=\"FOO\")`" + `
-  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_selected(selected=true); filter(clips, clip.length < 1.5).set_clip(color=\"#ff0000\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `!)
+  - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true); filter(clips, clip.length < 2.790698).set_clip(name=\"FOO\")`" + `
+  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_clip(selected=true); filter(clips, clip.length < 1.5).set_clip(color=\"#ff0000\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `!)
   - "filter clips by length and rename" → ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\")`" + ` (no selection needed if user didn't say "select")
-  - "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY rename, NO ` + "`set_selected`" + `!)
+  - "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY rename, NO ` + "`selected`" + ` property!)
   - **WRONG**: ` + "`filter(clips, _clip.length < 1.5)`" + ` (underscore prefix - will cause parser error!)
+
+- **Concrete Examples for Tracks** (NOTE: Use unified ` + "`set_track`" + ` method):
+  - "select all muted tracks and rename them to Muted" → ` + "`filter(tracks, track.muted == true).set_track(selected=true); filter(tracks, track.muted == true).set_track(name=\"Muted\")`" + `
+  - "unmute all muted tracks" → ` + "`filter(tracks, track.muted == true).set_track(mute=false)`" + `
+  - "set volume to -3 dB for all tracks" → ` + "`filter(tracks, true).set_track(volume_db=-3)`" + ` (use ` + "`true`" + ` to match all tracks)
+  - "rename track 1 to Bass" → ` + "`track(id=1).set_track(name=\"Bass\")`" + `
 - **Abstract Examples**:
   - "select [items] and [action]" → ` + "`filter(collection, predicate).set_selected(selected=true); filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is the SECOND action (rename, color, delete, etc.)
   - "filter [items] and [action1] and [action2]" → ` + "`filter(collection, predicate).action1(...); filter(collection, predicate).action2(...)`" + `
@@ -250,6 +256,16 @@ Selects or deselects a media item/clip.
 - Optional: ` + "`clip`" + ` (integer, clip index), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
 - Example: ` + "`filter(clips, clip.length < 1.0).set_selected(selected=true)`" + ` selects all clips shorter than 1 second
 - Example: ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` selects all clips shorter than one bar (at 120 BPM, one bar ≈ 2 seconds)
+
+**set_track**
+Sets properties for a track (name, volume_db, pan, mute, solo, selected, etc.). This is the unified method - use this instead of separate set_name/set_volume/set_pan/set_mute/set_solo methods.
+- DSL syntax: ` + "`.set_track(name=\"...\", volume_db=..., pan=..., mute=true/false, solo=true/false, selected=true/false)`" + ` - you can specify one or more properties
+- Required: ` + "`action: \"set_track\"`" + `, ` + "`track`" + ` (integer), and at least one property
+- Examples:
+  - ` + "`filter(tracks, track.muted == true).set_track(mute=false)`" + ` - unmutes all muted tracks
+  - ` + "`filter(tracks, track.muted == true).set_track(name=\"Muted\")`" + ` - renames all muted tracks
+  - ` + "`filter(tracks, track.muted == true).set_track(mute=false, name=\"Unmuted\")`" + ` - unmutes and renames in one call
+  - ` + "`track(id=1).set_track(volume_db=-3, pan=0.5)`" + ` - sets volume and pan for track 1
 
 **set_clip**
 Sets properties for a clip (name, color, selected, etc.). This is the unified method - use this instead of separate set_clip_name/set_clip_color methods.
