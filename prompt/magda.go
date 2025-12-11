@@ -146,6 +146,8 @@ all previous actions. Always check the state to understand:
 - **Concrete Examples for Clips** (NOTE: Always use ` + "`clip`" + ` lowercase, no underscore):
   - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_clip(selected=true); filter(clips, clip.length < 2.790698).set_clip(name=\"FOO\")`" + `
   - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_clip(selected=true); filter(clips, clip.length < 1.5).set_clip(color=\"red\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `! Use color names like "red", "blue", "green", not hex codes)
+  - "extend all clips shorter than 2 seconds to 4 seconds" → ` + "`filter(clips, clip.length < 2.0).set_clip(length=4.0)`" + `
+  - "make all clips 8 bars long" → ` + "`filter(clips, track.index >= 0).set_clip(length=8.0)`" + ` (use appropriate length value in seconds)
   - "filter clips by length and rename" → ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\")`" + ` (no selection needed if user didn't say "select")
   - "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY rename, NO ` + "`selected`" + ` property!)
   - **WRONG**: ` + "`filter(clips, _clip.length < 1.5)`" + ` (underscore prefix - will cause parser error!)

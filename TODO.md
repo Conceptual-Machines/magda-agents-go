@@ -22,18 +22,18 @@
 ## High Priority Features
 
 ### 3. Clip Length Modification
-**Status**: Not Implemented
-**Action**: `set_clip_length` / `extend_clip`
-- **REAPER API**: `SetMediaItemLength(MediaItem *item, double length, bool adjust_take_length)`
+**Status**: ✅ Completed
+**Action**: `set_clip(length=...)` (unified method)
+- **REAPER API**: `SetMediaItemLength(MediaItem *item, double length, bool adjust_take_length)` (already implemented in C++)
 - **Use Cases**: 
   - "extend clip to 8 bars"
   - "make clip 2 seconds long"
-- **DSL**: `filter(clips, clip.length < 2.0).set_clip_length(length=4.0)`
-- **Files to Modify**:
-  - `magda-reaper/include/magda_actions.h` - Add `SetClipLength()` declaration
-  - `magda-reaper/src/magda_actions.cpp` - Implement `SetClipLength()`
-  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Add `SetClipLength()` method
-  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Update grammar
+- **DSL**: `filter(clips, clip.length < 2.0).set_clip(length=4.0)`
+- **Implementation**: Added `length` property to unified `set_clip` method
+- **Files Modified**:
+  - ✅ `magda-agents-go/agents/daw/dsl_parser_functional.go` - Added `length` handling to `SetClip()` method
+  - ✅ `magda-agents-go/agents/daw/dsl_parser_functional.go` - Updated grammar to include `length` in `clip_property_param`
+  - ✅ `magda-reaper/src/magda_actions.cpp` - Already supported in `SetClipProperties()`
 
 ### 4. Track Color Support
 **Status**: Not Implemented
@@ -144,7 +144,6 @@
 - All integration tests passing
 
 **High Priority (Next Steps)**:
-- Clip length modification (`set_clip_length`)
 - Track color support (add to `set_track`)
 - FX management (remove, enable, disable, set params)
 

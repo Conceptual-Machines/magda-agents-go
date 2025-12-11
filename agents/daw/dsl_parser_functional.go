@@ -697,9 +697,14 @@ func (r *ReaperDSL) SetClip(args gs.Args) error {
 		actionProps["selected"] = selectedValue.Bool
 	}
 	
+	// Handle length
+	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
+		actionProps["length"] = lengthValue.Num
+	}
+	
 	// Must have at least one property
 	if len(actionProps) == 0 {
-		return fmt.Errorf("set_clip requires at least one property: name, color, or selected")
+		return fmt.Errorf("set_clip requires at least one property: name, color, selected, or length")
 	}
 
 	// Check if we have a filtered collection to apply to
@@ -2245,6 +2250,7 @@ clip_properties_params: clip_property_param ("," SP clip_property_param)*
 clip_property_param: "name" "=" STRING
                    | "color" "=" (STRING | NUMBER)
                    | "selected" "=" BOOLEAN
+                   | "length" "=" NUMBER
                    | "clip" "=" NUMBER
                    | "position" "=" NUMBER
                    | "bar" "=" NUMBER

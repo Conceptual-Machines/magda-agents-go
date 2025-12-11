@@ -84,3 +84,60 @@ func TestFunctionalDSLParser_SetTrack(t *testing.T) {
 		})
 	}
 }
+
+func TestFunctionalDSLParser_SetClipLength(t *testing.T) {
+	parser, err := NewFunctionalDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	state := map[string]any{
+		"tracks": []any{
+			map[string]any{
+				"index": 0,
+				"name":  "Track 1",
+				"clips": []any{
+					map[string]any{
+						"index":    0,
+						"position": 0.0,
+						"length":   2.0,
+						"track":    0,
+					},
+					map[string]any{
+						"index":    1,
+						"position": 4.0,
+						"length":   2.0,
+						"track":    0,
+					},
+				},
+			},
+		},
+	}
+	parser.SetState(state)
+
+	// Test setting clip length via filter
+	dslCode := `filter(clips, clip.length < 3.0).set_clip(length=4.0)`
+	actions, err := parser.ParseDSL(dslCode)
+	if err != nil {
+		t.Fatalf("ParseDSL() error = %v", err)
+	}
+	if len(actions) == 0 {
+		t.Fatal("Should generate at least one action")
+	}
+
+	// Check that we got set_clip actions with length property
+	hasSetClipLength := false
+	for _, action := range actions {
+		if actionType, ok := action["action"].(string); ok && actionType == "set_clip" {
+			if length, ok := action["length"].(float64); ok {
+				if length != 4.0 {
+					t.Errorf("Length should be 4.0, got %v", length)
+				}
+				hasSetClipLength = true
+			}
+		}
+	}
+	if !hasSetClipLength {
+		t.Error("Should have set_clip action with length property")
+	}
+}
