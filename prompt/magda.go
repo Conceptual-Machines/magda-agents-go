@@ -80,13 +80,15 @@ all previous actions. Always check the state to understand:
   - **NEVER** use ` + "`create_clip_at_bar`" + ` when user says "select clips" - selection is different from creation!
 - When user says "rename selected clips" or "rename [condition] clips", you MUST:
   - Use ` + "`filter(clips, clip.selected == true)`" + ` to filter selected clips, OR
-  - Use ` + "`filter(clips, [condition])`" + ` to filter by condition (e.g., ` + "`clip.length < 1.5`" + `)
+  - Use ` + "`filter(clips, [condition])`" + ` to filter by condition (e.g., ` + "`clip.length < 1.5`" + `) - **ALWAYS use ` + "`clip`" + ` (lowercase, no underscore) as the variable name!**
   - Chain with ` + "`.set_clip_name(name=\"value\")`" + ` to rename the filtered clips
   - **CRITICAL**: When user says "rename selected clips", they want to RENAME them, NOT select them again! The clips are already selected in the state.
-  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (NOT ` + "`set_selected`" + `!)
+  - **CRITICAL**: "rename selected clips" means ONLY rename - do NOT generate ` + "`set_selected`" + ` actions!
+  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (ONLY ` + "`set_clip_name`" + `, NO ` + "`set_selected`" + `!)
   - Example: "rename all clips shorter than one bar to Short" → ` + "`filter(clips, clip.length < 2.790698).set_clip_name(name=\"Short\")`" + `
   - **NEVER** use ` + "`set_selected`" + ` when user says "rename" - use ` + "`set_clip_name`" + ` instead!
   - **NEVER** use ` + "`for_each`" + ` or function references (e.g., ` + "`@set_name_on_selected_clip`" + `) for clip operations - use ` + "`filter().set_clip_name()`" + ` instead!
+  - **WRONG**: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_selected(selected=true); filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (DO NOT include ` + "`set_selected`" + ` - clips are already selected!)
 
 **FILTER PREDICATES - COMPREHENSIVE EXAMPLES**:
 
@@ -105,7 +107,8 @@ all previous actions. Always check the state to understand:
 - ` + "`filter(tracks, track.has_fx == true)`" + ` - Filter tracks that have FX plugins
 
 **Clip Predicates**:
-- ` + "`filter(clips, clip.length < 1.5)`" + ` - Filter clips shorter than 1.5 seconds
+- **CRITICAL**: Always use ` + "`clip`" + ` (lowercase, no underscore) as the iteration variable - NEVER use ` + "`_clip`" + ` or ` + "`Clip`" + ` or any other variation!
+- ` + "`filter(clips, clip.length < 1.5)`" + ` - Filter clips shorter than 1.5 seconds (CORRECT: ` + "`clip.length`" + `)
 - ` + "`filter(clips, clip.length > 5.0)`" + ` - Filter clips longer than 5 seconds
 - ` + "`filter(clips, clip.length <= 2.0)`" + ` - Filter clips 2 seconds or shorter
 - ` + "`filter(clips, clip.length >= 4.0)`" + ` - Filter clips 4 seconds or longer
@@ -115,6 +118,8 @@ all previous actions. Always check the state to understand:
 - ` + "`filter(clips, clip.selected == true)`" + ` - Filter selected clips
 - ` + "`filter(clips, clip.selected == false)`" + ` - Filter unselected clips
 - ` + "`filter(clips, clip.length < 2.790698)`" + ` - Filter clips shorter than one bar (at 120 BPM, one bar ≈ 2.79 seconds)
+- **WRONG**: ` + "`filter(clips, _clip.length < 1.5)`" + ` (has underscore - will fail!)
+- **WRONG**: ` + "`filter(clips, Clip.length < 1.5)`" + ` (capitalized - will fail!)
 
 **Compound Filter Pattern**:
 - General form: ` + "`filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is any available method
@@ -138,10 +143,12 @@ all previous actions. Always check the state to understand:
   4. **When user says "X AND Y"** (e.g., "select and rename", "filter and color"), you MUST generate BOTH actions - NEVER skip any action the user requested
   5. **Apply the same predicate** to all filter calls when operating on the same filtered items
   6. **DIFFERENT ACTIONS**: When user says "select AND rename", generate ` + "`set_selected`" + ` AND ` + "`set_name`" + ` (or ` + "`set_clip_name`" + ` for clips) - NOT two ` + "`set_selected`" + ` calls
-- **Concrete Examples for Clips**:
+- **Concrete Examples for Clips** (NOTE: Always use ` + "`clip`" + ` lowercase, no underscore):
   - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true); filter(clips, clip.length < 2.790698).set_clip_name(name=\"FOO\")`" + `
-  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_selected(selected=true); filter(clips, clip.length < 1.5).set_clip_color(color=\"#ff0000\")`" + `
+  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_selected(selected=true); filter(clips, clip.length < 1.5).set_clip_color(color=\"#ff0000\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `!)
   - "filter clips by length and rename" → ` + "`filter(clips, clip.length < 1.5).set_clip_name(name=\"Short\")`" + ` (no selection needed if user didn't say "select")
+  - "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (ONLY rename, NO ` + "`set_selected`" + `!)
+  - **WRONG**: ` + "`filter(clips, _clip.length < 1.5)`" + ` (underscore prefix - will cause parser error!)
 - **Abstract Examples**:
   - "select [items] and [action]" → ` + "`filter(collection, predicate).set_selected(selected=true); filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is the SECOND action (rename, color, delete, etc.)
   - "filter [items] and [action1] and [action2]" → ` + "`filter(collection, predicate).action1(...); filter(collection, predicate).action2(...)`" + `
