@@ -81,14 +81,14 @@ all previous actions. Always check the state to understand:
 - When user says "rename selected clips" or "rename [condition] clips", you MUST:
   - Use ` + "`filter(clips, clip.selected == true)`" + ` to filter selected clips, OR
   - Use ` + "`filter(clips, [condition])`" + ` to filter by condition (e.g., ` + "`clip.length < 1.5`" + `) - **ALWAYS use ` + "`clip`" + ` (lowercase, no underscore) as the variable name!**
-  - Chain with ` + "`.set_clip_name(name=\"value\")`" + ` to rename the filtered clips
+  - Chain with ` + "`.set_clip(name=\"value\")`" + ` to rename the filtered clips
   - **CRITICAL**: When user says "rename selected clips", they want to RENAME them, NOT select them again! The clips are already selected in the state.
   - **CRITICAL**: "rename selected clips" means ONLY rename - do NOT generate ` + "`set_selected`" + ` actions!
-  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (ONLY ` + "`set_clip_name`" + `, NO ` + "`set_selected`" + `!)
-  - Example: "rename all clips shorter than one bar to Short" → ` + "`filter(clips, clip.length < 2.790698).set_clip_name(name=\"Short\")`" + `
-  - **NEVER** use ` + "`set_selected`" + ` when user says "rename" - use ` + "`set_clip_name`" + ` instead!
-  - **NEVER** use ` + "`for_each`" + ` or function references (e.g., ` + "`@set_name_on_selected_clip`" + `) for clip operations - use ` + "`filter().set_clip_name()`" + ` instead!
-  - **WRONG**: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_selected(selected=true); filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (DO NOT include ` + "`set_selected`" + ` - clips are already selected!)
+  - Example: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY ` + "`set_clip`" + ` with ` + "`name`" + `, NO ` + "`set_selected`" + `!)
+  - Example: "rename all clips shorter than one bar to Short" → ` + "`filter(clips, clip.length < 2.790698).set_clip(name=\"Short\")`" + `
+  - **NEVER** use ` + "`set_selected`" + ` when user says "rename" - use ` + "`set_clip(name=\"...\")`" + ` instead!
+  - **NEVER** use ` + "`for_each`" + ` or function references (e.g., ` + "`@set_name_on_selected_clip`" + `) for clip operations - use ` + "`filter().set_clip(name=\"...\")`" + ` instead!
+  - **WRONG**: "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_selected(selected=true); filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (DO NOT include ` + "`set_selected`" + ` - clips are already selected!)
 
 **FILTER PREDICATES - COMPREHENSIVE EXAMPLES**:
 
@@ -144,10 +144,10 @@ all previous actions. Always check the state to understand:
   5. **Apply the same predicate** to all filter calls when operating on the same filtered items
   6. **DIFFERENT ACTIONS**: When user says "select AND rename", generate ` + "`set_selected`" + ` AND ` + "`set_name`" + ` (or ` + "`set_clip_name`" + ` for clips) - NOT two ` + "`set_selected`" + ` calls
 - **Concrete Examples for Clips** (NOTE: Always use ` + "`clip`" + ` lowercase, no underscore):
-  - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true); filter(clips, clip.length < 2.790698).set_clip_name(name=\"FOO\")`" + `
-  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_selected(selected=true); filter(clips, clip.length < 1.5).set_clip_color(color=\"#ff0000\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `!)
-  - "filter clips by length and rename" → ` + "`filter(clips, clip.length < 1.5).set_clip_name(name=\"Short\")`" + ` (no selection needed if user didn't say "select")
-  - "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip_name(name=\"foo\")`" + ` (ONLY rename, NO ` + "`set_selected`" + `!)
+  - "select all clips shorter than one bar and rename them to FOO" → ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true); filter(clips, clip.length < 2.790698).set_clip(name=\"FOO\")`" + `
+  - "select all clips shorter than 1.5 seconds and color them red" → ` + "`filter(clips, clip.length < 1.5).set_selected(selected=true); filter(clips, clip.length < 1.5).set_clip(color=\"#ff0000\")`" + ` (CORRECT: ` + "`clip.length`" + `, NOT ` + "`_clip.length`" + `!)
+  - "filter clips by length and rename" → ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\")`" + ` (no selection needed if user didn't say "select")
+  - "rename selected clips to foo" → ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` (ONLY rename, NO ` + "`set_selected`" + `!)
   - **WRONG**: ` + "`filter(clips, _clip.length < 1.5)`" + ` (underscore prefix - will cause parser error!)
 - **Abstract Examples**:
   - "select [items] and [action]" → ` + "`filter(collection, predicate).set_selected(selected=true); filter(collection, predicate).action(...)`" + ` where ` + "`action`" + ` is the SECOND action (rename, color, delete, etc.)
@@ -251,17 +251,16 @@ Selects or deselects a media item/clip.
 - Example: ` + "`filter(clips, clip.length < 1.0).set_selected(selected=true)`" + ` selects all clips shorter than 1 second
 - Example: ` + "`filter(clips, clip.length < 2.790698).set_selected(selected=true)`" + ` selects all clips shorter than one bar (at 120 BPM, one bar ≈ 2 seconds)
 
-**set_clip_name**
-Sets the name/label for a clip.
-- Required: ` + "`action: \"set_clip\"`" + `, ` + "`track`" + ` (integer), ` + "`name`" + ` (string)
-- Optional: ` + "`clip`" + ` (integer), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
-- Example: ` + "`filter(clips, clip.length < 1.5).set_clip_name(name=\"Short Clip\")`" + ` renames all clips shorter than 1.5 seconds (generates ` + "`set_clip`" + ` action with ` + "`name`" + ` field)
-
-**set_clip_color**
-Sets the color for a clip.
-- Required: ` + "`action: \"set_clip\"`" + `, ` + "`track`" + ` (integer), ` + "`color`" + ` (string, hex color like "#ff0000")
-- Optional: ` + "`clip`" + ` (integer), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
-- Example: ` + "`filter(clips, clip.length < 1.5).set_clip_color(color=\"#ff0000\")`" + ` colors all short clips red (generates ` + "`set_clip`" + ` action with ` + "`color`" + ` field)
+**set_clip**
+Sets properties for a clip (name, color, selected, etc.). This is the unified method - use this instead of separate set_clip_name/set_clip_color methods.
+- DSL syntax: ` + "`.set_clip(name=\"...\", color=\"...\", selected=true/false)`" + ` - you can specify one or more properties
+- Required: ` + "`action: \"set_clip\"`" + `, ` + "`track`" + ` (integer), and at least one property (` + "`name`" + `, ` + "`color`" + `, or ` + "`selected`" + `)
+- Optional: ` + "`clip`" + ` (integer), ` + "`position`" + ` (number in seconds), or ` + "`bar`" + ` (integer) for clip identification
+- Examples:
+  - ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short Clip\")`" + ` - renames all clips shorter than 1.5 seconds
+  - ` + "`filter(clips, clip.length < 1.5).set_clip(color=\"#ff0000\")`" + ` - colors all short clips red
+  - ` + "`filter(clips, clip.selected == true).set_clip(name=\"foo\")`" + ` - renames selected clips (NO set_selected needed!)
+  - ` + "`filter(clips, clip.length < 1.5).set_clip(name=\"Short\", color=\"#ff0000\")`" + ` - sets both name and color in one call
 
 **set_clip_position** / **move_clip**
 Moves a clip to a different time position.
