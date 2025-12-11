@@ -1,27 +1,23 @@
 # TODO - Remaining Implementation Tasks
 
-## Critical Issues (Blocking)
+## ✅ Recently Completed
 
-### 1. Compound Actions - LLM Not Generating Multiple Actions for Clips
-**Status**: Partially Working
-**Issue**: LLM generates selection but not rename/color actions for clips
-- ✅ Tracks: `filter(tracks, ...).set_selected(); filter(tracks, ...).set_name()` works
-- ❌ Clips: `filter(clips, ...).set_selected(); filter(clips, ...).set_clip_name()` - LLM only generates selection
-- **Tests Failing**: 
-  - `TestMagdaCompoundActions/select_and_rename_clips`
-  - `TestMagdaCompoundActions/filter_and_color_clips`
-- **Next Steps**: 
-  - Investigate why LLM skips second action for clips
-  - May need more explicit prompt guidance or examples
-  - Consider if there's a grammar limitation
+### 1. Unified Actions Implementation
+**Status**: ✅ Completed
+- ✅ Unified `set_track` method handles: name, volume_db, pan, mute, solo, selected
+- ✅ Unified `set_clip` method handles: name, color, selected
+- ✅ All legacy individual methods removed
+- ✅ Grammar updated to support method chaining (`chain*` instead of `chain?`)
+- ✅ Filtered collections support for all unified actions
+- ✅ `AddFx` now handles filtered collections
+- ✅ All integration tests passing
 
-### 2. SetName Not Handling Standalone Filter() Calls
-**Status**: Bug
-**Issue**: `filter(tracks, track.name == "X").set_name(name="Y")` fails with "no track context"
-- **Error**: `method SetName error: no track context for name call`
-- **Test Failing**: `TestMagdaRenameTracksWithFilter`
-- **Root Cause**: `SetName` checks for `current_filtered` but may not be set correctly when filter is chained directly
-- **Fix Needed**: Ensure `SetName` correctly handles filtered collections from chained filter calls
+### 2. Grammar and Parser Improvements
+**Status**: ✅ Completed
+- ✅ Fixed grammar to support multiple method chains (`track().new_clip().set_track()`)
+- ✅ Fixed parser to handle `>=` and `<=` operators when split by Lark parser
+- ✅ Removed boolean literal handling (grammar now enforces proper predicates)
+- ✅ Updated prompt to use `track.index >= 0` instead of `true` for matching all tracks
 
 ## High Priority Features
 
@@ -41,17 +37,17 @@
 
 ### 4. Track Color Support
 **Status**: Not Implemented
-**Action**: `set_track_color`
+**Action**: Add `color` property to unified `set_track` method
 - **REAPER API**: `GetSetMediaTrackInfo` with "I_CUSTOMCOLOR"
 - **Use Cases**: 
   - "color all muted tracks red"
   - "set track color to blue"
-- **DSL**: `filter(tracks, track.muted == true).set_track_color(color="#ff0000")`
+- **DSL**: `filter(tracks, track.muted == true).set_track(color="#ff0000")` or `set_track(color="red")`
 - **Files to Modify**:
-  - `magda-reaper/include/magda_actions.h` - Add `SetTrackColor()` declaration
-  - `magda-reaper/src/magda_actions.cpp` - Implement `SetTrackColor()`
-  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Add `SetTrackColor()` method
-  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Update grammar
+  - `magda-reaper/include/magda_actions.h` - Add color handling to `SetTrackProperties()`
+  - `magda-reaper/src/magda_actions.cpp` - Implement color in `SetTrackProperties()`
+  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Add `color` handling to `SetTrack()` method
+  - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Update grammar to include `color` in `track_property_param`
 
 ### 5. FX Management - Remove/Enable/Disable
 **Status**: Not Implemented
@@ -125,40 +121,37 @@
 - **Files to Modify**:
   - `magda-agents-go/agents/daw/dsl_parser_functional.go` - Complete function reference support
 
-## Test Fixes Needed
+## ✅ Test Fixes Completed
 
 ### 11. TestMagdaCreateTrackWithSerum
-**Status**: Test Expectation Issue
-**Issue**: Test expects `add_instrument` action but DSL correctly combines into `create_track` with `instrument` field
-- **Fix**: Update test expectations to match actual behavior
-- **File**: `aideas-api/internal/api/handlers/magda_integration_test.go`
+**Status**: ✅ Fixed
+- Updated test to check for `instrument` in `create_track` action instead of separate `add_instrument` action
 
 ## Documentation
 
 ### 12. Update Documentation
-**Status**: Needed
-- Update `IMPLEMENTATION_STATUS.md` with compound actions status
-- Document new clip methods (set_clip_name, set_clip_color, move_clip)
-- Add examples for compound actions in documentation
+**Status**: Partially Needed
+- ✅ Unified actions are implemented and working
+- ⚠️ Update `IMPLEMENTATION_STATUS.md` to reflect unified actions (remove references to individual methods)
+- ⚠️ Document unified `set_track` and `set_clip` methods with all supported properties
+- ⚠️ Add examples for method chaining in documentation
 
 ## Summary
 
-**Critical (Blocking)**:
-- Compound actions for clips (LLM not generating both actions)
-- SetName handling filtered collections from chained filter calls
+**✅ Recently Completed**:
+- Unified `set_track` and `set_clip` actions with full filtered collection support
+- Grammar fixes for method chaining and predicate parsing
+- All integration tests passing
 
-**High Priority**:
-- Clip length modification
-- Track color support
+**High Priority (Next Steps)**:
+- Clip length modification (`set_clip_length`)
+- Track color support (add to `set_track`)
 - FX management (remove, enable, disable, set params)
 
 **Medium Priority**:
-- Track reordering
-- Track folder/grouping
-- Complete MIDI operations
+- Track reordering (`move_track`)
+- Track folder/grouping (`set_track_folder`)
+- Complete MIDI operations (notes array parsing)
 - Complete map() and for_each() function reference execution
-
-**Test Fixes**:
-- Update TestMagdaCreateTrackWithSerum expectations
 
 
