@@ -291,9 +291,20 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 
 	log.Printf("⏱️  OPENAI API CALL COMPLETED in %v", apiDuration)
 
-	// Process response (MAGDA always uses DSL/CFG)
+	// Process response
 	if request.CFGGrammar != nil {
+		// MAGDA DSL uses CFG grammar
 		result, err := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
+		if err != nil {
+			return nil, err
+		}
+		transaction.SetTag("success", "true")
+		return result, nil
+	}
+
+	// Handle JSON Schema output (e.g., for orchestrator classification)
+	if request.OutputSchema != nil {
+		result, err := p.processResponseWithJSONSchema(resp, startTime, transaction, request.OutputSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -303,7 +314,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 
 	// This should never happen for MAGDA, but handle it gracefully
 	transaction.SetTag("success", "false")
-	return nil, fmt.Errorf("CFG grammar is required for MAGDA")
+	return nil, fmt.Errorf("CFG grammar or OutputSchema is required")
 }
 
 // buildRequestParams converts GenerationRequest to OpenAI-specific ResponseNewParams
@@ -337,25 +348,35 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 	}
 
 	// Determine reasoning effort
-	// Default to "low" for GPT-5.1 (low-latency)
-	// Note: GPT-5.1 doesn't support "none" directly, use "low" as the fastest option
+	// Only include reasoning parameter for models that support it (e.g., gpt-5-mini, gpt-5)
+	// Models like gpt-4.1-mini do NOT support reasoning parameters
+	modelsWithReasoning := map[string]bool{
+		"gpt-5-mini": true,
+		"gpt-5":      true,
+		"o3-mini":    true,
+		"o3":         true,
+	}
+	supportsReasoning := modelsWithReasoning[request.Model]
+
 	var reasoningEffort shared.ReasoningEffort
-	switch request.ReasoningMode {
-	case reasoningNone:
-		// "none" is not a valid enum, use "low" as the fastest option
-		reasoningEffort = shared.ReasoningEffort("none")
-	case reasoningMinimal, reasoningMin:
-		// "minimal" is not supported by GPT-5.1, fall back to "low"
-		reasoningEffort = responses.ReasoningEffortLow
-	case reasoningLow:
-		reasoningEffort = responses.ReasoningEffortLow
-	case reasoningMedium, reasoningMed:
-		reasoningEffort = responses.ReasoningEffortMedium
-	case reasoningHigh:
-		reasoningEffort = responses.ReasoningEffortHigh
-	default:
-		// Default to "low" for GPT-5.1
-		reasoningEffort = responses.ReasoningEffortLow
+	if supportsReasoning {
+		switch request.ReasoningMode {
+		case reasoningNone:
+			// "none" is not a valid enum, use "low" as the fastest option
+			reasoningEffort = shared.ReasoningEffort("none")
+		case reasoningMinimal, reasoningMin:
+			// "minimal" is not supported by GPT-5.1, fall back to "low"
+			reasoningEffort = responses.ReasoningEffortLow
+		case reasoningLow:
+			reasoningEffort = responses.ReasoningEffortLow
+		case reasoningMedium, reasoningMed:
+			reasoningEffort = responses.ReasoningEffortMedium
+		case reasoningHigh:
+			reasoningEffort = responses.ReasoningEffortHigh
+		default:
+			// Default to "low" for GPT-5.1
+			reasoningEffort = responses.ReasoningEffortLow
+		}
 	}
 
 	params := responses.ResponseNewParams{
@@ -365,9 +386,13 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 		},
 		Instructions:      openai.String(request.SystemPrompt),
 		ParallelToolCalls: openai.Bool(true),
-		Reasoning: shared.ReasoningParam{
+	}
+
+	// Only include Reasoning parameter for models that support it
+	if supportsReasoning {
+		params.Reasoning = shared.ReasoningParam{
 			Effort: reasoningEffort,
-		},
+		}
 	}
 
 	// MAGDA always uses DSL/CFG, no JSON schema
@@ -422,6 +447,18 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 		}
 
 		params.ParallelToolCalls = openai.Bool(false) // CFG tools typically don't use parallel calls
+	}
+
+	// Add JSON Schema support (for orchestrator classification, etc.)
+	if request.OutputSchema != nil {
+		// Convert OutputSchema to OpenAI TextFormat
+		params.Text = responses.ResponseTextConfigParam{
+			Format: responses.ResponseFormatTextConfigParamOfJSONSchema(
+				request.OutputSchema.Name,
+				request.OutputSchema.Schema,
+			),
+		}
+		log.Printf("📋 JSON SCHEMA CONFIGURED: %s", request.OutputSchema.Name)
 	}
 
 	// Add MCP tools if configured
@@ -799,6 +836,38 @@ func (p *OpenAIProvider) processResponseWithCFG(
 	p.logUsageStats(resp.Usage)
 
 	// MAGDA always uses DSL, so we should never reach here
+	return nil, fmt.Errorf("unexpected code path in processResponseWithCFG")
+}
+
+// processResponseWithJSONSchema extracts JSON output from OpenAI response when using JSON Schema
+func (p *OpenAIProvider) processResponseWithJSONSchema(
+	resp *responses.Response,
+	startTime time.Time,
+	transaction *sentry.Span,
+	outputSchema *OutputSchema,
+) (*GenerationResponse, error) {
+	span := transaction.StartChild("process_response_json")
+	defer span.Finish()
+
+	// Extract text output (should be JSON when using JSON Schema)
+	textOutput := p.extractAndCleanTextOutput(resp)
+	log.Printf("📥 OPENAI JSON RESPONSE: output_length=%d, output_items=%d, tokens=%d",
+		len(textOutput), len(resp.Output), resp.Usage.TotalTokens)
+
+	if textOutput == "" {
+		return nil, fmt.Errorf("openai response did not include any output text")
+	}
+
+	// Log usage stats
+	p.logUsageStats(resp.Usage)
+
+	duration := time.Since(startTime)
+	log.Printf("✅ OPENAI GENERATION COMPLETED in %v", duration)
+
+	return &GenerationResponse{
+		RawOutput: textOutput, // JSON string from OutputSchema
+		Usage:     resp.Usage,
+	}, nil
 	// If we do, it means CFG was not configured, which is an error
 	return nil, fmt.Errorf("CFG grammar is required for MAGDA - this code path should never be reached")
 }

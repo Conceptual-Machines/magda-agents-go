@@ -210,6 +210,13 @@ func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state 
 	// Parse as DSL only - no fallback to JSON
 	dslCode := strings.TrimSpace(resp.RawOutput)
 
+	// Check for out-of-scope error comments
+	if strings.HasPrefix(dslCode, "// ERROR:") {
+		errorMsg := strings.TrimPrefix(dslCode, "// ERROR:")
+		errorMsg = strings.TrimSpace(errorMsg)
+		return nil, fmt.Errorf("request is out of scope: %s", errorMsg)
+	}
+
 	// Check if it's DSL (starts with "track" or similar function call)
 	// NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
 	hasTrackPrefix := strings.HasPrefix(dslCode, "track(")
@@ -422,6 +429,13 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]any) ([
 
 	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasAddMidi=%v, hasMap=%v, hasForEach=%v, hasSetTrack=%v, hasSetClip=%v, hasAddFx=%v, isDSL=%v",
 		hasTrackPrefix, hasFilter, hasNewClip, hasAddMidi, hasMap, hasForEach, hasSetTrack, hasSetClip, hasAddFx, isDSL)
+
+	// Check for out-of-scope error comments
+	if strings.HasPrefix(text, "// ERROR:") {
+		errorMsg := strings.TrimPrefix(text, "// ERROR:")
+		errorMsg = strings.TrimSpace(errorMsg)
+		return nil, fmt.Errorf("request is out of scope: %s", errorMsg)
+	}
 
 	if !isDSL {
 		const maxLogLength = 500

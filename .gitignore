@@ -33,3 +33,6 @@ Thumbs.db
 # Logs
 *.log
 vibe_artefacts/
+
+# Environment variables
+.env
