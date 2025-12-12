@@ -199,53 +199,177 @@ choice("I VI IV progression", [
 
 ## Detection Logic (CRITICAL: Run BEFORE launching agents)
 
-The orchestrator **must detect which agents are needed BEFORE launching them** to avoid wasting API calls:
+The orchestrator **must detect which agents are needed BEFORE launching them** to avoid wasting API calls.
+
+### ⚠️ Problem with Simple Keyword Matching
+
+Simple keyword matching is **brittle** and will fail on many musical terms:
+
+**Works:**
+- ✅ "add a clip with an arpeggio in e minor" → detects "minor" → Arranger needed
+- ✅ "add I VI IV progression" → detects Roman numerals → Arranger needed
+
+**Fails:**
+- ❌ "add a clip with a bassline" → no keywords → Arranger NOT detected (WRONG!)
+- ❌ "add a clip with a riff" → no keywords → Arranger NOT detected (WRONG!)
+- ❌ "add a clip with a hook" → no keywords → Arranger NOT detected (WRONG!)
+- ❌ "add a clip with a groove" → no keywords → Arranger NOT detected (WRONG!)
+
+### Solution Options
+
+#### Option 1: Traditional ML Classifier
+
+Train a lightweight classifier model (e.g., fine-tuned BERT, RoBERTa, or even a simple logistic regression):
 
 ```go
-func (o *Orchestrator) DetectAgentsNeeded(question string) (needsDAW bool, needsArranger bool) {
-    // DAW keywords: track, clip, fx, volume, pan, mute, solo, etc.
-    dawKeywords := []string{
-        "track", "clip", "fx", "volume", "pan", "mute", "solo", 
-        "reaper", "daw", "create", "delete", "move", "select",
-        "color", "rename", "add", "remove", "enable", "disable",
-    }
-    
-    // Arranger keywords: chord, progression, melody, note, roman numeral, etc.
-    arrangerKeywords := []string{
-        "chord", "progression", "melody", "note", "notes",
-        "I", "VI", "IV", "V", "ii", "iii", "vii", // Roman numerals
-        "roman", "scale", "harmony", "sequence", "pattern",
-        "major", "minor", "diminished", "augmented", // Chord types
-        "C", "D", "E", "F", "G", "A", "B", // Note names (context-dependent)
-        "triad", "seventh", "ninth", // Chord extensions
-    }
-    
-    questionLower := strings.ToLower(question)
-    
-    needsDAW = containsAny(questionLower, dawKeywords)
-    needsArranger = containsAny(questionLower, arrangerKeywords)
-    
-    // Special case: If question contains both types, we need both agents
-    // Example: "add I VI IV progression to piano track" → needs both
-    
-    // Default: if no keywords detected, assume DAW (backward compatibility)
-    if !needsDAW && !needsArranger {
-        needsDAW = true
-        log.Printf("⚠️ No agent keywords detected, defaulting to DAW agent")
-    }
-    
-    return needsDAW, needsArranger
+type MLClassifier struct {
+    model *onnxruntime.Session // or TensorFlow Lite, etc.
 }
 
-func containsAny(text string, keywords []string) bool {
-    for _, keyword := range keywords {
-        if strings.Contains(text, keyword) {
-            return true
-        }
-    }
-    return false
+func (c *MLClassifier) DetectAgentsNeeded(question string) (needsDAW bool, needsArranger bool, error) {
+    // Tokenize and encode question
+    features := c.tokenize(question)
+    
+    // Run inference (very fast: 1-5ms)
+    predictions := c.model.Predict(features)
+    
+    return predictions.NeedsDAW > 0.5, predictions.NeedsArranger > 0.5, nil
 }
 ```
+
+**Pros**: 
+- ⚡ Very fast (~1-5ms inference)
+- 💰 No API costs (runs locally)
+- 🔒 Deterministic, no network calls
+- 📦 Can be embedded in binary
+
+**Cons**: 
+- 📚 Needs training data (collect real user requests)
+- 🔄 Needs retraining for new patterns
+- 🛠️ Harder to maintain (model versioning, updates)
+- 📉 May struggle with edge cases not in training data
+- 🏗️ Infrastructure overhead (model serving, versioning)
+
+**Best for**: High-volume, predictable patterns, cost-sensitive
+
+#### Option 2: LLM-Based Classification
+
+Use a small, fast LLM call to classify intent:
+
+```go
+func (o *Orchestrator) DetectAgentsNeeded(ctx context.Context, question string) (needsDAW bool, needsArranger bool, error) {
+    // Use a small, fast model (e.g., GPT-4o-mini) for classification
+    classificationPrompt := fmt.Sprintf(`Classify this music production request. Return JSON:
+{
+  "needsDAW": true/false,  // REAPER operations: tracks, clips, FX, volume, etc.
+  "needsArranger": true/false  // Musical content: chords, melodies, notes, arpeggios, basslines, riffs, etc.
+}
+
+Request: "%s"`, question)
+    
+    result, err := o.classifierLLM.Classify(ctx, classificationPrompt)
+    if err != nil {
+        // Fallback to keyword matching
+        return o.detectAgentsNeededFallback(question)
+    }
+    
+    return result.NeedsDAW, result.NeedsArranger, nil
+}
+```
+
+**Pros**: 
+- 🧠 Handles edge cases, understands context
+- 🔧 Easy to update (just change prompt)
+- 📈 Extensible (can add new agents easily)
+- 🎯 High accuracy on edge cases
+
+**Cons**: 
+- ⏱️ Adds ~50-100ms latency (API call)
+- 💰 Costs tokens (~100-200 tokens per request)
+- 🌐 Requires network/API availability
+
+**Best for**: Low-medium volume, high accuracy needs, rapid iteration
+
+#### Option 3: Enhanced Keyword Matching (Quick Fix)
+
+Expand keyword list significantly:
+
+```go
+arrangerKeywords := []string{
+    // Existing
+    "chord", "progression", "melody", "note", "notes",
+    "I", "VI", "IV", "V", "ii", "iii", "vii",
+    "roman", "scale", "harmony", "sequence", "pattern",
+    "major", "minor", "diminished", "augmented",
+    "triad", "seventh", "ninth",
+    // ADD MORE:
+    "arpeggio", "bassline", "riff", "hook", "groove", "lick",
+    "phrase", "motif", "ostinato", "fill", "break",
+    "C", "D", "E", "F", "G", "A", "B", // Note names
+    "sharp", "flat", "natural", // Accidentals
+    "pentatonic", "dorian", "mixolydian", // Scales
+    "sus2", "sus4", "add9", // Chord extensions
+}
+```
+
+**Pros**: 
+- ⚡ Fast, no API calls
+- 💰 No costs
+
+**Cons**: 
+- 🐛 Still brittle, needs constant maintenance
+- ❌ False positives/negatives
+- 📝 Manual keyword list maintenance
+
+**Best for**: MVP, very simple use cases
+
+#### Option 4: Hybrid Keywords + LLM (Simpler Hybrid)
+
+Combine enhanced keywords (fast path) with LLM fallback:
+
+Combine ML classifier (fast path) with LLM fallback (edge cases):
+
+1. **Fast path**: Enhanced keyword matching (handles 90% of cases)
+2. **Fallback**: LLM classification for ambiguous cases
+
+```go
+func (o *Orchestrator) DetectAgentsNeeded(ctx context.Context, question string) (needsDAW bool, needsArranger bool, error) {
+    // Fast path: ML classifier (1-5ms)
+    mlDAW, mlArranger, confidence := o.mlClassifier.Predict(question)
+    
+    // If high confidence, use ML result
+    if confidence > 0.9 {
+        return mlDAW, mlArranger, nil
+    }
+    
+    // Low confidence or edge case: fallback to LLM (50-100ms)
+    llmDAW, llmArranger, err := o.detectAgentsNeededLLM(ctx, question)
+    if err != nil {
+        // If LLM fails, use ML result anyway
+        return mlDAW, mlArranger, nil
+    }
+    
+    // Use LLM result for low-confidence cases
+    return llmDAW, llmArranger, nil
+}
+```
+
+**Pros**: 
+- ⚡ Fast for 90% of cases (ML: 1-5ms)
+- 🎯 Accurate for edge cases (LLM fallback)
+- 💰 Cost-effective (LLM only for ~10% of requests)
+- 📈 Improves over time (can retrain ML on LLM results)
+
+**Cons**: 
+- 🏗️ More complex (needs ML infrastructure)
+- 📚 Needs initial training data
+- 🔄 Needs retraining pipeline
+
+**Best for**: Production at scale, cost optimization, high accuracy needs
+
+#### Option 5: Hybrid Keywords + LLM (Simpler Hybrid - Recommended for MVP)
+
+Simpler version without ML infrastructure:
 
 **Important**: This detection happens **BEFORE** any agent is launched, so we only make API calls for agents that are actually needed.
 
