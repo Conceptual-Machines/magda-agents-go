@@ -22,11 +22,12 @@ User Request → [DAW Agent (parallel) + Arranger Agent (parallel)] → Parser �
 
 ## Design Goals
 
-1. **Parallel Execution**: Both agents run simultaneously to minimize latency
-2. **Result Merging**: Parser intelligently merges DAW actions with Arranger musical content
-3. **Placeholder Resolution**: DAW agent can generate placeholders that Arranger fills
-4. **Error Handling**: If one agent fails, the other can still succeed (partial results)
-5. **Streaming Support**: Both agents can stream results incrementally
+1. **Smart Detection**: Detect which agents are needed BEFORE launching (avoid wasting API calls)
+2. **Parallel Execution**: Only launch needed agents simultaneously to minimize latency
+3. **Result Merging**: Parser intelligently merges DAW actions with Arranger musical content
+4. **Placeholder Resolution**: DAW agent can generate placeholders that Arranger fills
+5. **Error Handling**: If one agent fails, the other can still succeed (partial results)
+6. **Streaming Support**: Both agents can stream results incrementally (only if needed)
 
 ## Architecture Options
 
@@ -35,10 +36,10 @@ User Request → [DAW Agent (parallel) + Arranger Agent (parallel)] → Parser �
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Orchestrator Service                     │
-│  - Detects which agents are needed                          │
-│  - Launches agents in parallel (goroutines/channels)        │
-│  - Collects results from both agents                        │
-│  - Merges results via Parser                                 │
+│  1. Detect which agents are needed (based on question)      │
+│  2. Launch only needed agents in parallel                    │
+│  3. Collect results from active agents                       │
+│  4. Merge results via Parser                                 │
 └─────────────────────────────────────────────────────────────┘
          │                              │
          ├──────────────┬──────────────┤
@@ -52,56 +53,73 @@ User Request → [DAW Agent (parallel) + Arranger Agent (parallel)] → Parser �
 **Implementation**:
 ```go
 type Orchestrator struct {
-    dawAgent     *daw.DawAgent
+    dawAgent      *daw.DawAgent
     arrangerAgent *arranger.ArrangerAgent
-    parser       *MergedParser
+    parser        *MergedParser
 }
 
 func (o *Orchestrator) GenerateActions(ctx context.Context, question string, state map[string]any) (*MergedResult, error) {
-    // Launch both agents in parallel
-    dawChan := make(chan *daw.DawResult)
-    arrangerChan := make(chan *arranger.GenerationResult)
-    errChan := make(chan error, 2)
+    // Step 1: Detect which agents are needed (BEFORE launching)
+    needsDAW, needsArranger := o.DetectAgentsNeeded(question)
     
-    // DAW Agent (parallel)
-    go func() {
-        result, err := o.dawAgent.GenerateActions(ctx, question, state)
-        if err != nil {
-            errChan <- fmt.Errorf("daw agent: %w", err)
-            return
-        }
-        dawChan <- result
-    }()
-    
-    // Arranger Agent (parallel)
-    go func() {
-        result, err := o.arrangerAgent.Generate(ctx, model, inputArray, reasoningMode, outputFormat)
-        if err != nil {
-            errChan <- fmt.Errorf("arranger agent: %w", err)
-            return
-        }
-        arrangerChan <- result
-    }()
-    
-    // Collect results (with timeout)
-    var dawResult *daw.DawResult
-    var arrangerResult *arranger.GenerationResult
-    
-    for i := 0; i < 2; i++ {
-        select {
-        case result := <-dawChan:
-            dawResult = result
-        case result := <-arrangerChan:
-            arrangerResult = result
-        case err := <-errChan:
-            // Log error but continue (partial results OK)
-            log.Printf("⚠️ Agent error: %v", err)
-        case <-ctx.Done():
-            return nil, ctx.Err()
-        }
+    if !needsDAW && !needsArranger {
+        // Default to DAW if no detection (backward compatibility)
+        needsDAW = true
     }
     
-    // Merge results via parser
+    log.Printf("🔍 Agent detection: DAW=%v, Arranger=%v", needsDAW, needsArranger)
+    
+    // Step 2: Launch only needed agents in parallel
+    var wg sync.WaitGroup
+    var dawResult *daw.DawResult
+    var arrangerResult *arranger.GenerationResult
+    var dawErr, arrangerErr error
+    
+    if needsDAW {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            result, err := o.dawAgent.GenerateActions(ctx, question, state)
+            if err != nil {
+                dawErr = fmt.Errorf("daw agent: %w", err)
+                return
+            }
+            dawResult = result
+        }()
+    }
+    
+    if needsArranger {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            // Arranger agent needs different input format
+            inputArray := o.buildArrangerInput(question)
+            result, err := o.arrangerAgent.Generate(ctx, "gpt-5.1", inputArray, "none", "dsl")
+            if err != nil {
+                arrangerErr = fmt.Errorf("arranger agent: %w", err)
+                return
+            }
+            arrangerResult = result
+        }()
+    }
+    
+    // Wait for all active agents to complete
+    wg.Wait()
+    
+    // Step 3: Handle errors (partial results OK)
+    if dawErr != nil && arrangerErr != nil {
+        return nil, fmt.Errorf("both agents failed: %v, %v", dawErr, arrangerErr)
+    }
+    if dawErr != nil && needsDAW {
+        log.Printf("⚠️ DAW agent failed: %v", dawErr)
+        // Continue with Arranger if available
+    }
+    if arrangerErr != nil && needsArranger {
+        log.Printf("⚠️ Arranger agent failed: %v", arrangerErr)
+        // Continue with DAW if available
+    }
+    
+    // Step 4: Merge results via parser
     return o.parser.MergeResults(dawResult, arrangerResult)
 }
 ```
@@ -179,35 +197,61 @@ choice("I VI IV progression", [
 }
 ```
 
-## Detection Logic
+## Detection Logic (CRITICAL: Run BEFORE launching agents)
 
-The orchestrator needs to detect which agents are needed:
+The orchestrator **must detect which agents are needed BEFORE launching them** to avoid wasting API calls:
 
 ```go
 func (o *Orchestrator) DetectAgentsNeeded(question string) (needsDAW bool, needsArranger bool) {
     // DAW keywords: track, clip, fx, volume, pan, mute, solo, etc.
-    dawKeywords := []string{"track", "clip", "fx", "volume", "pan", "mute", "solo", "reaper", "daw"}
+    dawKeywords := []string{
+        "track", "clip", "fx", "volume", "pan", "mute", "solo", 
+        "reaper", "daw", "create", "delete", "move", "select",
+        "color", "rename", "add", "remove", "enable", "disable",
+    }
     
     // Arranger keywords: chord, progression, melody, note, roman numeral, etc.
-    arrangerKeywords := []string{"chord", "progression", "melody", "note", "I", "VI", "IV", "V", "roman", "scale"}
+    arrangerKeywords := []string{
+        "chord", "progression", "melody", "note", "notes",
+        "I", "VI", "IV", "V", "ii", "iii", "vii", // Roman numerals
+        "roman", "scale", "harmony", "sequence", "pattern",
+        "major", "minor", "diminished", "augmented", // Chord types
+        "C", "D", "E", "F", "G", "A", "B", // Note names (context-dependent)
+        "triad", "seventh", "ninth", // Chord extensions
+    }
     
     questionLower := strings.ToLower(question)
     
     needsDAW = containsAny(questionLower, dawKeywords)
     needsArranger = containsAny(questionLower, arrangerKeywords)
     
-    // Default: if no keywords, assume DAW (backward compatibility)
+    // Special case: If question contains both types, we need both agents
+    // Example: "add I VI IV progression to piano track" → needs both
+    
+    // Default: if no keywords detected, assume DAW (backward compatibility)
     if !needsDAW && !needsArranger {
         needsDAW = true
+        log.Printf("⚠️ No agent keywords detected, defaulting to DAW agent")
     }
     
     return needsDAW, needsArranger
 }
+
+func containsAny(text string, keywords []string) bool {
+    for _, keyword := range keywords {
+        if strings.Contains(text, keyword) {
+            return true
+        }
+    }
+    return false
+}
 ```
+
+**Important**: This detection happens **BEFORE** any agent is launched, so we only make API calls for agents that are actually needed.
 
 ## Streaming Support
 
-For streaming, both agents can stream incrementally:
+For streaming, detect agents first, then launch only needed ones:
 
 ```go
 func (o *Orchestrator) GenerateActionsStream(
@@ -216,39 +260,58 @@ func (o *Orchestrator) GenerateActionsStream(
     state map[string]any,
     callback func(action map[string]any) error,
 ) error {
-    // Launch both agents with streaming callbacks
+    // Step 1: Detect which agents are needed
+    needsDAW, needsArranger := o.DetectAgentsNeeded(question)
+    if !needsDAW && !needsArranger {
+        needsDAW = true // Default
+    }
+    
+    // Step 2: Launch only needed agents with streaming callbacks
+    var wg sync.WaitGroup
+    var arrangerChoices []models.MusicalChoice
+    
     dawCallback := func(action map[string]any) error {
         // Check if action has placeholder
         if hasPlaceholder(action) {
-            // Queue for later merge
+            // Queue for later merge (wait for Arranger)
             return nil
         }
+        // Emit immediately if no placeholder
         return callback(action)
     }
     
     arrangerCallback := func(choice models.MusicalChoice) error {
         // Store for placeholder resolution
+        arrangerChoices = append(arrangerChoices, choice)
         return nil
     }
     
-    // Run in parallel with goroutines
-    var wg sync.WaitGroup
-    wg.Add(2)
+    // Launch only needed agents in parallel
+    if needsDAW {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            o.dawAgent.GenerateActionsStream(ctx, question, state, dawCallback)
+        }()
+    }
     
-    go func() {
-        defer wg.Done()
-        o.dawAgent.GenerateActionsStream(ctx, question, state, dawCallback)
-    }()
-    
-    go func() {
-        defer wg.Done()
-        o.arrangerAgent.GenerateStream(ctx, model, inputArray, arrangerCallback)
-    }()
+    if needsArranger {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            inputArray := o.buildArrangerInput(question)
+            o.arrangerAgent.GenerateStream(ctx, "gpt-5.1", inputArray, arrangerCallback)
+        }()
+    }
     
     wg.Wait()
     
-    // Resolve placeholders and emit merged actions
-    return o.resolvePlaceholders(callback)
+    // Step 3: Resolve placeholders and emit merged actions
+    if needsDAW && needsArranger {
+        return o.resolvePlaceholders(callback, arrangerChoices)
+    }
+    
+    return nil
 }
 ```
 
