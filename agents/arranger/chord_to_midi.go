@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/Conceptual-Machines/magda-agents-go/models"
@@ -178,48 +179,57 @@ func convertChordToNoteEvents(action map[string]any, startBeat float64) ([]model
 
 // convertProgressionToNoteEvents converts a progression action to NoteEvents
 func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([]models.NoteEvent, error) {
+	log.Printf("🎵 convertProgressionToNoteEvents: action=%+v", action)
+	
 	chords, ok := action["chords"].([]string)
 	if !ok {
+		log.Printf("🎵 chords not []string, trying []interface{}")
 		// Try to extract from interface{} slice
 		if chordsInterface, ok := action["chords"].([]interface{}); ok {
+			log.Printf("🎵 found []interface{} with %d items", len(chordsInterface))
 			chords = make([]string, len(chordsInterface))
 			for i, c := range chordsInterface {
 				if str, ok := c.(string); ok {
 					chords[i] = str
+					log.Printf("🎵 chord[%d] = %s", i, str)
+				} else {
+					log.Printf("🎵 chord[%d] is not string: %T = %v", i, c, c)
 				}
 			}
 		} else {
+			log.Printf("🎵 chords field: %T = %v", action["chords"], action["chords"])
 			return nil, fmt.Errorf("progression missing chords field")
 		}
 	}
 
-	fmt.Printf("🎵 DEBUG convertProgressionToNoteEvents: chords=%v, len=%d\n", chords, len(chords))
+	log.Printf("🎵 Extracted chords: %v (len=%d)", chords, len(chords))
 
 	length, _ := getFloat(action, "length", float64(len(chords))*4.0) // Default: 1 bar per chord
 	repeat, _ := getInt(action, "repeat", 1)
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
 
-	fmt.Printf("🎵 DEBUG params: length=%.2f, repeat=%d, velocity=%d, octave=%d\n", length, repeat, velocity, octave)
+	log.Printf("🎵 Progression params: length=%.2f, repeat=%d, velocity=%d, octave=%d", length, repeat, velocity, octave)
 
 	// Calculate chord duration
 	chordDuration := length / float64(len(chords))
 
-	fmt.Printf("🎵 DEBUG chordDuration=%.2f (length %.2f / %d chords)\n", chordDuration, length, len(chords))
+	log.Printf("🎵 chordDuration=%.2f (length %.2f / %d chords)", chordDuration, length, len(chords))
 
 	var noteEvents []models.NoteEvent
 	currentBeat := startBeat
 
 	for r := 0; r < repeat; r++ {
-		fmt.Printf("🎵 DEBUG repeat %d/%d\n", r+1, repeat)
+		log.Printf("🎵 Repeat %d/%d", r+1, repeat)
 		for chordIdx, chordSymbol := range chords {
-			fmt.Printf("🎵 DEBUG chord %d/%d: %s\n", chordIdx+1, len(chords), chordSymbol)
+			log.Printf("🎵 Processing chord %d/%d: %s", chordIdx+1, len(chords), chordSymbol)
 			chordNotes, err := ChordToMIDI(chordSymbol, octave)
 			if err != nil {
+				log.Printf("🎵 ERROR: ChordToMIDI failed for %s: %v", chordSymbol, err)
 				return nil, fmt.Errorf("invalid chord in progression: %s: %w", chordSymbol, err)
 			}
 
-			fmt.Printf("🎵 DEBUG chord %s generated %d notes: %v\n", chordSymbol, len(chordNotes), chordNotes)
+			log.Printf("🎵 Chord %s => MIDI notes: %v", chordSymbol, chordNotes)
 
 			// All notes of the chord start simultaneously
 			for _, midiNote := range chordNotes {
@@ -235,7 +245,7 @@ func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([
 		}
 	}
 
-	fmt.Printf("🎵 DEBUG convertProgressionToNoteEvents: returning %d noteEvents\n", len(noteEvents))
+	log.Printf("🎵 convertProgressionToNoteEvents: returning %d noteEvents", len(noteEvents))
 	return noteEvents, nil
 }
 
