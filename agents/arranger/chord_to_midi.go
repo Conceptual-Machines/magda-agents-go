@@ -321,21 +321,15 @@ func parseChordQuality(chordSymbol string) string {
 func parseExtensions(chordSymbol string) []string {
 	extensions := []string{}
 
-	// Remove root and quality
+	// Remove root note first
 	if len(chordSymbol) > 1 && (chordSymbol[1] == '#' || chordSymbol[1] == 'b') {
 		chordSymbol = chordSymbol[2:]
 	} else if len(chordSymbol) > 0 {
 		chordSymbol = chordSymbol[1:]
 	}
 
-	// Remove quality markers
-	chordSymbol = strings.TrimPrefix(chordSymbol, "m")
-	chordSymbol = strings.TrimPrefix(chordSymbol, "dim")
-	chordSymbol = strings.TrimPrefix(chordSymbol, "aug")
-	chordSymbol = strings.TrimPrefix(chordSymbol, "sus2")
-	chordSymbol = strings.TrimPrefix(chordSymbol, "sus4")
-
-	// Extract extensions
+	// Extract extensions BEFORE removing quality markers
+	// This prevents "maj7" from being corrupted to "aj7" by TrimPrefix("m")
 	if strings.Contains(chordSymbol, "maj7") {
 		extensions = append(extensions, "maj7")
 		chordSymbol = strings.ReplaceAll(chordSymbol, "maj7", "")
@@ -344,6 +338,15 @@ func parseExtensions(chordSymbol string) []string {
 		extensions = append(extensions, "min7")
 		chordSymbol = strings.ReplaceAll(chordSymbol, "min7", "")
 	}
+
+	// Now remove quality markers (after extracting maj7/min7)
+	chordSymbol = strings.TrimPrefix(chordSymbol, "m")
+	chordSymbol = strings.TrimPrefix(chordSymbol, "dim")
+	chordSymbol = strings.TrimPrefix(chordSymbol, "aug")
+	chordSymbol = strings.TrimPrefix(chordSymbol, "sus2")
+	chordSymbol = strings.TrimPrefix(chordSymbol, "sus4")
+
+	// Extract remaining extensions
 	if strings.Contains(chordSymbol, "7") {
 		extensions = append(extensions, "7")
 		chordSymbol = strings.ReplaceAll(chordSymbol, "7", "")

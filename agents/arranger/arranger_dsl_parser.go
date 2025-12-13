@@ -123,26 +123,17 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 		noteDuration = noteDurValue.Num
 	}
 
-	// Extract length (default: 4 beats = 1 bar, or calculated from note_duration)
+	// Extract length (default: 4 beats = 1 bar)
+	// Note: length should be explicit via "length" or "duration" param
+	// Don't treat note_duration as a length fallback
 	length := 4.0
 	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
 		length = lengthValue.Num
 	} else if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
 		length = durationValue.Num
-	} else if len(args) > 1 {
-		// Second positional arg might be length
-		count := 0
-		for _, v := range args {
-			if v.Kind == gs.ValueString && count == 0 {
-				count++
-				continue
-			}
-			if v.Kind == gs.ValueNumber && count == 1 {
-				length = v.Num
-				break
-			}
-		}
 	}
+	// Note: positional args for arpeggio are handled separately (chord symbol first, then optionally length)
+	// We don't use positional fallback for length when named params like note_duration are present
 	
 	// If note_duration is set, it overrides the length calculation
 	// note_duration specifies how long each note should be
