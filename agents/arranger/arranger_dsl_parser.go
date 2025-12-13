@@ -281,8 +281,8 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 		}
 	}
 
-	// Extract repeat (default: 0 = auto-fill the bar)
-	repeat := 0
+	// Extract repeat (default: 1 for chords - play once)
+	repeat := 1
 	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
 		repeat = int(repeatValue.Num)
 	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
@@ -293,11 +293,6 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 	velocity := 100
 	if velocityValue, ok := args["velocity"]; ok && velocityValue.Kind == gs.ValueNumber {
 		velocity = int(velocityValue.Num)
-	}
-
-	voicing := ""
-	if voicingValue, ok := args["voicing"]; ok && voicingValue.Kind == gs.ValueString {
-		voicing = voicingValue.Str
 	}
 
 	inversion := 0
@@ -323,9 +318,6 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 		"length":   length,
 		"repeat":   repeat,
 		"velocity": velocity,
-	}
-	if voicing != "" {
-		action["voicing"] = voicing
 	}
 	if inversion != 0 {
 		action["inversion"] = inversion
@@ -406,28 +398,20 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 		length = durationValue.Num
 	}
 
-	// Extract repeat (default: 0 = auto-fill the bar)
-	repeat := 0
+	// Extract repeat (default: 1 for progressions - play once)
+	repeat := 1
 	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
 		repeat = int(repeatValue.Num)
 	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
 		repeat = int(repetitionsValue.Num)
 	}
 
-	pattern := ""
-	if patternValue, ok := args["pattern"]; ok && patternValue.Kind == gs.ValueString {
-		pattern = patternValue.Str
-	}
-
 	// Create action
 	action := map[string]any{
-		"type":    "progression",
-		"chords":  chords,
-		"length":  length,
-		"repeat":  repeat,
-	}
-	if pattern != "" {
-		action["pattern"] = pattern
+		"type":   "progression",
+		"chords": chords,
+		"length": length,
+		"repeat": repeat,
 	}
 
 	p.actions = append(p.actions, action)
