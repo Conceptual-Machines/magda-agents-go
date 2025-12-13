@@ -97,13 +97,23 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 	}
 
 	length, _ := getFloat(action, "length", 4.0) // Default: 1 bar (4 beats)
-	repeat, _ := getInt(action, "repeat", 1)
+	repeat, _ := getInt(action, "repeat", 0)      // 0 means auto-calculate to fill the bar
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
 	direction, _ := getString(action, "direction", "up")
-	
+
 	// Check for explicit note_duration (e.g., 0.25 for 16th notes)
+	// Default to 16th notes (0.25 beats) if not specified - this fills 1 bar nicely
 	explicitNoteDuration, hasNoteDuration := getFloat(action, "note_duration", 0)
+	var noteDuration float64
+	if hasNoteDuration && explicitNoteDuration > 0 {
+		noteDuration = explicitNoteDuration
+		log.Printf("🎵 Using explicit note_duration: %.4f beats", noteDuration)
+	} else {
+		// Default to 16th notes (0.25 beats) for arpeggios
+		noteDuration = 0.25
+		log.Printf("🎵 Using default note_duration: 0.25 beats (16th notes)")
+	}
 
 	// Get chord notes
 	chordNotes, err := ChordToMIDI(chordSymbol, octave)
@@ -121,30 +131,46 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 		chordNotes = append(up, down...)
 	}
 
-	// Calculate note duration
 	noteCount := len(chordNotes)
-	var noteDuration float64
-	if hasNoteDuration && explicitNoteDuration > 0 {
-		// Use explicit note duration (e.g., 0.25 for 16th notes)
-		noteDuration = explicitNoteDuration
-		log.Printf("🎵 Using explicit note_duration: %.4f beats", noteDuration)
-	} else {
-		// Divide length by number of notes
-		noteDuration = length / float64(noteCount)
+
+	// Calculate how many times to repeat to fill the bar
+	// If repeat is 0 (auto), calculate based on length and note_duration
+	actualRepeat := repeat
+	if actualRepeat == 0 {
+		totalNotes := int(length / noteDuration)
+		actualRepeat = (totalNotes + noteCount - 1) / noteCount // Ceiling division
+		if actualRepeat < 1 {
+			actualRepeat = 1
+		}
+		log.Printf("🎵 Auto-calculated repeat=%d to fill %.1f beats with %d notes at %.2f beats each", 
+			actualRepeat, length, noteCount, noteDuration)
 	}
 
 	var noteEvents []models.NoteEvent
 	currentBeat := startBeat
+	endBeat := startBeat + length
 
-	for r := 0; r < repeat; r++ {
+	for r := 0; r < actualRepeat; r++ {
 		for _, midiNote := range chordNotes {
+			// Don't exceed the clip length
+			if currentBeat >= endBeat {
+				break
+			}
+			// Trim last note if it would exceed
+			actualDuration := noteDuration
+			if currentBeat+noteDuration > endBeat {
+				actualDuration = endBeat - currentBeat
+			}
 			noteEvents = append(noteEvents, models.NoteEvent{
 				MidiNoteNumber: midiNote,
 				Velocity:       velocity,
 				StartBeats:     currentBeat,
-				DurationBeats:  noteDuration,
+				DurationBeats:  actualDuration,
 			})
 			currentBeat += noteDuration
+		}
+		if currentBeat >= endBeat {
+			break
 		}
 	}
 

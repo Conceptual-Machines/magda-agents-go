@@ -120,10 +120,10 @@ func TestConvertArrangerActionToNoteEvents_Arpeggio(t *testing.T) {
 	action := map[string]any{
 		"type":     "arpeggio",
 		"chord":    "Em",
-		"length":   4.0,
-		"repeat":   1,
+		"length":   4.0, // 1 bar
 		"velocity": 100,
 		"octave":   4,
+		// No repeat specified = auto-fill the bar with 16th notes
 	}
 
 	events, err := ConvertArrangerActionToNoteEvents(action, 0.0)
@@ -131,15 +131,17 @@ func TestConvertArrangerActionToNoteEvents_Arpeggio(t *testing.T) {
 		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
 	}
 
-	// Em triad has 3 notes, length=4, so each note is 4/3 = 1.333 beats
-	if len(events) != 3 {
-		t.Errorf("Expected 3 events, got %d", len(events))
+	// Em triad has 3 notes, default 16th notes (0.25 beats)
+	// 4 beats / 0.25 = 16 notes to fill the bar
+	// 16 notes = 5 full cycles of 3 notes (15) + 1 more note = 16
+	if len(events) != 16 {
+		t.Errorf("Expected 16 events (filling 1 bar with 16th notes), got %d", len(events))
 	}
 
-	expectedDuration := 4.0 / 3.0
+	// Each note should be 0.25 beats (16th note)
 	for i, event := range events {
-		if event.DurationBeats < expectedDuration-0.01 || event.DurationBeats > expectedDuration+0.01 {
-			t.Errorf("Event %d: expected duration ~%.2f, got %.2f", i, expectedDuration, event.DurationBeats)
+		if event.DurationBeats != 0.25 {
+			t.Errorf("Event %d: expected duration 0.25 (16th note), got %.4f", i, event.DurationBeats)
 		}
 	}
 
