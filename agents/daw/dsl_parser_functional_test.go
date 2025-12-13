@@ -5,24 +5,24 @@ import (
 	"testing"
 )
 
-func TestFunctionalDSLParser_SetSelected(t *testing.T) {
+func TestFunctionalDSLParser_SetTrack(t *testing.T) {
 	tests := []struct {
 		name    string
 		dslCode string
-		want    []map[string]interface{}
+		want    []map[string]any
 		wantErr bool
 	}{
 		{
-			name:    "track with set_selected true",
-			dslCode: `track(instrument="Serum").set_selected(selected=true)`,
-			want: []map[string]interface{}{
+			name:    "track with set_track selected true",
+			dslCode: `track(instrument="Serum").set_track(selected=true)`,
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
 					"index":      0,
 				},
 				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
 					"selected": true,
 				},
@@ -30,16 +30,16 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "track with set_selected false",
-			dslCode: `track(instrument="Piano").set_selected(selected=false)`,
-			want: []map[string]interface{}{
+			name:    "track with set_track selected false",
+			dslCode: `track(instrument="Piano").set_track(selected=false)`,
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Piano",
 					"index":      0,
 				},
 				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
 					"selected": false,
 				},
@@ -48,21 +48,17 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 		},
 		{
 			name:    "track with multiple operations including selection",
-			dslCode: `track(instrument="Serum").set_name(name="Bass").set_selected(selected=true)`,
-			want: []map[string]interface{}{
+			dslCode: `track(instrument="Serum").set_track(name="Bass", selected=true)`,
+			want: []map[string]any{
 				{
 					"action":     "create_track",
 					"instrument": "Serum",
 					"index":      0,
 				},
 				{
-					"action": "set_track_name",
-					"track":  0,
-					"name":   "Bass",
-				},
-				{
-					"action":   "set_track_selected",
+					"action":   "set_track",
 					"track":    0,
+					"name":     "Bass",
 					"selected": true,
 				},
 			},
@@ -86,5 +82,62 @@ func TestFunctionalDSLParser_SetSelected(t *testing.T) {
 				t.Errorf("ParseDSL() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFunctionalDSLParser_SetClipLength(t *testing.T) {
+	parser, err := NewFunctionalDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	state := map[string]any{
+		"tracks": []any{
+			map[string]any{
+				"index": 0,
+				"name":  "Track 1",
+				"clips": []any{
+					map[string]any{
+						"index":    0,
+						"position": 0.0,
+						"length":   2.0,
+						"track":    0,
+					},
+					map[string]any{
+						"index":    1,
+						"position": 4.0,
+						"length":   2.0,
+						"track":    0,
+					},
+				},
+			},
+		},
+	}
+	parser.SetState(state)
+
+	// Test setting clip length via filter
+	dslCode := `filter(clips, clip.length < 3.0).set_clip(length=4.0)`
+	actions, err := parser.ParseDSL(dslCode)
+	if err != nil {
+		t.Fatalf("ParseDSL() error = %v", err)
+	}
+	if len(actions) == 0 {
+		t.Fatal("Should generate at least one action")
+	}
+
+	// Check that we got set_clip actions with length property
+	hasSetClipLength := false
+	for _, action := range actions {
+		if actionType, ok := action["action"].(string); ok && actionType == "set_clip" {
+			if length, ok := action["length"].(float64); ok {
+				if length != 4.0 {
+					t.Errorf("Length should be 4.0, got %v", length)
+				}
+				hasSetClipLength = true
+			}
+		}
+	}
+	if !hasSetClipLength {
+		t.Error("Should have set_clip action with length property")
 	}
 }

@@ -88,20 +88,11 @@ func (s *GenerationService) GenerateStream(
 		}
 	}
 
-	// Use provider streaming
-	log.Printf("🚀 PROVIDER STREAMING REQUEST: %s model=%s, mcp_enabled=%t",
+	// Use provider non-streaming
+	log.Printf("🚀 PROVIDER REQUEST: %s model=%s, mcp_enabled=%t",
 		s.provider.Name(), model, s.mcpURL != "")
 
-	// Convert our StreamCallback to llm.StreamCallback
-	providerCallback := func(event llm.StreamEvent) error {
-		return callback(StreamEvent{
-			Type:    event.Type,
-			Message: event.Message,
-			Data:    event.Data,
-		})
-	}
-
-	resp, err := s.provider.GenerateStream(ctx, request, providerCallback)
+	resp, err := s.provider.Generate(ctx, request)
 	if err != nil {
 		return nil, err
 	}

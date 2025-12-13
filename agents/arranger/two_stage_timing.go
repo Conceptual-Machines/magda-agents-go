@@ -140,9 +140,8 @@ func (s *GenerationService) createTimingSkeleton(
 
 	log.Printf("🎯 Stage 2 (Timing): Calling provider with %s reasoning", reasoningMode)
 
-	// Use streaming for Stage 2 - forward all events including "completed"
-	streamCallback := s.buildStage2StreamCallback(callback)
-	resp, err := s.provider.GenerateStream(ctx, request, streamCallback)
+	// Use non-streaming for Stage 2
+	resp, err := s.provider.Generate(ctx, request)
 	if err != nil {
 		// Check if context was cancelled (client disconnected)
 		if ctx.Err() != nil {
@@ -207,43 +206,6 @@ func (s *GenerationService) createTimingSkeleton(
 	return result, nil
 }
 
-// buildStage2StreamCallback creates the streaming callback for Stage 2 to reduce complexity
-func (s *GenerationService) buildStage2StreamCallback(callback StreamCallback) func(llm.StreamEvent) error {
-	return func(event llm.StreamEvent) error {
-		// Forward LLM streaming events to the main callback
-		if callback != nil {
-			forwardErr := callback(StreamEvent{
-				Type:    event.Type,
-				Message: event.Message,
-				Data:    event.Data,
-			})
-			if forwardErr != nil {
-				return forwardErr
-			}
-
-			// Log when we receive "completed" event - this is critical for debugging
-			if event.Type == "completed" {
-				choicesCount := s.extractChoicesCountFromEvent(event)
-				log.Printf("✅ Stage 2 COMPLETED event received from provider (choices: %d) - forwarding to client", choicesCount)
-			}
-		}
-		return nil
-	}
-}
-
-// extractChoicesCountFromEvent extracts choices count from completed event data
-func (s *GenerationService) extractChoicesCountFromEvent(event llm.StreamEvent) int {
-	if event.Data == nil {
-		return 0
-	}
-	if count, ok := event.Data["choices_count"]; ok {
-		if countInt, ok := count.(int); ok {
-			return countInt
-		}
-	}
-	return 0
-}
-
 // enrichWithHarmonyStage1 generates harmony without timing skeleton (Stage 1)
 // This doesn't need to return structured data - just processes harmonically
 func (s *GenerationService) enrichWithHarmonyStage1(
@@ -290,27 +252,9 @@ func (s *GenerationService) enrichWithHarmonyStage1(
 
 	log.Printf("🎯 Stage 1 (Harmony): Calling provider with %s reasoning and MCP enabled", reasoningMode)
 
-	// Use streaming for Stage 1 to avoid timeouts
+	// Use non-streaming for Stage 1
 	// Stage 1 doesn't need structured data back, just processes harmonically
-	// We wrap the callback to catch parse errors and continue (Stage 1 doesn't need valid JSON)
-	_, err := s.provider.GenerateStream(ctx, request, func(event llm.StreamEvent) error {
-		// Forward LLM streaming events to the main callback
-		if callback != nil {
-			// If we get a parse error, log it but don't fail Stage 1
-			// Stage 1 is just for harmonic processing and doesn't need structured output
-			if event.Type == "error" && event.Message != "" {
-				log.Printf("⚠️  Stage 1 parse error (non-fatal): %s", event.Message)
-				// Still forward the error event, but don't fail the stage
-				// The error might be about JSON parsing, which is OK for Stage 1
-			}
-			return callback(StreamEvent{
-				Type:    event.Type,
-				Message: event.Message,
-				Data:    event.Data,
-			})
-		}
-		return nil
-	})
+	_, err := s.provider.Generate(ctx, request)
 	if err != nil {
 		// Check if the error is a parse error - Stage 1 can continue even if parsing fails
 		// since it doesn't need structured output

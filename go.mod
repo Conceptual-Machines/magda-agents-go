@@ -3,7 +3,7 @@ module github.com/Conceptual-Machines/magda-agents-go
 go 1.24
 
 require (
-	github.com/Conceptual-Machines/grammar-school-go v0.6.0
+	github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209221559-b28f4a271151
 	github.com/getsentry/sentry-go v0.35.3
 	github.com/openai/openai-go v1.12.0
 	github.com/stretchr/testify v1.8.4
@@ -20,6 +20,7 @@ require (
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/tidwall/gjson v1.14.4 // indirect

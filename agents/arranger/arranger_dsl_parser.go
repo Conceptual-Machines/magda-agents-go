@@ -1,0 +1,470 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/Conceptual-Machines/grammar-school-go/gs"
+	"github.com/Conceptual-Machines/magda-agents-go/llm"
+)
+
+// ArrangerDSLParser parses Arranger DSL code with chord symbols.
+// Uses Grammar School Engine for parsing.
+type ArrangerDSLParser struct {
+	engine      *gs.Engine
+	arrangerDSL *ArrangerDSL
+	actions     []map[string]any
+	rawDSL      string // Store raw DSL for manual parsing (Grammar School has array issues)
+}
+
+// ArrangerDSL implements the DSL methods for musical composition.
+type ArrangerDSL struct {
+	parser *ArrangerDSLParser
+}
+
+// NewArrangerDSLParser creates a new arranger DSL parser.
+func NewArrangerDSLParser() (*ArrangerDSLParser, error) {
+	parser := &ArrangerDSLParser{
+		arrangerDSL: &ArrangerDSL{},
+		actions:     make([]map[string]any, 0),
+	}
+
+	parser.arrangerDSL.parser = parser
+
+	// Get Arranger DSL grammar
+	grammar := llm.GetArrangerDSLGrammar()
+
+	// Use generic Lark parser from grammar-school
+	larkParser := gs.NewLarkParser()
+
+	// Create Engine with ArrangerDSL instance and parser
+	engine, err := gs.NewEngine(grammar, parser.arrangerDSL, larkParser)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create engine: %w", err)
+	}
+
+	parser.engine = engine
+
+	return parser, nil
+}
+
+// ParseDSL parses DSL code and returns arranger actions.
+func (p *ArrangerDSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
+	if dslCode == "" {
+		return nil, fmt.Errorf("empty DSL code")
+	}
+
+	// Store raw DSL for manual parsing (Grammar School has issues with arrays)
+	p.rawDSL = dslCode
+
+	// Reset actions for new parse
+	p.actions = make([]map[string]any, 0)
+
+	// Execute DSL code using Grammar School Engine
+	ctx := context.Background()
+	if err := p.engine.Execute(ctx, dslCode); err != nil {
+		return nil, fmt.Errorf("failed to execute DSL: %w", err)
+	}
+
+	if len(p.actions) == 0 {
+		return nil, fmt.Errorf("no actions found in DSL code")
+	}
+
+	// Post-process: Filter out redundant chord actions when arpeggio exists
+	// LLM sometimes generates both chord() and arpeggio() for same chord symbol
+	// In that case, keep only the arpeggio (which is sequential notes)
+	p.actions = p.filterRedundantChords(p.actions)
+
+	log.Printf("✅ Arranger DSL Parser: Translated %d actions from DSL", len(p.actions))
+	return p.actions, nil
+}
+
+// filterRedundantChords removes chord actions that duplicate arpeggio actions
+// This fixes LLM behavior where it generates chord() + arpeggio() for same chord
+func (p *ArrangerDSLParser) filterRedundantChords(actions []map[string]any) []map[string]any {
+	// Find all arpeggio chord symbols
+	arpeggioChords := make(map[string]bool)
+	hasArpeggio := false
+	for _, action := range actions {
+		if action["type"] == "arpeggio" {
+			hasArpeggio = true
+			if chord, ok := action["chord"].(string); ok {
+				arpeggioChords[chord] = true
+			}
+		}
+	}
+
+	// If no arpeggios, return as-is
+	if !hasArpeggio {
+		return actions
+	}
+
+	// Filter out chord actions that match arpeggio chord symbols
+	filtered := make([]map[string]any, 0, len(actions))
+	for _, action := range actions {
+		if action["type"] == "chord" {
+			if chord, ok := action["chord"].(string); ok {
+				if arpeggioChords[chord] {
+					log.Printf("🔄 Filtering redundant chord action for %s (arpeggio exists)", chord)
+					continue // Skip this chord - arpeggio takes precedence
+				}
+			}
+		}
+		filtered = append(filtered, action)
+	}
+
+	return filtered
+}
+
+// ========== Side-effect methods (ArrangerDSL) ==========
+
+// Arpeggio handles arpeggio() calls.
+// Example: arpeggio("Em", length=2, repeat=4)
+func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
+	p := a.parser
+
+	// Extract chord symbol
+	chordSymbol := ""
+	if symbolValue, ok := args["symbol"]; ok && symbolValue.Kind == gs.ValueString {
+		chordSymbol = symbolValue.Str
+	} else if chordValue, ok := args["chord"]; ok && chordValue.Kind == gs.ValueString {
+		chordSymbol = chordValue.Str
+	} else if posValue, ok := args[""]; ok && posValue.Kind == gs.ValueString {
+		// First positional arg (empty key)
+		chordSymbol = posValue.Str
+	} else {
+		// Last resort: find first string value
+		for _, v := range args {
+			if v.Kind == gs.ValueString {
+				chordSymbol = v.Str
+				break
+			}
+		}
+	}
+
+	if chordSymbol == "" {
+		return fmt.Errorf("arpeggio: missing chord symbol")
+	}
+
+	// Parse bass note from chord symbol for arpeggios too (e.g., "Emin/G")
+	bassNote := ""
+	if strings.Contains(chordSymbol, "/") {
+		parts := strings.Split(chordSymbol, "/")
+		if len(parts) == 2 {
+			bassNote = strings.TrimSpace(parts[1])
+			// Keep the base chord without the bass note in the chord field
+			chordSymbol = strings.TrimSpace(parts[0])
+		}
+	}
+
+	// Extract note_duration (duration of each note, e.g., 0.25 for 16th notes)
+	noteDuration := 0.0
+	if noteDurValue, ok := args["note_duration"]; ok && noteDurValue.Kind == gs.ValueNumber {
+		noteDuration = noteDurValue.Num
+	}
+
+	// Extract length (default: 4 beats = 1 bar)
+	// Note: length should be explicit via "length" or "duration" param
+	// Don't treat note_duration as a length fallback
+	length := 4.0
+	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
+		length = lengthValue.Num
+	} else if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
+		length = durationValue.Num
+	}
+	// Note: positional args for arpeggio are handled separately (chord symbol first, then optionally length)
+	// We don't use positional fallback for length when named params like note_duration are present
+
+	// If note_duration is set, it overrides the length calculation
+	// note_duration specifies how long each note should be
+
+	// Extract repeat (default: 0 = auto-fill the bar)
+	repeat := 0
+	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
+		repeat = int(repeatValue.Num)
+	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
+		repeat = int(repetitionsValue.Num)
+	}
+
+	// Extract optional parameters
+	velocity := 100
+	if velocityValue, ok := args["velocity"]; ok && velocityValue.Kind == gs.ValueNumber {
+		velocity = int(velocityValue.Num)
+	}
+
+	octave := 4
+	if octaveValue, ok := args["octave"]; ok && octaveValue.Kind == gs.ValueNumber {
+		octave = int(octaveValue.Num)
+	}
+
+	direction := "up"
+	if directionValue, ok := args["direction"]; ok && directionValue.Kind == gs.ValueString {
+		direction = directionValue.Str
+	}
+
+	pattern := ""
+	if patternValue, ok := args["pattern"]; ok && patternValue.Kind == gs.ValueString {
+		pattern = patternValue.Str
+	}
+
+	// Create action
+	action := map[string]any{
+		"type":      "arpeggio",
+		"chord":     chordSymbol,
+		"length":    length,
+		"repeat":    repeat,
+		"velocity":  velocity,
+		"octave":    octave,
+		"direction": direction,
+	}
+	if noteDuration > 0 {
+		action["note_duration"] = noteDuration
+	}
+	if pattern != "" {
+		action["pattern"] = pattern
+	}
+	if bassNote != "" {
+		action["bass"] = bassNote
+	}
+
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// Chord handles chord() calls.
+// Example: chord("C", length=1, repeat=4)
+func (a *ArrangerDSL) Chord(args gs.Args) error {
+	p := a.parser
+
+	// Extract chord symbol
+	chordSymbol := ""
+	if symbolValue, ok := args["symbol"]; ok && symbolValue.Kind == gs.ValueString {
+		chordSymbol = symbolValue.Str
+	} else if chordValue, ok := args["chord"]; ok && chordValue.Kind == gs.ValueString {
+		chordSymbol = chordValue.Str
+	} else if posValue, ok := args[""]; ok && posValue.Kind == gs.ValueString {
+		// First positional arg (empty key)
+		chordSymbol = posValue.Str
+	} else {
+		// Last resort: find first string value
+		for _, v := range args {
+			if v.Kind == gs.ValueString {
+				chordSymbol = v.Str
+				break
+			}
+		}
+	}
+
+	if chordSymbol == "" {
+		return fmt.Errorf("chord: missing chord symbol")
+	}
+
+	// Extract length (default: 4 beats = 1 bar)
+	length := 4.0
+	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
+		length = lengthValue.Num
+	} else if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
+		length = durationValue.Num
+	} else {
+		// Check for positional number args (after the string arg)
+		// Grammar School may pass positional args in order
+		positionalCount := 0
+		for _, v := range args {
+			if v.Kind == gs.ValueString && v.Str == chordSymbol {
+				positionalCount++
+			} else if v.Kind == gs.ValueNumber && positionalCount > 0 {
+				length = v.Num
+				break
+			}
+		}
+	}
+
+	// Extract repeat (default: 1 for chords - play once)
+	repeat := 1
+	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
+		repeat = int(repeatValue.Num)
+	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
+		repeat = int(repetitionsValue.Num)
+	}
+
+	// Extract optional parameters
+	velocity := 100
+	if velocityValue, ok := args["velocity"]; ok && velocityValue.Kind == gs.ValueNumber {
+		velocity = int(velocityValue.Num)
+	}
+
+	inversion := 0
+	if inversionValue, ok := args["inversion"]; ok && inversionValue.Kind == gs.ValueNumber {
+		inversion = int(inversionValue.Num)
+	}
+
+	// Parse bass note from chord symbol (e.g., "Emin/G" -> bass note is "G")
+	bassNote := ""
+	if strings.Contains(chordSymbol, "/") {
+		parts := strings.Split(chordSymbol, "/")
+		if len(parts) == 2 {
+			bassNote = strings.TrimSpace(parts[1])
+			// Keep the base chord without the bass note in the chord field
+			chordSymbol = strings.TrimSpace(parts[0])
+		}
+	}
+
+	// Create action
+	action := map[string]any{
+		"type":     "chord",
+		"chord":    chordSymbol,
+		"length":   length,
+		"repeat":   repeat,
+		"velocity": velocity,
+	}
+	if inversion != 0 {
+		action["inversion"] = inversion
+	}
+	if bassNote != "" {
+		action["bass"] = bassNote
+	}
+
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// Progression handles progression() calls.
+// Example: progression(chords=["C", "Am", "F", "G"], length=4, repeat=2)
+func (a *ArrangerDSL) Progression(args gs.Args) error {
+	p := a.parser
+
+	// DEBUG: Log all args to see what Grammar School passes
+	log.Printf("🎵 Progression called with args: %+v", args)
+
+	// Grammar School has issues parsing arrays - extract chords from raw DSL instead
+	chords := []string{}
+
+	// Use regex to extract chords array from raw DSL
+	// Pattern: chords=[...] or chords = [...]
+	rawDSL := p.rawDSL
+	log.Printf("🎵 Raw DSL: %s", rawDSL)
+
+	// Find chords=[...] pattern
+	chordsStart := strings.Index(rawDSL, "chords=[")
+	if chordsStart == -1 {
+		chordsStart = strings.Index(rawDSL, "chords =[")
+	}
+	if chordsStart == -1 {
+		chordsStart = strings.Index(rawDSL, "chords= [")
+	}
+	if chordsStart == -1 {
+		chordsStart = strings.Index(rawDSL, "chords = [")
+	}
+
+	if chordsStart != -1 {
+		// Find the opening bracket
+		bracketStart := strings.Index(rawDSL[chordsStart:], "[")
+		if bracketStart != -1 {
+			bracketStart += chordsStart
+			// Find the closing bracket
+			bracketEnd := strings.Index(rawDSL[bracketStart:], "]")
+			if bracketEnd != -1 {
+				bracketEnd += bracketStart
+				// Extract the array content
+				arrayContent := rawDSL[bracketStart+1 : bracketEnd]
+				log.Printf("🎵 Extracted array content: %q", arrayContent)
+
+				// Split by comma and clean up
+				parts := strings.Split(arrayContent, ",")
+				for _, part := range parts {
+					part = strings.TrimSpace(part)
+					part = strings.Trim(part, "\"'")
+					if part != "" {
+						chords = append(chords, part)
+					}
+				}
+			}
+		}
+	}
+
+	log.Printf("🎵 Extracted chords: %v (len=%d)", chords, len(chords))
+
+	if len(chords) == 0 {
+		return fmt.Errorf("progression: missing chords array")
+	}
+
+	// Extract length (default: number of chords * 4 beats = 1 bar per chord)
+	length := float64(len(chords)) * 4.0
+	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
+		length = lengthValue.Num
+	} else if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
+		length = durationValue.Num
+	}
+
+	// Extract repeat (default: 1 for progressions - play once)
+	repeat := 1
+	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
+		repeat = int(repeatValue.Num)
+	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
+		repeat = int(repetitionsValue.Num)
+	}
+
+	// Create action
+	action := map[string]any{
+		"type":   "progression",
+		"chords": chords,
+		"length": length,
+		"repeat": repeat,
+	}
+
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// Composition handles composition() calls with chaining.
+// Example: composition().add_arpeggio("Em", length=2).add_chord("C", length=1)
+func (a *ArrangerDSL) Composition(args gs.Args) error {
+	// Composition() itself doesn't create an action, it's just a container
+	// The chain items will create actions
+	return nil
+}
+
+// AddArpeggio handles .add_arpeggio() chain calls.
+func (a *ArrangerDSL) AddArpeggio(args gs.Args) error {
+	return a.Arpeggio(args)
+}
+
+// AddChord handles .add_chord() chain calls.
+func (a *ArrangerDSL) AddChord(args gs.Args) error {
+	return a.Chord(args)
+}
+
+// AddProgression handles .add_progression() chain calls.
+func (a *ArrangerDSL) AddProgression(args gs.Args) error {
+	return a.Progression(args)
+}
+
+// Choice handles choice() calls (single choice format).
+// Example: choice("E minor arpeggio", [arpeggio("Em", length=2)])
+func (a *ArrangerDSL) Choice(args gs.Args) error {
+	// Extract description
+	description := ""
+	if descValue, ok := args["description"]; ok && descValue.Kind == gs.ValueString {
+		description = descValue.Str
+	} else if len(args) > 0 {
+		// First positional arg might be description
+		for _, v := range args {
+			if v.Kind == gs.ValueString {
+				description = v.Str
+				break
+			}
+		}
+	}
+
+	// Extract content (arpeggios, chords, or progressions)
+	// The content will be parsed as separate statements, so we just mark this as a choice
+	if description != "" {
+		// Store description for later use (could be used in choice metadata)
+		log.Printf("📝 Choice description: %s", description)
+	}
+
+	// Content items will be parsed as separate statements
+	return nil
+}

@@ -2,7 +2,6 @@ package daw
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -11,15 +10,9 @@ import (
 	"github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
 	"github.com/Conceptual-Machines/magda-agents-go/metrics"
-	"github.com/Conceptual-Machines/magda-agents-go/models"
 	"github.com/Conceptual-Machines/magda-agents-go/prompt"
 	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go/responses"
-)
-
-const (
-	streamEventCompleted = "completed"
-	maxErrorPreviewChars = 500
 )
 
 // DawAgent handles DAW (Digital Audio Workstation) operations for MAGDA
@@ -42,8 +35,8 @@ func NewDawAgent(cfg *config.Config) *DawAgent {
 	// Use OpenAI provider (default for now)
 	provider := llm.NewOpenAIProvider(cfg.OpenAIAPIKey)
 
-	// Check environment variable to determine mode (default to DSL for now)
-	useDSL := true // Can be made configurable via env var: os.Getenv("MAGDA_USE_DSL") != "false"
+	// Always use DSL mode (CFG grammar) for better latency and structured output
+	useDSL := true
 
 	agent := &DawAgent{
 		provider:      provider,
@@ -56,18 +49,53 @@ func NewDawAgent(cfg *config.Config) *DawAgent {
 	log.Printf("🤖 DAW AGENT INITIALIZED:")
 	log.Printf("   Provider: %s", provider.Name())
 	log.Printf("   System prompt loaded: %d chars", len(systemPrompt))
-	log.Printf("   Mode: %s", map[bool]string{true: "DSL (CFG)", false: "JSON Schema"}[useDSL])
+	log.Printf("   Mode: DSL (CFG) - always enabled")
 
 	return agent
 }
 
 type DawResult struct {
-	Actions []map[string]interface{} `json:"actions"`
-	Usage   any                      `json:"usage"`
+	Actions []map[string]any `json:"actions"`
+	Usage   any              `json:"usage"`
+}
+
+// getCFGGrammarConfig returns the CFG grammar configuration for the DAW agent
+// This is shared between GenerateActions and GenerateActionsStream to avoid duplication
+func (a *DawAgent) getCFGGrammarConfig() *llm.CFGConfig {
+	return &llm.CFGConfig{
+		ToolName: "magda_dsl",
+		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
+			"Executes REAPER operations using the MAGDA DSL. " +
+			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4). " +
+			"Your job is to create tracks, clips, and set track properties. Musical content (chords, arpeggios, progressions) is handled by the arranger agent. " +
+			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
+			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
+			"**CRITICAL - DELETE OPERATIONS**: " +
+			"- When user says 'delete [track name]' or 'remove [track name]', you MUST generate DSL code: filter(tracks, track.name == \"[name]\").delete() " +
+			"- For delete by track id: track(id=1).delete() where id is 1-based " +
+			"- Example: 'delete Nebula Drift' → filter(tracks, track.name == \"Nebula Drift\").delete() " +
+			"- Example: 'remove track 1' → track(id=1).delete() " +
+			"- NEVER use set_track(mute=true) or set_track(selected=true) for delete operations - 'delete' means permanently remove the track " +
+			"**CRITICAL - SELECTION OPERATIONS**: " +
+			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
+			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_track(selected=true) " +
+			"- NEVER generate set_track(solo=true) for selection - 'select' ≠ 'solo'. " +
+			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_track(selected=true) " +
+			"- 'solo' means audio isolation and uses set_track(solo=true), but 'select' means visual highlighting and uses set_track(selected=true). " +
+			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_track(selected=true). " +
+			"This efficiently filters the collection and applies the action to all matching tracks. " +
+			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
+			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
+			"If no track is specified in a chain, it applies to the track created by track(). " +
+			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR. " +
+			"**REMEMBER: YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
+		Grammar: GetMagdaDSLGrammarForFunctional(),
+		Syntax:  "lark",
+	}
 }
 
 func (a *DawAgent) GenerateActions(
-	ctx context.Context, question string, state map[string]interface{},
+	ctx context.Context, question string, state map[string]any,
 ) (*DawResult, error) {
 	startTime := time.Now()
 	log.Printf("🤖 MAGDA REQUEST STARTED: question=%s", question)
@@ -77,7 +105,7 @@ func (a *DawAgent) GenerateActions(
 	defer transaction.Finish()
 
 	transaction.SetTag("model", "gpt-5.1") // GPT-5.1 for MAGDA
-	transaction.SetContext("magda", map[string]interface{}{
+	transaction.SetContext("magda", map[string]any{
 		"question_length": len(question),
 		"has_state":       state != nil,
 	})
@@ -93,34 +121,9 @@ func (a *DawAgent) GenerateActions(
 		SystemPrompt:  a.systemPrompt,
 	}
 
-	// Choose between JSON Schema and CFG/DSL based on configuration
-	if a.useDSL {
-		// Use CFG grammar for DSL output
-		request.CFGGrammar = &llm.CFGConfig{
-			ToolName: "magda_dsl",
-			Description: "Executes REAPER operations using the MAGDA DSL. " +
-				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
-				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
-				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
-				"This efficiently filters the collection and applies the action to all matching tracks. " +
-				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
-				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
-				"If no track is specified in a chain, it applies to the track created by track(). " +
-				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: GetMagdaDSLGrammarForFunctional(),
-			Syntax:  "lark",
-		}
-		log.Printf("🔧 Using DSL mode (CFG grammar)")
-	} else {
-		// Use JSON Schema for structured output (legacy mode)
-		request.OutputSchema = &llm.OutputSchema{
-			Name:        "MagdaActions",
-			Description: "REAPER actions to execute",
-			Schema:      llm.GetMagdaActionsSchema(),
-		}
-		log.Printf("🔧 Using JSON Schema mode (legacy)")
-	}
+	// Always use CFG grammar for DSL output (DSL mode is always enabled)
+	request.CFGGrammar = a.getCFGGrammarConfig()
+	log.Printf("🔧 Using DSL mode (CFG grammar) - always enabled")
 
 	// Call provider
 	log.Printf("🚀 MAGDA PROVIDER REQUEST: %s", a.provider.Name())
@@ -175,11 +178,11 @@ func (a *DawAgent) GenerateActions(
 }
 
 // buildInputMessages constructs the input array for the LLM
-func (a *DawAgent) buildInputMessages(question string, state map[string]interface{}) []map[string]interface{} {
-	messages := []map[string]interface{}{}
+func (a *DawAgent) buildInputMessages(question string, state map[string]any) []map[string]any {
+	messages := []map[string]any{}
 
 	// Add user question
-	userMessage := map[string]interface{}{
+	userMessage := map[string]any{
 		"role":    "user",
 		"content": question,
 	}
@@ -187,7 +190,7 @@ func (a *DawAgent) buildInputMessages(question string, state map[string]interfac
 
 	// Add REAPER state if provided
 	if len(state) > 0 {
-		stateMessage := map[string]interface{}{
+		stateMessage := map[string]any{
 			"role":    "user",
 			"content": fmt.Sprintf("Current REAPER state: %+v", state),
 		}
@@ -198,54 +201,63 @@ func (a *DawAgent) buildInputMessages(question string, state map[string]interfac
 }
 
 // parseActionsFromResponse extracts actions from the LLM response
-// For CFG/DSL mode: RawOutput contains DSL code (e.g., track().newClip().addMidi())
+// For CFG/DSL mode: RawOutput contains DSL code (e.g., track().new_clip().add_midi())
 // For JSON Schema mode: RawOutput contains JSON with actions array
-func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state map[string]interface{}) ([]map[string]interface{}, error) {
+func (a *DawAgent) parseActionsFromResponse(resp *llm.GenerationResponse, state map[string]any) ([]map[string]any, error) {
 	// The provider should have stored the raw output (DSL or JSON) in RawOutput
 	if resp.RawOutput == "" {
 		return nil, fmt.Errorf("no raw output available in response")
 	}
 
-	// If using DSL mode, try parsing as DSL first
-	if a.useDSL {
-		dslCode := strings.TrimSpace(resp.RawOutput)
-		// Check if it's DSL (starts with "track" or similar function call)
-		if strings.HasPrefix(dslCode, "track(") || strings.Contains(dslCode, ".new_clip(") || strings.Contains(dslCode, ".add_midi(") || strings.Contains(dslCode, ".filter(") || strings.Contains(dslCode, ".map(") || strings.Contains(dslCode, ".for_each(") {
-			// This is DSL code - parse and translate to REAPER API actions
-			log.Printf("✅ Found DSL code in response: %s", truncate(dslCode, MaxDSLPreviewLength))
+	// Parse as DSL only - no fallback to JSON
+	dslCode := strings.TrimSpace(resp.RawOutput)
 
-			parser, err := NewFunctionalDSLParser()
-			if err != nil {
-				return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
-			}
-			parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
-			actions, err := parser.ParseDSL(dslCode)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse DSL: %w", err)
-			}
-
-			log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
-			return actions, nil
-		}
-		// If DSL mode but output doesn't look like DSL, try parsing as JSON (fallback)
-		log.Printf("⚠️  DSL mode enabled but output doesn't look like DSL, trying JSON parse")
+	// Check for out-of-scope error comments
+	if strings.HasPrefix(dslCode, "// ERROR:") {
+		errorMsg := strings.TrimPrefix(dslCode, "// ERROR:")
+		errorMsg = strings.TrimSpace(errorMsg)
+		return nil, fmt.Errorf("request is out of scope: %s", errorMsg)
 	}
 
-	// JSON Schema mode (legacy) or fallback: parse as JSON
-	var magdaOutput models.MagdaActionsOutput
-	if err := json.Unmarshal([]byte(resp.RawOutput), &magdaOutput); err != nil {
-		log.Printf("❌ Failed to parse MAGDA output as JSON: %v", err)
+	// Check if it's DSL (starts with "track" or similar function call)
+	// NOTE: We only support snake_case methods (new_clip, delete_clip) - NOT camelCase
+	// NOTE: add_midi is NOT generated by DAW agent - arranger agent handles MIDI notes
+	hasTrackPrefix := strings.HasPrefix(dslCode, "track(")
+	hasFilter := strings.HasPrefix(dslCode, "filter(") || strings.Contains(dslCode, ".filter(")
+	hasMap := strings.HasPrefix(dslCode, "map(") || strings.Contains(dslCode, ".map(")
+	hasForEach := strings.HasPrefix(dslCode, "for_each(") || strings.Contains(dslCode, ".for_each(")
+	hasNewClip := strings.Contains(dslCode, ".new_clip(")
+	hasDelete := strings.Contains(dslCode, ".delete(")
+	hasDeleteClip := strings.Contains(dslCode, ".delete_clip(")
+	hasSetTrack := strings.Contains(dslCode, ".set_track(")
+	hasSetClip := strings.Contains(dslCode, ".set_clip(")
+	hasAddFx := strings.Contains(dslCode, ".add_fx(")
+
+	isDSL := hasTrackPrefix || hasNewClip || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
+		hasSetTrack || hasSetClip || hasAddFx
+
+	if !isDSL {
 		const maxLogLength = 500
-		log.Printf("Raw output (first %d chars): %s", maxLogLength, truncate(resp.RawOutput, maxLogLength))
-		return nil, fmt.Errorf("failed to parse MAGDA output: %w", err)
+		log.Printf("❌ LLM did not generate DSL code. Raw output (first %d chars): %s", maxLogLength, truncate(resp.RawOutput, maxLogLength))
+		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
 	}
 
-	if len(magdaOutput.Actions) == 0 {
-		return nil, fmt.Errorf("no actions found in MAGDA output")
+	// This is DSL code - parse and translate to REAPER API actions
+	log.Printf("✅ Found DSL code in response: %s", truncate(dslCode, MaxDSLPreviewLength))
+
+	parser, err := NewFunctionalDSLParser()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
+	}
+	// Pass state directly - SetState handles both {"state": {...}} and {...} formats
+	parser.SetState(state)
+	actions, err := parser.ParseDSL(dslCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DSL: %w", err)
 	}
 
-	log.Printf("✅ Parsed %d actions from MAGDA JSON output", len(magdaOutput.Actions))
-	return magdaOutput.Actions, nil
+	log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
+	return actions, nil
 }
 
 // truncate truncates a string to a maximum length
@@ -257,14 +269,14 @@ func truncate(s string, maxLen int) string {
 }
 
 // StreamActionCallback is called for each action found in the stream
-type StreamActionCallback func(action map[string]interface{}) error
+type StreamActionCallback func(action map[string]any) error
 
 // GenerateActionsStream generates actions using streaming (without structured output)
 // It parses JSON incrementally from the text stream and calls callback for each action found
 func (a *DawAgent) GenerateActionsStream(
 	ctx context.Context,
 	question string,
-	state map[string]interface{},
+	state map[string]any,
 	callback StreamActionCallback,
 ) (*DawResult, error) {
 	startTime := time.Now()
@@ -275,8 +287,8 @@ func (a *DawAgent) GenerateActionsStream(
 	defer transaction.Finish()
 
 	transaction.SetTag("model", "gpt-5.1")
-	transaction.SetTag("streaming", "true")
-	transaction.SetContext("magda", map[string]interface{}{
+	transaction.SetTag("streaming", "false")
+	transaction.SetContext("magda", map[string]any{
 		"question_length": len(question),
 		"has_state":       state != nil,
 	})
@@ -292,78 +304,51 @@ func (a *DawAgent) GenerateActionsStream(
 		SystemPrompt:  a.systemPrompt,
 	}
 
-	// Choose between JSON Schema and CFG/DSL based on configuration
-	if a.useDSL {
-		// Use CFG grammar for DSL output
-		request.CFGGrammar = &llm.CFGConfig{
-			ToolName: "magda_dsl",
-			Description: "Executes REAPER operations using the MAGDA DSL. " +
-				"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
-				"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
-				"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-				"For selection operations on multiple tracks (e.g., 'select all tracks named X'), use filter() with predicate and chain set_selected: filter(tracks, track.name == \"X\").set_selected(selected=true). " +
-				"This efficiently filters the collection and applies the action to all matching tracks. " +
-				"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
-				"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
-				"If no track is specified in a chain, it applies to the track created by track(). " +
-				"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR.",
-			Grammar: GetMagdaDSLGrammarForFunctional(),
-			Syntax:  "lark",
-		}
-		log.Printf("🔧 Using DSL mode (CFG grammar) for streaming")
-	} else {
-		// No OutputSchema - we'll parse raw JSON from text stream
-		log.Printf("🔧 Using JSON Schema mode (legacy) for streaming")
-	}
+	// Always use CFG grammar for DSL output (DSL mode is always enabled)
+	request.CFGGrammar = a.getCFGGrammarConfig()
+	log.Printf("🔧 Using DSL mode (CFG grammar) - always enabled")
 
-	// Track accumulated text and parsed actions
-	var accumulatedText string
-	var allActions []map[string]interface{}
-	var usage any
+	// Call non-streaming provider
+	log.Printf("🚀 MAGDA PROVIDER REQUEST: %s", a.provider.Name())
+	resp, err := a.provider.Generate(ctx, request)
 
-	// Stream callback that processes text deltas and parses actions incrementally
-	streamCallback := func(event llm.StreamEvent) error {
-		return a.handleStreamEvent(event, &accumulatedText, &allActions, &usage, callback, state)
-	}
-
-	// Call streaming provider
-	log.Printf("🚀 MAGDA STREAMING PROVIDER REQUEST: %s", a.provider.Name())
-	resp, err := a.provider.GenerateStream(ctx, request, streamCallback)
-
-	// If we already received actions, don't treat provider errors as fatal
-	// (DSL mode generates tool calls, not text, so "no output" errors are expected)
 	if err != nil {
-		if len(allActions) > 0 {
-			log.Printf("⚠️  MAGDA: Provider reported error but %d actions were already received: %v", len(allActions), err)
-			// Continue processing - we have actions, so this is a success
-		} else {
-			transaction.SetTag("success", "false")
-			transaction.SetTag("error_type", "provider_error")
-			sentry.CaptureException(err)
-			return nil, fmt.Errorf("provider stream failed: %w", err)
-		}
+		transaction.SetTag("success", "false")
+		transaction.SetTag("error_type", "provider_error")
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("provider failed: %w", err)
 	}
 
-	// If we still have accumulated text, try final parse
-	if accumulatedText != "" && len(allActions) == 0 {
-		actions, err := a.parseActionsIncremental(accumulatedText, state)
-		if err == nil {
-			allActions = actions
-			for _, action := range actions {
-				_ = callback(action)
-			}
-		}
+	// Extract DSL code from response
+	if resp == nil || resp.RawOutput == "" {
+		transaction.SetTag("success", "false")
+		transaction.SetTag("error_type", "no_output")
+		return nil, fmt.Errorf("no DSL output from provider")
+	}
+
+	// Parse DSL code into actions
+	allActions, err := a.parseActionsIncremental(resp.RawOutput, state)
+	if err != nil {
+		transaction.SetTag("success", "false")
+		transaction.SetTag("error_type", "parse_error")
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("failed to parse DSL: %w", err)
+	}
+
+	// Call callback for each action
+	for _, action := range allActions {
+		_ = callback(action)
 	}
 
 	if len(allActions) == 0 {
 		transaction.SetTag("success", "false")
 		transaction.SetTag("error_type", "no_actions")
-		return nil, fmt.Errorf("no actions found in stream")
+		return nil, fmt.Errorf("no actions found in DSL output")
 	}
 
 	result := &DawResult{
 		Actions: allActions,
-		Usage:   usage,
+		Usage:   nil,
 	}
 
 	if resp != nil && resp.Usage != nil {
@@ -385,174 +370,72 @@ func (a *DawAgent) GenerateActionsStream(
 // It looks for complete DSL code or JSON objects in the text and extracts them
 //
 //nolint:gocyclo // Complex parsing logic is necessary for handling both DSL and JSON formats
-func (a *DawAgent) parseActionsIncremental(text string, state map[string]interface{}) ([]map[string]interface{}, error) {
+func (a *DawAgent) parseActionsIncremental(text string, state map[string]any) ([]map[string]any, error) {
 	text = strings.TrimSpace(text)
 
-	// If using DSL mode, try parsing as DSL first
-	if a.useDSL {
-		// Check if it's DSL (starts with "track" or similar function call)
-		if strings.HasPrefix(text, "track(") || strings.Contains(text, ".new_clip(") || strings.Contains(text, ".add_midi(") || strings.Contains(text, ".filter(") || strings.Contains(text, ".map(") || strings.Contains(text, ".for_each(") {
-			// This is DSL code - parse and translate to REAPER API actions
-			log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
-
-			parser, err := NewFunctionalDSLParser()
-			if err != nil {
-				log.Printf("⚠️  Failed to create functional DSL parser: %v, trying JSON parse", err)
-			} else {
-				parser.SetState(map[string]interface{}{"state": state}) // Pass state for track resolution
-				actions, err := parser.ParseDSL(text)
-				if err == nil && len(actions) > 0 {
-					log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
-					return actions, nil
-				}
-				// If DSL parsing failed, fall through to JSON parsing
-				log.Printf("⚠️  DSL parsing failed, trying JSON parse: %v", err)
-			}
+	log.Printf("🔍 parseActionsIncremental called with %d chars, useDSL=%v", len(text), a.useDSL)
+	if len(text) > 0 {
+		previewLen := 200
+		if len(text) < previewLen {
+			previewLen = len(text)
 		}
+		log.Printf("📄 Input text preview (first %d chars): %s", previewLen, text[:previewLen])
+		log.Printf("📋 FULL INPUT TEXT (all %d chars, NO TRUNCATION):\n%s", len(text), text)
 	}
 
-	// First, try to parse as complete MagdaActionsOutput
-	var magdaOutput models.MagdaActionsOutput
-	if err := json.Unmarshal([]byte(text), &magdaOutput); err == nil {
-		if len(magdaOutput.Actions) > 0 {
-			return magdaOutput.Actions, nil
-		}
+	// Always try parsing as DSL first (DSL mode is always enabled)
+	// Check if it's DSL (starts with "track" or similar function call)
+	// NOTE: We only support snake_case methods (new_clip, delete_clip) - NOT camelCase
+	// NOTE: add_midi is NOT generated by DAW agent - arranger agent handles MIDI notes
+	hasTrackPrefix := strings.HasPrefix(text, "track(")
+	hasFilter := strings.Contains(text, ".filter(") || strings.Contains(text, "filter(")
+	hasNewClip := strings.Contains(text, ".new_clip(")
+	hasMap := strings.Contains(text, ".map(")
+	hasForEach := strings.Contains(text, ".for_each(")
+	hasDelete := strings.Contains(text, ".delete(")
+	hasDeleteClip := strings.Contains(text, ".delete_clip(")
+	hasSetTrack := strings.Contains(text, ".set_track(")
+	hasSetClip := strings.Contains(text, ".set_clip(")
+	hasAddFx := strings.Contains(text, ".add_fx(")
+
+	isDSL := hasTrackPrefix || hasNewClip || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
+		hasSetTrack || hasSetClip || hasAddFx
+
+	log.Printf("🔍 DSL detection: hasTrackPrefix=%v, hasFilter=%v, hasNewClip=%v, hasMap=%v, hasForEach=%v, hasSetTrack=%v, hasSetClip=%v, hasAddFx=%v, isDSL=%v",
+		hasTrackPrefix, hasFilter, hasNewClip, hasMap, hasForEach, hasSetTrack, hasSetClip, hasAddFx, isDSL)
+
+	// Check for out-of-scope error comments
+	if strings.HasPrefix(text, "// ERROR:") {
+		errorMsg := strings.TrimPrefix(text, "// ERROR:")
+		errorMsg = strings.TrimSpace(errorMsg)
+		return nil, fmt.Errorf("request is out of scope: %s", errorMsg)
 	}
 
-	// Try to find and extract the actions array directly
-	// Look for "actions": [ ... ]
-	actionsStart := strings.Index(text, `"actions"`)
-	if actionsStart == -1 {
-		// Maybe it's just an array of actions?
-		if strings.HasPrefix(text, "[") {
-			var actions []map[string]interface{}
-			if err := json.Unmarshal([]byte(text), &actions); err == nil {
-				return actions, nil
-			}
-		}
-		return nil, fmt.Errorf("no actions array found")
+	if !isDSL {
+		const maxLogLength = 500
+		log.Printf("❌ LLM did not generate DSL code in stream. Text (first %d chars): %s", maxLogLength, truncate(text, maxLogLength))
+		return nil, fmt.Errorf("LLM must generate DSL code, but output does not look like DSL. Expected format: track(id=0).delete() or similar")
 	}
 
-	// Find the opening bracket after "actions"
-	arrayStart := strings.Index(text[actionsStart:], "[")
-	if arrayStart == -1 {
-		return nil, fmt.Errorf("actions array not found")
-	}
-	arrayStart += actionsStart
+	// This is DSL code - parse and translate to REAPER API actions
+	log.Printf("✅ Found DSL code in stream: %s", truncate(text, MaxDSLPreviewLength))
+	log.Printf("📋 FULL DSL CODE (all %d chars, NO TRUNCATION):\n%s", len(text), text)
 
-	// Find matching closing bracket
-	bracketCount := 0
-	arrayEnd := -1
-	for i := arrayStart; i < len(text); i++ {
-		if text[i] == '[' {
-			bracketCount++
-		} else if text[i] == ']' {
-			bracketCount--
-			if bracketCount == 0 {
-				arrayEnd = i + 1
-				break
-			}
-		}
+	parser, err := NewFunctionalDSLParser()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create functional DSL parser: %w", err)
+	}
+	// Pass state directly - SetState handles both {"state": {...}} and {...} formats
+	parser.SetState(state)
+	actions, err := parser.ParseDSL(text)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DSL: %w", err)
 	}
 
-	if arrayEnd == -1 {
-		// Array not complete yet
-		return nil, fmt.Errorf("actions array incomplete")
+	if len(actions) == 0 {
+		return nil, fmt.Errorf("DSL parsed but produced no actions")
 	}
 
-	// Extract and parse the actions array
-	actionsJSON := text[arrayStart:arrayEnd]
-	var actions []map[string]interface{}
-	if err := json.Unmarshal([]byte(actionsJSON), &actions); err != nil {
-		return nil, fmt.Errorf("failed to parse actions array: %w", err)
-	}
-
+	log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
 	return actions, nil
-}
-
-// handleStreamEvent processes a single stream event to reduce cyclomatic complexity
-func (a *DawAgent) handleStreamEvent(
-	event llm.StreamEvent,
-	accumulatedText *string,
-	allActions *[]map[string]interface{},
-	usage *any,
-	callback StreamActionCallback,
-	state map[string]interface{},
-) error {
-	switch event.Type {
-	case "output_text.delta":
-		return a.handleTextDelta(event, accumulatedText, allActions, callback, state)
-	case "output_progress", "output_started":
-		// Just acknowledge these events
-		return nil
-	case streamEventCompleted:
-		return a.handleStreamCompleted(event, accumulatedText, allActions, usage, callback, state)
-	}
-	return nil
-}
-
-// handleTextDelta processes text delta events
-func (a *DawAgent) handleTextDelta(
-	event llm.StreamEvent,
-	accumulatedText *string,
-	allActions *[]map[string]interface{},
-	callback StreamActionCallback,
-	state map[string]interface{},
-) error {
-	text, ok := event.Data["text"].(string)
-	if !ok || text == "" {
-		return nil
-	}
-
-	*accumulatedText += text
-	log.Printf("📝 MAGDA: Accumulated %d chars (delta: %d)", len(*accumulatedText), len(text))
-
-	// Try to parse actions from accumulated text after each delta
-	actions, err := a.parseActionsIncremental(*accumulatedText, state)
-	if err == nil && len(actions) > len(*allActions) {
-		// New actions found - call callback for each new one
-		for i := len(*allActions); i < len(actions); i++ {
-			log.Printf("✅ MAGDA: Parsed action %d: %s", i+1, actions[i]["action"])
-			if callbackErr := callback(actions[i]); callbackErr != nil {
-				return callbackErr
-			}
-			*allActions = append(*allActions, actions[i])
-		}
-	} else if err != nil {
-		// Log parse errors but continue (might be incomplete JSON)
-		log.Printf("⚠️  MAGDA: Parse attempt failed (might be incomplete): %v", err)
-	}
-	return nil
-}
-
-// handleStreamCompleted processes the stream completion event
-func (a *DawAgent) handleStreamCompleted(
-	event llm.StreamEvent,
-	accumulatedText *string,
-	allActions *[]map[string]interface{},
-	usage *any,
-	callback StreamActionCallback,
-	state map[string]interface{},
-) error {
-	log.Printf("📦 MAGDA: Stream completed, final parse of %d chars", len(*accumulatedText))
-	if *accumulatedText != "" {
-		actions, err := a.parseActionsIncremental(*accumulatedText, state)
-		if err == nil {
-			// Call callback for any remaining actions
-			for i := len(*allActions); i < len(actions); i++ {
-				log.Printf("✅ MAGDA: Final parse - action %d: %s", i+1, actions[i]["action"])
-				if callbackErr := callback(actions[i]); callbackErr != nil {
-					return callbackErr
-				}
-				*allActions = append(*allActions, actions[i])
-			}
-		} else {
-			log.Printf("❌ MAGDA: Final parse failed: %v", err)
-			log.Printf("❌ MAGDA: Accumulated text (first %d chars): %s", maxErrorPreviewChars, truncate(*accumulatedText, maxErrorPreviewChars))
-		}
-	}
-	if usageData, ok := event.Data["usage"]; ok {
-		*usage = usageData
-	}
-	return nil
 }

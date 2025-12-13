@@ -17,238 +17,15 @@ type FunctionalDSLParser struct {
 	reaperDSL         *ReaperDSL
 	currentTrackIndex int
 	trackCounter      int
-	state             map[string]interface{}
-	data              map[string]interface{} // Storage for collections
-	iterationContext  map[string]interface{} // Current iteration variables (track, fx, clip, etc.)
-	actions           []map[string]interface{}
+	state             map[string]any
+	data              map[string]any // Storage for collections
+	iterationContext  map[string]any // Current iteration variables (track, fx, clip, etc.)
+	actions           []map[string]any
 }
 
 // ReaperDSL implements the DSL methods for REAPER operations.
 type ReaperDSL struct {
 	parser *FunctionalDSLParser
-}
-
-// magdaParser implements gs.Parser interface for MAGDA DSL
-type magdaParser struct {
-	parent *FunctionalDSLParser
-}
-
-// Parse implements gs.Parser interface
-func (p *magdaParser) Parse(input string) (*gs.CallChain, error) {
-	// Simple parser implementation that converts DSL to CallChain
-	// This is a workaround for grammar-school-go requiring a parser
-	// TODO: Implement proper grammar-based parsing when grammar-school-go supports it
-
-	// For now, we'll use the existing ParseDSL logic to extract actions
-	// and convert them to CallChain format
-	// This is a temporary solution until grammar-school-go is fixed
-
-	// Since we're using the engine.Execute to parse, we need a basic parser
-	// that just returns an empty CallChain and let the engine handle it
-	// Actually, we can't do that because Execute needs the CallChain...
-
-	// Let's create a simple parser that extracts method calls
-	return p.parseSimpleDSL(input)
-}
-
-// parseSimpleDSL parses simple DSL like track(...).method(...)
-func (p *magdaParser) parseSimpleDSL(input string) (*gs.CallChain, error) {
-	// This is a minimal implementation - grammar-school-go was supposed to handle nil parser
-	// but recent changes broke it. This is a workaround.
-
-	// Parse the input manually into a CallChain
-	chain := &gs.CallChain{Calls: []gs.Call{}}
-
-	// Simple regex-based parsing for now
-	// Split by dots to get method calls
-	parts := splitMethodCalls(input)
-
-	for _, part := range parts {
-		call := parseMethodCall(part)
-		if call != nil {
-			chain.Calls = append(chain.Calls, *call)
-		}
-	}
-
-	return chain, nil
-}
-
-// splitMethodCalls splits "track(...).method(...)" into ["track(...)", "method(...)"]
-func splitMethodCalls(input string) []string {
-	var parts []string
-	var current strings.Builder
-	depth := 0
-
-	for _, r := range input {
-		char := string(r)
-
-		if char == "(" {
-			depth++
-			current.WriteRune(r)
-		} else if char == ")" {
-			depth--
-			current.WriteRune(r)
-		} else if char == "." && depth == 0 {
-			if current.Len() > 0 {
-				parts = append(parts, strings.TrimSpace(current.String()))
-				current.Reset()
-			}
-		} else {
-			current.WriteRune(r)
-		}
-	}
-
-	if current.Len() > 0 {
-		parts = append(parts, strings.TrimSpace(current.String()))
-	}
-
-	return parts
-}
-
-// parseMethodCall parses "method(param=value)" into a Call
-func parseMethodCall(input string) *gs.Call {
-	input = strings.TrimSpace(input)
-
-	// Find method name and params
-	parenIndex := strings.Index(input, "(")
-	if parenIndex == -1 {
-		// No params
-		methodName := strings.TrimSpace(input)
-		// Capitalize first letter for Go method names (track -> Track, set_selected -> SetSelected)
-		methodName = capitalizeMethodName(methodName)
-		return &gs.Call{
-			Name: methodName,
-			Args: []gs.Arg{},
-		}
-	}
-
-	methodName := strings.TrimSpace(input[:parenIndex])
-	// Capitalize first letter and convert snake_case to CamelCase
-	methodName = capitalizeMethodName(methodName)
-	paramsStr := strings.TrimSpace(input[parenIndex+1:])
-
-	// Remove trailing )
-	paramsStr = strings.TrimSuffix(paramsStr, ")")
-
-	// Parse params
-	args := parseArgs(paramsStr)
-
-	return &gs.Call{
-		Name: methodName,
-		Args: args,
-	}
-}
-
-// parseArgs parses "param1=value1, param2=value2" into []Arg
-func parseArgs(paramsStr string) []gs.Arg {
-	if paramsStr == "" {
-		return []gs.Arg{}
-	}
-
-	var args []gs.Arg
-
-	// Split by comma, but respect string quotes
-	var current strings.Builder
-	depth := 0
-	inString := false
-
-	for _, r := range paramsStr {
-		char := string(r)
-
-		if char == "\"" {
-			inString = !inString
-			current.WriteRune(r)
-		} else if char == "(" {
-			depth++
-			current.WriteRune(r)
-		} else if char == ")" {
-			depth--
-			current.WriteRune(r)
-		} else if char == "," && depth == 0 && !inString {
-			argStr := strings.TrimSpace(current.String())
-			if argStr != "" {
-				args = append(args, parseArg(argStr))
-			}
-			current.Reset()
-		} else {
-			current.WriteRune(r)
-		}
-	}
-
-	argStr := strings.TrimSpace(current.String())
-	if argStr != "" {
-		args = append(args, parseArg(argStr))
-	}
-
-	return args
-}
-
-// parseArg parses "name=value" into Arg
-func parseArg(argStr string) gs.Arg {
-	parts := strings.SplitN(argStr, "=", 2)
-	if len(parts) != 2 {
-		return gs.Arg{
-			Name:  "",
-			Value: gs.Value{Kind: gs.ValueString, Str: argStr},
-		}
-	}
-
-	name := strings.TrimSpace(parts[0])
-	valueStr := strings.TrimSpace(parts[1])
-
-	value := parseValue(valueStr)
-
-	return gs.Arg{
-		Name:  name,
-		Value: value,
-	}
-}
-
-// capitalizeMethodName converts snake_case to CamelCase (track -> Track, set_selected -> SetSelected)
-func capitalizeMethodName(name string) string {
-	if name == "" {
-		return name
-	}
-
-	// Convert snake_case to CamelCase
-	parts := strings.Split(name, "_")
-	var result strings.Builder
-	for _, part := range parts {
-		if part != "" {
-			result.WriteString(strings.ToUpper(part[:1]) + strings.ToLower(part[1:]))
-		}
-	}
-
-	return result.String()
-}
-
-// parseValue parses a value string into Value
-func parseValue(valueStr string) gs.Value {
-	valueStr = strings.TrimSpace(valueStr)
-
-	// Check if it's a string
-	if strings.HasPrefix(valueStr, "\"") && strings.HasSuffix(valueStr, "\"") {
-		return gs.Value{
-			Kind: gs.ValueString,
-			Str:  valueStr[1 : len(valueStr)-1],
-		}
-	}
-
-	// Check if it's a boolean
-	if valueStr == "true" {
-		return gs.Value{Kind: gs.ValueBool, Bool: true}
-	}
-	if valueStr == "false" {
-		return gs.Value{Kind: gs.ValueBool, Bool: false}
-	}
-
-	// Check if it's a number
-	if num, err := strconv.ParseFloat(valueStr, 64); err == nil {
-		return gs.Value{Kind: gs.ValueNumber, Num: num}
-	}
-
-	// Default to string
-	return gs.Value{Kind: gs.ValueString, Str: valueStr}
 }
 
 // NewFunctionalDSLParser creates a new functional DSL parser.
@@ -257,9 +34,9 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 		reaperDSL:         &ReaperDSL{},
 		currentTrackIndex: -1,
 		trackCounter:      0,
-		data:              make(map[string]interface{}),
-		iterationContext:  make(map[string]interface{}),
-		actions:           make([]map[string]interface{}, 0),
+		data:              make(map[string]any),
+		iterationContext:  make(map[string]any),
+		actions:           make([]map[string]any, 0),
 	}
 
 	parser.reaperDSL.parser = parser
@@ -267,13 +44,11 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 	// Get MAGDA DSL grammar
 	grammar := GetMagdaDSLGrammarForFunctional()
 
-	// Create a parser implementation for grammar-school-go
-	// This is a workaround - grammar-school-go was supposed to support nil parser
-	// but recent changes broke it
-	magdaP := &magdaParser{parent: parser}
+	// Use generic Lark parser from grammar-school
+	larkParser := gs.NewLarkParser()
 
 	// Create Engine with ReaperDSL instance and parser
-	engine, err := gs.NewEngine(grammar, parser.reaperDSL, magdaP)
+	engine, err := gs.NewEngine(grammar, parser.reaperDSL, larkParser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -284,33 +59,84 @@ func NewFunctionalDSLParser() (*FunctionalDSLParser, error) {
 }
 
 // SetState sets the current REAPER state.
-func (p *FunctionalDSLParser) SetState(state map[string]interface{}) {
+func (p *FunctionalDSLParser) SetState(state map[string]any) {
 	p.state = state
 	// Populate data with collections from state
 	if state != nil {
-		stateMap, ok := state["state"].(map[string]interface{})
+		stateMap, ok := state["state"].(map[string]any)
 		if !ok {
 			stateMap = state
 		}
-		if tracks, ok := stateMap["tracks"].([]interface{}); ok {
+		if tracks, ok := stateMap["tracks"].([]any); ok {
 			p.data["tracks"] = tracks
+
+			// Extract all clips from all tracks into a global clips collection
+			// This allows filter(clips, ...) to work on all clips across all tracks
+			allClips := make([]any, 0)
+			for _, trackInterface := range tracks {
+				if track, ok := trackInterface.(map[string]any); ok {
+					if clips, ok := track["clips"].([]any); ok {
+						// Add track index to each clip for reference
+						trackIndex, _ := track["index"].(int)
+						if trackIndexFloat, ok := track["index"].(float64); ok {
+							trackIndex = int(trackIndexFloat)
+						}
+						for _, clip := range clips {
+							if clipMap, ok := clip.(map[string]any); ok {
+								// Ensure clip has track reference
+								clipMap["track"] = trackIndex
+							}
+							allClips = append(allClips, clip)
+						}
+					}
+				}
+			}
+			if len(allClips) > 0 {
+				p.data["clips"] = allClips
+				log.Printf("📦 Extracted %d clips from %d tracks into global clips collection", len(allClips), len(tracks))
+			}
 		}
-		if clips, ok := stateMap["clips"].([]interface{}); ok {
+		// Also check for top-level clips collection (if state provides it directly)
+		if clips, ok := stateMap["clips"].([]any); ok {
 			p.data["clips"] = clips
 		}
 	}
 }
 
+// getExistingTrackCount returns the number of existing tracks from the state.
+// This is used to initialize trackCounter so new tracks are created at the correct index.
+func (p *FunctionalDSLParser) getExistingTrackCount() int {
+	if p.state == nil {
+		return 0
+	}
+
+	// Check for tracks in state.state.tracks or state.tracks
+	stateMap, ok := p.state["state"].(map[string]any)
+	if !ok {
+		stateMap = p.state
+	}
+
+	if tracks, ok := stateMap["tracks"].([]any); ok {
+		return len(tracks)
+	}
+
+	return 0
+}
+
 // ParseDSL parses DSL code and returns REAPER API actions.
-func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]interface{}, error) {
+func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 	if dslCode == "" {
 		return nil, fmt.Errorf("empty DSL code")
 	}
 
 	// Reset actions for new parse
-	p.actions = make([]map[string]interface{}, 0)
+	p.actions = make([]map[string]any, 0)
 	p.currentTrackIndex = -1
-	p.trackCounter = 0
+
+	// Initialize trackCounter based on existing tracks in state
+	// This ensures new tracks are created at the correct index
+	p.trackCounter = p.getExistingTrackCount()
+
 	p.clearIterationContext()
 
 	// Execute DSL code using Grammar School Engine
@@ -328,13 +154,13 @@ func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]interface{}
 }
 
 // setIterationContext sets the current iteration variables.
-func (p *FunctionalDSLParser) setIterationContext(context map[string]interface{}) {
+func (p *FunctionalDSLParser) setIterationContext(context map[string]any) {
 	p.iterationContext = context
 }
 
 // clearIterationContext clears iteration context.
 func (p *FunctionalDSLParser) clearIterationContext() {
-	p.iterationContext = make(map[string]interface{})
+	p.iterationContext = make(map[string]any)
 }
 
 // getIterVarFromCollection derives iteration variable name from collection name.
@@ -355,10 +181,10 @@ func (p *FunctionalDSLParser) getIterVarFromCollection(collectionName string) st
 }
 
 // resolveCollection resolves a collection name to actual data.
-func (p *FunctionalDSLParser) resolveCollection(name string) ([]interface{}, error) {
+func (p *FunctionalDSLParser) resolveCollection(name string) ([]any, error) {
 	// Check if it's in data storage
 	if collection, ok := p.data[name]; ok {
-		if list, ok := collection.([]interface{}); ok {
+		if list, ok := collection.([]any); ok {
 			return list, nil
 		}
 		return nil, fmt.Errorf("collection %s is not a list", name)
@@ -394,11 +220,12 @@ func (r *ReaperDSL) Track(args gs.Args) error {
 	}
 
 	// This is a track creation
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "create_track",
 	}
 
 	if instrumentValue, ok := args["instrument"]; ok && instrumentValue.Kind == gs.ValueString {
+		// Plugin name is passed as-is - extension will resolve aliases
 		action["instrument"] = instrumentValue.Str
 	}
 	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
@@ -431,7 +258,7 @@ func (r *ReaperDSL) NewClip(args gs.Args) error {
 		}
 	}
 
-	action := map[string]interface{}{
+	action := map[string]any{
 		"track": trackIndex,
 	}
 
@@ -475,31 +302,86 @@ func (r *ReaperDSL) AddMidi(args gs.Args) error {
 		return fmt.Errorf("no track context for midi call")
 	}
 
-	action := map[string]interface{}{
+	action := map[string]any{
 		"action": "add_midi",
 		"track":  p.currentTrackIndex,
-		"notes":  []interface{}{},
+		"notes":  []any{},
 	}
 
 	if _, ok := args["notes"]; ok {
 		// Handle notes array (would need more complex Value type)
 		// For now, placeholder
-		action["notes"] = []interface{}{}
+		action["notes"] = []any{}
 	}
 
 	p.actions = append(p.actions, action)
 	return nil
 }
 
-// AddFX handles .add_fx() calls.
-func (r *ReaperDSL) AddFX(args gs.Args) error {
+// AddFx handles .add_fx() calls.
+// Note: Method name must be AddFx (not AddFX) for grammar-school camelCase conversion
+func (r *ReaperDSL) AddFx(args gs.Args) error {
 	p := r.parser
 
+	// Check if there's a filtered collection (from filter() call)
+	if filtered, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		if filteredSlice, ok := filtered.([]any); ok && len(filteredSlice) > 0 {
+			log.Printf("🔍 AddFx: Found filtered collection (hasFiltered=true)")
+			log.Printf("🔍 AddFx: Filtered collection has %d items", len(filteredSlice))
+
+			// Determine action type
+			var actionType string
+			var fxname string
+			if fxnameValue, ok := args["fxname"]; ok && fxnameValue.Kind == gs.ValueString {
+				actionType = "add_track_fx"
+				fxname = fxnameValue.Str
+			} else if instrumentValue, ok := args["instrument"]; ok && instrumentValue.Kind == gs.ValueString {
+				actionType = "add_instrument"
+				// Plugin name is passed as-is - extension will resolve aliases
+				fxname = instrumentValue.Str
+			} else {
+				return fmt.Errorf("FX call must specify fxname or instrument")
+			}
+
+			// Apply to all filtered tracks
+			for _, item := range filteredSlice {
+				trackMap, ok := item.(map[string]any)
+				if !ok {
+					log.Printf("⚠️  AddFx: Could not convert filtered item to map: %+v", item)
+					continue
+				}
+
+				trackIndex := -1
+				if idx, ok := trackMap["index"].(int); ok {
+					trackIndex = idx
+				} else if idxFloat, ok := trackMap["index"].(float64); ok {
+					trackIndex = int(idxFloat)
+				}
+
+				if trackIndex < 0 {
+					log.Printf("⚠️  AddFx: Could not extract track index from %+v", trackMap)
+					continue
+				}
+
+				action := map[string]any{
+					"action": actionType,
+					"track":  trackIndex,
+					"fxname": fxname,
+				}
+				log.Printf("✅ AddFx: Adding action for track %d, fxname=%s", trackIndex, fxname)
+				p.actions = append(p.actions, action)
+			}
+			log.Printf("✅ AddFx: Applied to %d filtered tracks", len(filteredSlice))
+			return nil
+		}
+	}
+
+	// No filtered collection - use current track context
 	if p.currentTrackIndex < 0 {
 		return fmt.Errorf("no track context for FX call")
 	}
 
-	action := map[string]interface{}{
+	action := map[string]any{
 		"track": p.currentTrackIndex,
 	}
 
@@ -508,6 +390,7 @@ func (r *ReaperDSL) AddFX(args gs.Args) error {
 		action["fxname"] = fxnameValue.Str
 	} else if instrumentValue, ok := args["instrument"]; ok && instrumentValue.Kind == gs.ValueString {
 		action["action"] = "add_instrument"
+		// Plugin name is passed as-is - extension will resolve aliases
 		action["fxname"] = instrumentValue.Str
 	} else {
 		return fmt.Errorf("FX call must specify fxname or instrument")
@@ -517,149 +400,567 @@ func (r *ReaperDSL) AddFX(args gs.Args) error {
 	return nil
 }
 
-// SetVolume handles .set_volume() calls.
-func (r *ReaperDSL) SetVolume(args gs.Args) error {
+// SetTrack handles .set_track() calls to set track properties (name, volume_db, pan, mute, solo, selected, etc.).
+// If there's a filtered collection, applies to all tracks; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) SetTrack(args gs.Args) error {
 	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for volume call")
-	}
-	volumeValue, ok := args["volume_db"]
-	if !ok || volumeValue.Kind != gs.ValueNumber {
-		return fmt.Errorf("volume_db must be a number")
-	}
-	action := map[string]interface{}{
-		"action":    "set_track_volume",
-		"track":     p.currentTrackIndex,
-		"volume_db": volumeValue.Num,
-	}
-	p.actions = append(p.actions, action)
-	return nil
-}
 
-// SetPan, SetMute, SetSolo, SetName methods (similar pattern)
-func (r *ReaperDSL) SetPan(args gs.Args) error {
-	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for pan call")
-	}
-	panValue, ok := args["pan"]
-	if !ok || panValue.Kind != gs.ValueNumber {
-		return fmt.Errorf("pan must be a number")
-	}
-	action := map[string]interface{}{
-		"action": "set_track_pan",
-		"track":  p.currentTrackIndex,
-		"pan":    panValue.Num,
-	}
-	p.actions = append(p.actions, action)
-	return nil
-}
+	// Build action with any provided properties
+	actionProps := make(map[string]any)
 
-func (r *ReaperDSL) SetMute(args gs.Args) error {
-	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for mute call")
+	// Handle name
+	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
+		actionProps["name"] = nameValue.Str
 	}
-	muteValue, ok := args["mute"]
-	if !ok || muteValue.Kind != gs.ValueBool {
-		return fmt.Errorf("mute must be a boolean")
-	}
-	action := map[string]interface{}{
-		"action": "set_track_mute",
-		"track":  p.currentTrackIndex,
-		"mute":   muteValue.Bool,
-	}
-	p.actions = append(p.actions, action)
-	return nil
-}
 
-func (r *ReaperDSL) SetSolo(args gs.Args) error {
-	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for solo call")
+	// Handle volume_db
+	if volumeValue, ok := args["volume_db"]; ok && volumeValue.Kind == gs.ValueNumber {
+		actionProps["volume_db"] = volumeValue.Num
 	}
-	soloValue, ok := args["solo"]
-	if !ok || soloValue.Kind != gs.ValueBool {
-		return fmt.Errorf("solo must be a boolean")
-	}
-	action := map[string]interface{}{
-		"action": "set_track_solo",
-		"track":  p.currentTrackIndex,
-		"solo":   soloValue.Bool,
-	}
-	p.actions = append(p.actions, action)
-	return nil
-}
 
-func (r *ReaperDSL) SetName(args gs.Args) error {
-	p := r.parser
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for name call")
+	// Handle pan
+	if panValue, ok := args["pan"]; ok && panValue.Kind == gs.ValueNumber {
+		actionProps["pan"] = panValue.Num
 	}
-	nameValue, ok := args["name"]
-	if !ok || nameValue.Kind != gs.ValueString {
-		return fmt.Errorf("name must be a string")
-	}
-	action := map[string]interface{}{
-		"action": "set_track_name",
-		"track":  p.currentTrackIndex,
-		"name":   nameValue.Str,
-	}
-	p.actions = append(p.actions, action)
-	return nil
-}
 
-// SetSelected handles .set_selected() calls.
-// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
-func (r *ReaperDSL) SetSelected(args gs.Args) error {
-	p := r.parser
-	selectedValue, ok := args["selected"]
-	if !ok || selectedValue.Kind != gs.ValueBool {
-		return fmt.Errorf("selected must be a boolean")
+	// Handle mute
+	if muteValue, ok := args["mute"]; ok && muteValue.Kind == gs.ValueBool {
+		actionProps["mute"] = muteValue.Bool
 	}
-	selected := selectedValue.Bool
+
+	// Handle solo
+	if soloValue, ok := args["solo"]; ok && soloValue.Kind == gs.ValueBool {
+		actionProps["solo"] = soloValue.Bool
+	}
+
+	// Handle selected
+	if selectedValue, ok := args["selected"]; ok && selectedValue.Kind == gs.ValueBool {
+		actionProps["selected"] = selectedValue.Bool
+	}
+
+	// Handle color (similar to SetClip)
+	if colorValue, ok := args["color"]; ok {
+		var color string
+		if colorValue.Kind == gs.ValueString {
+			colorStr := strings.ToLower(strings.TrimSpace(colorValue.Str))
+			// Convert color name to hex if it's a known color name
+			if hexColor := colorNameToHex(colorStr); hexColor != "" {
+				color = hexColor
+			} else if strings.HasPrefix(colorStr, "#") {
+				// Already a hex color
+				color = colorStr
+			} else {
+				// Unknown color name, pass through (might be handled by C++ backend)
+				color = colorValue.Str
+			}
+		} else if colorValue.Kind == gs.ValueNumber {
+			color = fmt.Sprintf("#%06x", int(colorValue.Num))
+		} else {
+			return fmt.Errorf("color must be a string or number")
+		}
+		actionProps["color"] = color
+	}
+
+	// Must have at least one property
+	if len(actionProps) == 0 {
+		return fmt.Errorf("set_track requires at least one property: name, volume_db, pan, mute, solo, selected, or color")
+	}
 
 	// Check if we have a filtered collection to apply to
 	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
-		if filtered, ok := filteredCollection.([]interface{}); ok && len(filtered) > 0 {
-			// Apply to all filtered tracks
-			for _, item := range filtered {
-				trackMap, ok := item.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				trackIndex, ok := trackMap["index"].(int)
-				if !ok {
-					// Try float64 (JSON numbers are float64)
-					if trackIndexFloat, ok := trackMap["index"].(float64); ok {
-						trackIndex = int(trackIndexFloat)
-					} else {
+		log.Printf("🔍 SetTrack: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]any); ok {
+			log.Printf("🔍 SetTrack: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				for _, item := range filtered {
+					trackMap, ok := item.(map[string]any)
+					if !ok {
+						log.Printf("⚠️  SetTrack: Item is not a map: %T", item)
 						continue
 					}
+					trackIndex, ok := trackMap["index"].(int)
+					if !ok {
+						if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+							trackIndex = int(trackIndexFloat)
+						} else {
+							log.Printf("⚠️  SetTrack: Could not extract track index from %+v", trackMap)
+							continue
+						}
+					}
+
+					action := map[string]any{
+						"action": "set_track",
+						"track":  trackIndex,
+					}
+
+					// Copy all properties
+					for k, v := range actionProps {
+						action[k] = v
+					}
+
+					log.Printf("✅ SetTrack: Adding action for track %d, props=%+v", trackIndex, actionProps)
+					p.actions = append(p.actions, action)
 				}
-				action := map[string]interface{}{
-					"action":   "set_track_selected",
-					"track":    trackIndex,
-					"selected": selected,
-				}
-				p.actions = append(p.actions, action)
+				delete(p.data, "current_filtered")
+				log.Printf("✅ SetTrack: Applied to %d filtered tracks", len(filtered))
+				return nil
 			}
-			// Clear filtered collection after applying
-			delete(p.data, "current_filtered")
-			log.Printf("Applied set_selected to %d filtered tracks", len(filtered))
-			return nil
 		}
 	}
 
 	// Normal single-track operation
 	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for selected call")
+		return fmt.Errorf("no track context for set_track call")
 	}
-	action := map[string]interface{}{
-		"action":   "set_track_selected",
+	action := map[string]any{
+		"action": "set_track",
+		"track":  p.currentTrackIndex,
+	}
+
+	// Copy all properties
+	for k, v := range actionProps {
+		action[k] = v
+	}
+
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// Delete handles .delete() calls to delete the current track.
+// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) Delete(args gs.Args) error {
+	p := r.parser
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 Delete: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]any); ok {
+			log.Printf("🔍 Delete: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				// Apply to all filtered tracks
+				for _, item := range filtered {
+					trackMap, ok := item.(map[string]any)
+					if !ok {
+						log.Printf("⚠️  Delete: Item is not a map: %T", item)
+						continue
+					}
+					trackIndex, ok := trackMap["index"].(int)
+					if !ok {
+						// Try float64 (JSON numbers are float64)
+						if trackIndexFloat, ok := trackMap["index"].(float64); ok {
+							trackIndex = int(trackIndexFloat)
+						} else {
+							log.Printf("⚠️  Delete: Could not extract track index from %+v", trackMap)
+							continue
+						}
+					}
+					trackName, _ := trackMap["name"].(string)
+					log.Printf("✅ Delete: Adding action for track %d (name='%s')", trackIndex, trackName)
+					action := map[string]any{
+						"action": "delete_track",
+						"track":  trackIndex,
+					}
+					p.actions = append(p.actions, action)
+				}
+				// Clear filtered collection after applying
+				delete(p.data, "current_filtered")
+				log.Printf("✅ Delete: Applied delete_track to %d filtered tracks", len(filtered))
+				return nil
+			} else {
+				log.Printf("⚠️  Delete: Filtered collection is empty! This means filter() returned 0 results.")
+			}
+		} else {
+			log.Printf("⚠️  Delete: Filtered collection is not a []any: %T", filteredCollection)
+		}
+	} else {
+		log.Printf("🔍 Delete: No filtered collection found, using single-track mode (currentTrackIndex=%d)", p.currentTrackIndex)
+	}
+
+	// Normal single-track operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for delete call")
+	}
+	action := map[string]any{
+		"action": "delete_track",
+		"track":  p.currentTrackIndex,
+	}
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// DeleteClip handles .deleteClip() calls to delete a clip from the current track.
+// If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) DeleteClip(args gs.Args) error {
+	p := r.parser
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 DeleteClip: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]any); ok {
+			log.Printf("🔍 DeleteClip: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				// Check if this is a clips collection
+				firstItem, ok := filtered[0].(map[string]any)
+				if !ok {
+					log.Printf("⚠️  DeleteClip: First item is not a map: %T", filtered[0])
+				} else {
+					_, hasTrackField := firstItem["track"]
+					_, hasLengthField := firstItem["length"]
+					_, hasPositionField := firstItem["position"]
+					isClip := hasTrackField && (hasLengthField || hasPositionField)
+
+					if isClip {
+						// This is a clips collection
+						log.Printf("🔍 DeleteClip: Detected clips collection")
+						for _, item := range filtered {
+							clipMap, ok := item.(map[string]any)
+							if !ok {
+								log.Printf("⚠️  DeleteClip: Clip item is not a map: %T", item)
+								continue
+							}
+							// Get track index from clip
+							trackIndex := -1
+							if trackVal, ok := clipMap["track"].(int); ok {
+								trackIndex = trackVal
+							} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+								trackIndex = int(trackValFloat)
+							}
+
+							// Get clip identifier (prefer position, then index)
+							var clipIndex *int
+							var position *float64
+
+							if idx, ok := clipMap["index"].(int); ok {
+								clipIndex = &idx
+							} else if idxFloat, ok := clipMap["index"].(float64); ok {
+								idxInt := int(idxFloat)
+								clipIndex = &idxInt
+							}
+
+							if pos, ok := clipMap["position"].(float64); ok {
+								position = &pos
+							}
+
+							if trackIndex < 0 {
+								log.Printf("⚠️  DeleteClip: Could not extract track index from clip %+v", clipMap)
+								continue
+							}
+
+							action := map[string]any{
+								"action": "delete_clip",
+								"track":  trackIndex,
+							}
+
+							// Add clip identifier (prefer position, then index)
+							if position != nil {
+								action["position"] = *position
+							} else if clipIndex != nil {
+								action["clip"] = *clipIndex
+							} else {
+								log.Printf("⚠️  DeleteClip: Could not identify clip (no index or position): %+v", clipMap)
+								continue
+							}
+
+							log.Printf("✅ DeleteClip: Adding action for clip on track %d", trackIndex)
+							p.actions = append(p.actions, action)
+						}
+						// Clear filtered collection after applying
+						delete(p.data, "current_filtered")
+						log.Printf("✅ DeleteClip: Applied delete_clip to %d filtered clips", len(filtered))
+						return nil
+					} else {
+						log.Printf("⚠️  DeleteClip: Filtered collection is not clips (isClip=%v)", isClip)
+					}
+				}
+			} else {
+				log.Printf("⚠️  DeleteClip: Filtered collection is empty!")
+			}
+		} else {
+			log.Printf("⚠️  DeleteClip: Filtered collection is not a []any: %T", filteredCollection)
+		}
+	}
+
+	// Normal single-clip operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for deleteClip call")
+	}
+	action := map[string]any{
+		"action": "delete_clip",
+		"track":  p.currentTrackIndex,
+	}
+
+	// Clip identification: clip index, position, or bar
+	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
+		action["clip"] = int(clipValue.Num)
+	} else if positionValue, ok := args["position"]; ok && positionValue.Kind == gs.ValueNumber {
+		action["position"] = positionValue.Num
+	} else if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+		action["bar"] = int(barValue.Num)
+	} else {
+		return fmt.Errorf("deleteClip requires one of: clip (index), position (seconds), or bar (number)")
+	}
+
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// SetClip handles .set_clip() calls to set clip properties (name, color, selected, etc.).
+// If there's a filtered collection, applies to all clips; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) SetClip(args gs.Args) error {
+	p := r.parser
+
+	// Build action with any provided properties
+	actionProps := make(map[string]any)
+
+	// Handle name
+	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
+		actionProps["name"] = nameValue.Str
+	}
+
+	// Handle color
+	if colorValue, ok := args["color"]; ok {
+		var color string
+		if colorValue.Kind == gs.ValueString {
+			colorStr := strings.ToLower(strings.TrimSpace(colorValue.Str))
+			// Convert color name to hex if it's a known color name
+			if hexColor := colorNameToHex(colorStr); hexColor != "" {
+				color = hexColor
+			} else if strings.HasPrefix(colorStr, "#") {
+				// Already a hex color
+				color = colorStr
+			} else {
+				// Unknown color name, pass through (might be handled by C++ backend)
+				color = colorValue.Str
+			}
+		} else if colorValue.Kind == gs.ValueNumber {
+			color = fmt.Sprintf("#%06x", int(colorValue.Num))
+		} else {
+			return fmt.Errorf("color must be a string or number")
+		}
+		actionProps["color"] = color
+	}
+
+	// Handle selected
+	if selectedValue, ok := args["selected"]; ok && selectedValue.Kind == gs.ValueBool {
+		actionProps["selected"] = selectedValue.Bool
+	}
+
+	// Handle length
+	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
+		actionProps["length"] = lengthValue.Num
+	}
+
+	// Must have at least one property
+	if len(actionProps) == 0 {
+		return fmt.Errorf("set_clip requires at least one property: name, color, selected, or length")
+	}
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 SetClip: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]any); ok {
+			log.Printf("🔍 SetClip: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				for _, item := range filtered {
+					clipMap, ok := item.(map[string]any)
+					if !ok {
+						log.Printf("⚠️  SetClip: Clip item is not a map: %T", item)
+						continue
+					}
+					trackIndex := -1
+					if trackVal, ok := clipMap["track"].(int); ok {
+						trackIndex = trackVal
+					} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+						trackIndex = int(trackValFloat)
+					}
+
+					var clipIndex *int
+					var position *float64
+
+					if idx, ok := clipMap["index"].(int); ok {
+						clipIndex = &idx
+					} else if idxFloat, ok := clipMap["index"].(float64); ok {
+						idxInt := int(idxFloat)
+						clipIndex = &idxInt
+					}
+
+					if pos, ok := clipMap["position"].(float64); ok {
+						position = &pos
+					}
+
+					if trackIndex < 0 {
+						log.Printf("⚠️  SetClip: Could not extract track index from clip %+v", clipMap)
+						continue
+					}
+
+					action := map[string]any{
+						"action": "set_clip",
+						"track":  trackIndex,
+					}
+
+					// Copy all properties
+					for k, v := range actionProps {
+						action[k] = v
+					}
+
+					if position != nil {
+						action["position"] = *position
+					} else if clipIndex != nil {
+						action["clip"] = *clipIndex
+					} else {
+						log.Printf("⚠️  SetClip: Could not identify clip (no index or position): %+v", clipMap)
+						continue
+					}
+
+					log.Printf("✅ SetClip: Adding action for clip on track %d, props=%+v", trackIndex, actionProps)
+					p.actions = append(p.actions, action)
+				}
+				delete(p.data, "current_filtered")
+				log.Printf("✅ SetClip: Applied to %d filtered clips", len(filtered))
+				return nil
+			}
+		}
+	}
+
+	// Normal single-clip operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for set_clip call")
+	}
+	action := map[string]any{
+		"action": "set_clip",
+		"track":  p.currentTrackIndex,
+	}
+
+	// Copy all properties
+	for k, v := range actionProps {
+		action[k] = v
+	}
+
+	// Clip identification
+	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
+		action["clip"] = int(clipValue.Num)
+	} else if positionValue, ok := args["position"]; ok && positionValue.Kind == gs.ValueNumber {
+		action["position"] = positionValue.Num
+	} else if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+		action["bar"] = int(barValue.Num)
+	} else {
+		return fmt.Errorf("set_clip requires one of: clip (index), position (seconds), or bar (number)")
+	}
+
+	p.actions = append(p.actions, action)
+	return nil
+}
+
+// MoveClip handles .move_clip() or .set_clip_position() calls to move a clip.
+// If there's a filtered collection, applies to all clips; otherwise uses currentTrackIndex.
+func (r *ReaperDSL) MoveClip(args gs.Args) error {
+	p := r.parser
+
+	// Get position (required)
+	positionValue, ok := args["position"]
+	if !ok {
+		// Try "bar" as alternative
+		if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+			// Convert bar to position (would need BPM, but for now just use bar number)
+			// This is a placeholder - in real implementation would convert bar to seconds
+			positionValue = barValue
+		} else {
+			return fmt.Errorf("move_clip requires position (seconds) or bar (number)")
+		}
+	}
+
+	var position float64
+	if positionValue.Kind == gs.ValueNumber {
+		position = positionValue.Num
+	} else {
+		return fmt.Errorf("position must be a number")
+	}
+
+	// Check if we have a filtered collection to apply to
+	if filteredCollection, hasFiltered := p.data["current_filtered"]; hasFiltered {
+		log.Printf("🔍 MoveClip: Found filtered collection (hasFiltered=%v)", hasFiltered)
+		if filtered, ok := filteredCollection.([]any); ok {
+			log.Printf("🔍 MoveClip: Filtered collection has %d items", len(filtered))
+			if len(filtered) > 0 {
+				for _, item := range filtered {
+					clipMap, ok := item.(map[string]any)
+					if !ok {
+						log.Printf("⚠️  MoveClip: Clip item is not a map: %T", item)
+						continue
+					}
+					trackIndex := -1
+					if trackVal, ok := clipMap["track"].(int); ok {
+						trackIndex = trackVal
+					} else if trackValFloat, ok := clipMap["track"].(float64); ok {
+						trackIndex = int(trackValFloat)
+					}
+
+					var clipIndex *int
+					var oldPosition *float64
+
+					if idx, ok := clipMap["index"].(int); ok {
+						clipIndex = &idx
+					} else if idxFloat, ok := clipMap["index"].(float64); ok {
+						idxInt := int(idxFloat)
+						clipIndex = &idxInt
+					}
+
+					if pos, ok := clipMap["position"].(float64); ok {
+						oldPosition = &pos
+					}
+
+					if trackIndex < 0 {
+						log.Printf("⚠️  MoveClip: Could not extract track index from clip %+v", clipMap)
+						continue
+					}
+
+					action := map[string]any{
+						"action":   "set_clip_position",
+						"track":    trackIndex,
+						"position": position,
+					}
+
+					// Use old position or index to identify the clip
+					if oldPosition != nil {
+						action["old_position"] = *oldPosition
+					} else if clipIndex != nil {
+						action["clip"] = *clipIndex
+					} else {
+						log.Printf("⚠️  MoveClip: Could not identify clip (no index or position): %+v", clipMap)
+						continue
+					}
+
+					log.Printf("✅ MoveClip: Adding action for clip on track %d, new position=%v", trackIndex, position)
+					p.actions = append(p.actions, action)
+				}
+				delete(p.data, "current_filtered")
+				log.Printf("✅ MoveClip: Applied set_clip_position to %d filtered clips", len(filtered))
+				return nil
+			}
+		}
+	}
+
+	// Normal single-clip operation
+	if p.currentTrackIndex < 0 {
+		return fmt.Errorf("no track context for move_clip call")
+	}
+	action := map[string]any{
+		"action":   "set_clip_position",
 		"track":    p.currentTrackIndex,
-		"selected": selected,
+		"position": position,
 	}
+
+	// Clip identification
+	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
+		action["clip"] = int(clipValue.Num)
+	} else if oldPositionValue, ok := args["old_position"]; ok && oldPositionValue.Kind == gs.ValueNumber {
+		action["old_position"] = oldPositionValue.Num
+	} else if barValue, ok := args["bar"]; ok && barValue.Kind == gs.ValueNumber {
+		action["bar"] = int(barValue.Num)
+	} else {
+		return fmt.Errorf("move_clip requires one of: clip (index), old_position (seconds), or bar (number)")
+	}
+
 	p.actions = append(p.actions, action)
 	return nil
 }
@@ -674,35 +975,149 @@ func (r *ReaperDSL) SetSelected(args gs.Args) error {
 func (r *ReaperDSL) Filter(args gs.Args) error {
 	p := r.parser
 
+	// Log all args for debugging
+	log.Printf("🔍 Filter: Received args with %d keys: %v", len(args), getArgsKeys(args))
+	for k, v := range args {
+		log.Printf("   Filter arg[%s] = %+v (Kind: %v, Str: '%s', Num: %v)", k, v, v.Kind, v.Str, v.Num)
+	}
+
 	// Get collection name or value
-	var collection []interface{}
+	var collection []any
 	var collectionName string
 
+	// Try multiple ways to find the collection argument
+	// 1. Named argument "collection"
 	if collectionValue, ok := args["collection"]; ok {
 		if collectionValue.Kind == gs.ValueString {
 			collectionName = collectionValue.Str
 			var err error
 			collection, err = p.resolveCollection(collectionName)
-			if err != nil {
-				return fmt.Errorf("failed to resolve collection: %w", err)
+			if err == nil {
+				log.Printf("✅ Filter: Found collection '%s' via named arg 'collection'", collectionName)
+			} else {
+				log.Printf("⚠️  Filter: Failed to resolve collection '%s' from named arg: %v", collectionName, err)
 			}
 		}
-	} else if collectionValue, ok := args["_positional"]; ok {
-		// First positional argument is collection
-		if collectionValue.Kind == gs.ValueString {
-			collectionName = collectionValue.Str
-			var err error
-			collection, err = p.resolveCollection(collectionName)
-			if err != nil {
-				return fmt.Errorf("failed to resolve collection: %w", err)
-			}
-		}
-	} else {
-		return fmt.Errorf("filter requires a collection argument")
 	}
 
+	// 2. First positional argument (empty key or _positional)
 	if collection == nil {
-		return fmt.Errorf("collection not found or is empty")
+		if collectionValue, ok := args[""]; ok {
+			if collectionValue.Kind == gs.ValueString {
+				collectionName = collectionValue.Str
+				var err error
+				collection, err = p.resolveCollection(collectionName)
+				if err == nil {
+					log.Printf("✅ Filter: Found collection '%s' via positional arg (empty key)", collectionName)
+				} else {
+					log.Printf("⚠️  Filter: Failed to resolve collection '%s' from positional arg: %v", collectionName, err)
+				}
+			}
+		} else if collectionValue, ok := args["_positional"]; ok {
+			if collectionValue.Kind == gs.ValueString {
+				collectionName = collectionValue.Str
+				var err error
+				collection, err = p.resolveCollection(collectionName)
+				if err == nil {
+					log.Printf("✅ Filter: Found collection '%s' via _positional key", collectionName)
+				} else {
+					log.Printf("⚠️  Filter: Failed to resolve collection '%s' from _positional: %v", collectionName, err)
+				}
+			}
+		}
+	}
+
+	// 3. Last resort: iterate and find first string value that resolves to a collection
+	// This handles the case where multiple positional arguments exist and the last one overwrote the first
+	// We need to check ALL args to find which one is the collection name
+	if collection == nil {
+		log.Printf("🔍 Filter: Trying to find collection by iterating all args...")
+		// First, try to find a collection by checking all string values
+		// We prioritize the positional argument (empty key) if it resolves to a collection
+		// Otherwise, check all other args
+		candidates := []struct {
+			key   string
+			value gs.Value
+		}{}
+
+		// Add positional arg first (if it exists)
+		if posValue, ok := args[""]; ok {
+			candidates = append(candidates, struct {
+				key   string
+				value gs.Value
+			}{"", posValue})
+		}
+
+		// Add all other args
+		for key, value := range args {
+			if key != "" && key != "predicate" && key != "property" && key != "operator" && key != "value" {
+				candidates = append(candidates, struct {
+					key   string
+					value gs.Value
+				}{key, value})
+			}
+		}
+
+		// Try each candidate to see if it resolves to a collection
+		for _, candidate := range candidates {
+			if candidate.value.Kind == gs.ValueString {
+				potentialName := candidate.value.Str
+				log.Printf("🔍 Filter: Trying to resolve '%s' (from key '%s') as collection...", potentialName, candidate.key)
+				if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
+					collectionName = potentialName
+					collection = resolved
+					log.Printf("✅ Filter: Found collection '%s' via iteration (key: '%s')", collectionName, candidate.key)
+					break
+				} else {
+					log.Printf("⚠️  Filter: '%s' is not a valid collection: %v", potentialName, err)
+				}
+			}
+		}
+	}
+
+	// Check if we found a collection
+	// If not, try to infer from predicate (e.g., "clip.length<1.5" suggests collection is "clips")
+	if collection == nil {
+		log.Printf("🔍 Filter: Could not find collection directly, trying to infer from predicate...")
+		// Check the positional argument - it might be the predicate, not the collection
+		if posValue, ok := args[""]; ok && posValue.Kind == gs.ValueString {
+			predicateStr := posValue.Str
+			log.Printf("🔍 Filter: Positional arg looks like predicate: '%s'", predicateStr)
+			// Try to extract collection name from predicate (e.g., "clip.length<1.5" -> "clips")
+			// Pattern: collection_item.property operator value
+			// We look for patterns like "track.name", "clip.length", etc.
+			if strings.Contains(predicateStr, ".") {
+				parts := strings.SplitN(predicateStr, ".", 2)
+				if len(parts) == 2 {
+					itemName := strings.TrimSpace(parts[0])
+					// Try to pluralize common item names
+					var potentialCollection string
+					switch itemName {
+					case "track":
+						potentialCollection = "tracks"
+					case "clip":
+						potentialCollection = "clips"
+					case "fx":
+						potentialCollection = "fx_chain"
+					default:
+						// Try simple pluralization (add 's')
+						potentialCollection = itemName + "s"
+					}
+					log.Printf("🔍 Filter: Inferred collection '%s' from predicate item '%s'", potentialCollection, itemName)
+					if resolved, err := p.resolveCollection(potentialCollection); err == nil && resolved != nil {
+						collectionName = potentialCollection
+						collection = resolved
+						log.Printf("✅ Filter: Found collection '%s' via predicate inference", collectionName)
+					}
+				}
+			}
+		}
+	}
+
+	// Final check
+	if collection == nil {
+		log.Printf("❌ Filter: Could not find collection argument. Available data keys: %v", getDataKeys(p.data))
+		return fmt.Errorf("filter requires a collection argument (got args: %v, available collections: %v)", args, getDataKeys(p.data))
 	}
 
 	// Derive iteration variable name
@@ -711,16 +1126,18 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 	// Filter the collection
 	// For now, we'll use a simple predicate evaluation
 	// In a full implementation, you'd evaluate expressions here
-	filtered := make([]interface{}, 0)
+	filtered := make([]any, 0)
 
 	for _, item := range collection {
 		// Set iteration context
-		p.setIterationContext(map[string]interface{}{
+		p.setIterationContext(map[string]any{
 			iterVar: item,
 		})
 
 		// Evaluate predicate - support property_access comparison_op value format
 		// Example: filter(tracks, track.name == "foo")
+		// The grammar enforces proper predicates (property_access comparison_op value),
+		// so we don't need to handle standalone boolean literals like "true" or "false"
 		predicateMatched := false
 
 		// Try to find predicate components from parsed args
@@ -739,7 +1156,11 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 						propName = propValue.Str
 					}
 					predicateMatched = evaluateSimplePredicate(item, propName, opValue.Str, compareValue)
+				} else {
+					log.Printf("⚠️  Filter: Missing 'value' in predicate args: %+v", args)
 				}
+			} else {
+				log.Printf("⚠️  Filter: Missing 'operator' in predicate args: %+v", args)
 			}
 		} else if predicateValue, ok := args["predicate"]; ok {
 			// Handle function reference predicate (future extension)
@@ -748,6 +1169,140 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 				// For now, include all items as placeholder
 				predicateMatched = true
 			}
+		} else {
+			// Try to manually parse predicate from args
+			// The parser might have split the predicate across multiple args
+			// Example: track.name=="Nebula Drift" might be parsed as:
+			//   args["track.name"] = "=\"Nebula Drift\""
+			// We need to reconstruct the full predicate
+
+			// First, try to find a complete predicate string
+			for key, value := range args {
+				if value.Kind == gs.ValueString {
+					predStr := strings.TrimSpace(value.Str)
+					log.Printf("🔍 Filter: Checking predicate string '%s' (key: '%s')", predStr, key)
+					// Check if it looks like a complete predicate: "track.name == \"value\"" or "track.name<1.5" or "clip.length<1.5"
+					// Support ==, !=, <, >, <=, >= operators
+					hasDot := strings.Contains(predStr, ".")
+					hasEq := strings.Contains(predStr, "==")
+					hasNe := strings.Contains(predStr, "!=")
+					hasLt := strings.Contains(predStr, "<")
+					hasGt := strings.Contains(predStr, ">")
+					hasIn := strings.Contains(predStr, " in ")
+					log.Printf("🔍 Filter: Predicate check - hasDot=%v, hasEq=%v, hasNe=%v, hasLt=%v, hasGt=%v, hasIn=%v", hasDot, hasEq, hasNe, hasLt, hasGt, hasIn)
+					if hasDot && (hasEq || hasNe || hasLt || hasGt || hasIn) {
+						log.Printf("🔍 Filter: Attempting to parse complete predicate: '%s'", predStr)
+						// Try to parse it manually
+						if matched := p.parseAndEvaluatePredicate(predStr, item, iterVar); matched {
+							log.Printf("✅ Filter: Predicate matched for item: %v", item)
+							predicateMatched = true
+							break
+						} else {
+							log.Printf("❌ Filter: Predicate did not match for item: %v", item)
+						}
+					}
+				}
+			}
+
+			// If no complete predicate found, try to reconstruct from split args
+			// Look for args with keys like "track.name" and values starting with "=" or "!="
+			// Also handle cases where >= or <= are split: key="track.index>" value=0 means "track.index >= 0"
+			if !predicateMatched {
+				for key, value := range args {
+					// Skip the collection argument (empty key)
+					if key == "" {
+						continue
+					}
+
+					// Check if key ends with > or < (means >= or <= was split by parser)
+					var operator string
+					var propertyKey string
+					if strings.HasSuffix(key, ">") {
+						// This is >= split: "track.index>" with value 0 means "track.index >= 0"
+						propertyKey = strings.TrimSuffix(key, ">")
+						operator = ">="
+					} else if strings.HasSuffix(key, "<") {
+						// This is <= split: "track.index<" with value 0 means "track.index <= 0"
+						propertyKey = strings.TrimSuffix(key, "<")
+						operator = "<="
+					} else if value.Kind == gs.ValueString {
+						valueStr := strings.TrimSpace(value.Str)
+						// Check if value starts with comparison operator (e.g., "=\"value\"" or "==\"value\"")
+						if strings.HasPrefix(valueStr, "=") || strings.HasPrefix(valueStr, "!=") {
+							propertyKey = key
+							// Reconstruct predicate: key + value
+							// key is like "track.name", value is like "=\"Nebula Drift\"" or "=true"
+							operator = "=="
+							if strings.HasPrefix(valueStr, "!=") {
+								operator = "!="
+								valueStr = strings.TrimPrefix(valueStr, "!=")
+							} else {
+								valueStr = strings.TrimPrefix(valueStr, "=")
+							}
+
+							// Check if value is a boolean (true/false) - don't wrap in quotes
+							valueStr = strings.TrimSpace(valueStr)
+							isBoolean := valueStr == "true" || valueStr == "false"
+
+							// Remove quotes if present (for string values)
+							if !isBoolean {
+								valueStr = strings.Trim(valueStr, "\"")
+							}
+
+							// Reconstruct predicate
+							var reconstructedPred string
+							if isBoolean {
+								// For booleans: "track.muted == true" (no quotes)
+								reconstructedPred = fmt.Sprintf("%s %s %s", propertyKey, operator, valueStr)
+							} else {
+								// For strings: "track.name == \"Nebula Drift\"" (with quotes)
+								reconstructedPred = fmt.Sprintf("%s %s \"%s\"", propertyKey, operator, valueStr)
+							}
+							log.Printf("🔍 Filter: Reconstructed predicate from split args: '%s'", reconstructedPred)
+
+							// Parse and evaluate
+							if matched := p.parseAndEvaluatePredicate(reconstructedPred, item, iterVar); matched {
+								log.Printf("✅ Filter: Reconstructed predicate matched for item: %v", item)
+								predicateMatched = true
+								break
+							} else {
+								// This is expected - predicate didn't match this item, continue checking
+								log.Printf("🔍 Filter: Predicate did not match for item (this is normal): %v", item)
+							}
+							continue
+						}
+					}
+
+					// Handle >= and <= cases where key ends with > or < and value is a number
+					if operator != "" && propertyKey != "" {
+						var valueStr string
+						if value.Kind == gs.ValueNumber {
+							valueStr = fmt.Sprintf("%.0f", value.Num)
+						} else if value.Kind == gs.ValueString {
+							valueStr = strings.TrimSpace(value.Str)
+						} else {
+							continue
+						}
+
+						reconstructedPred := fmt.Sprintf("%s %s %s", propertyKey, operator, valueStr)
+						log.Printf("🔍 Filter: Reconstructed predicate from split >=/<= args: '%s' (key='%s', operator='%s', value='%s')", reconstructedPred, key, operator, valueStr)
+
+						// Parse and evaluate
+						if matched := p.parseAndEvaluatePredicate(reconstructedPred, item, iterVar); matched {
+							log.Printf("✅ Filter: Reconstructed predicate matched for item: %v", item)
+							predicateMatched = true
+							break
+						} else {
+							// This is expected - predicate didn't match this item, continue checking
+							log.Printf("🔍 Filter: Predicate did not match for item (this is normal): %v", item)
+						}
+					}
+				}
+			}
+
+			// Note: predicateMatched being false here is expected for items that don't match the predicate
+			// We only log a warning if we couldn't even attempt to parse the predicate
+			// (which would mean we didn't find any predicate-like args at all)
 		}
 
 		if predicateMatched {
@@ -763,11 +1318,19 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 
 	// Also store as "current_filtered" for potential chaining
 	p.data["current_filtered"] = filtered
+	log.Printf("🔍 Filter: Stored filtered collection in current_filtered with %d items", len(filtered))
 
 	// Set the current collection context so chained methods can operate on filtered results
 	p.currentTrackIndex = -1 // Reset, will be set per item in map/for_each
 
-	log.Printf("Filtered %d items to %d", len(collection), len(filtered))
+	log.Printf("✅ Filtered %d items from '%s' to %d matches", len(collection), collectionName, len(filtered))
+	if len(filtered) == 0 {
+		log.Printf("⚠️  WARNING: Filter returned 0 results! Args received: %v", getArgsKeys(args))
+		// Log first item to debug
+		if len(collection) > 0 {
+			log.Printf("   First item in collection: %+v", collection[0])
+		}
+	}
 	return nil
 }
 
@@ -776,7 +1339,7 @@ func (r *ReaperDSL) Map(args gs.Args) error {
 	p := r.parser
 
 	// Get collection
-	var collection []interface{}
+	var collection []any
 	var collectionName string
 
 	if collectionValue, ok := args["collection"]; ok && collectionValue.Kind == gs.ValueString {
@@ -795,10 +1358,10 @@ func (r *ReaperDSL) Map(args gs.Args) error {
 		_ = funcValue.Str // funcName for future use
 		iterVar := p.getIterVarFromCollection(collectionName)
 
-		mapped := make([]interface{}, 0, len(collection))
+		mapped := make([]any, 0, len(collection))
 
 		for _, item := range collection {
-			p.setIterationContext(map[string]interface{}{
+			p.setIterationContext(map[string]any{
 				iterVar: item,
 			})
 
@@ -819,6 +1382,377 @@ func (r *ReaperDSL) Map(args gs.Args) error {
 	return fmt.Errorf("map requires a function argument")
 }
 
+// ForEach applies a function or method to each item in a collection (side effects).
+// Grammar: for_each(collection, @function) or for_each(collection, item.method())
+func (r *ReaperDSL) ForEach(args gs.Args) error {
+	p := r.parser
+
+	// Get collection - similar to Filter and Map
+	var collection []any
+	var collectionName string
+
+	// Try to get collection from various argument positions
+	// Note: for_each(tracks, track.method()) has two positional args, both with Name=""
+	// The second one overwrites the first in the map, so we need to check both
+	if collectionValue, ok := args["collection"]; ok && collectionValue.Kind == gs.ValueString {
+		collectionName = collectionValue.Str
+		var err error
+		collection, err = p.resolveCollection(collectionName)
+		if err != nil {
+			return fmt.Errorf("failed to resolve collection: %w", err)
+		}
+	} else {
+		// Check positional argument (Name="")
+		// For for_each(tracks, track.method()), the second arg overwrites the first
+		// So args[""] will be the method call, not the collection name
+		// We need to find the collection by checking which string value is a valid collection name
+		for _, value := range args {
+			if value.Kind == gs.ValueString {
+				potentialName := value.Str
+				// Skip if it looks like a method call (contains "." and "(")
+				if strings.Contains(potentialName, ".") && strings.Contains(potentialName, "(") {
+					continue // This is the method call, not the collection
+				}
+				// Try to resolve as collection
+				if resolved, err := p.resolveCollection(potentialName); err == nil && resolved != nil {
+					collectionName = potentialName
+					collection = resolved
+					break
+				}
+			}
+		}
+	}
+
+	if collection == nil {
+		return fmt.Errorf("for_each requires a collection argument (got args: %v, available collections: %v)", args, getDataKeys(p.data))
+	}
+
+	// Derive iteration variable name
+	iterVar := p.getIterVarFromCollection(collectionName)
+
+	// Get the function/method to execute
+	var methodCallStr string
+	var funcRef string
+
+	// Log all arguments for debugging
+	log.Printf("🔄 ForEach: Received args: %v", getArgsKeys(args))
+	for key, value := range args {
+		log.Printf("  ForEach arg[%s]: Kind=%s, Str=%s", key, value.Kind, value.Str)
+	}
+
+	// Check for function reference (@func_name)
+	if funcValue, ok := args["func"]; ok && funcValue.Kind == gs.ValueFunction {
+		funcRef = funcValue.Str
+		log.Printf("🔄 ForEach: Found function reference: @%s", funcRef)
+		// TODO: Implement function registry and execution
+		// For now, function references are not yet supported
+		return fmt.Errorf("function references (@%s) are not yet implemented in for_each", funcRef)
+	}
+
+	// Check for method call string (e.g., "track.add_fx(fxname=\"ReaEQ\")")
+	// The parser may split method calls on "=", so we need to reconstruct them
+	// Look for args that start with a method call pattern (contains "." and "(")
+	var methodCallParts []string
+	var methodCallValue string
+
+	for key, value := range args {
+		if value.Kind == gs.ValueString {
+			// Check if this looks like the start of a method call (contains "." and "(")
+			if strings.Contains(key, ".") && strings.Contains(key, "(") {
+				// This is a split method call - the key is the method part, value is the parameter value
+				methodCallParts = append(methodCallParts, key)
+				methodCallValue = value.Str
+				log.Printf("🔄 ForEach: Found split method call - key='%s', value='%s'", key, methodCallValue)
+			} else if key != "" && key != "collection" && key != "func" {
+				// Check if it's a complete method call string
+				if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") && strings.Contains(value.Str, ")") {
+					methodCallStr = value.Str
+					log.Printf("🔄 ForEach: Found complete method call in arg[%s]: %s", key, methodCallStr)
+					break
+				}
+			}
+		}
+	}
+
+	// If we found a split method call, reconstruct it
+	if methodCallStr == "" && len(methodCallParts) > 0 {
+		// Reconstruct: "track.add_fx(fxname" + "=" + "\"ReaEQ\")"
+		methodCallKey := methodCallParts[0]
+		// Reconstruct the full method call
+		// The key is like "track.add_fx(fxname" and value is like "\"ReaEQ\""
+		methodCallStr = methodCallKey + "=" + methodCallValue + ")"
+		log.Printf("🔄 ForEach: Reconstructed method call: %s", methodCallStr)
+	}
+
+	// Try positional argument as fallback
+	if methodCallStr == "" {
+		if value, ok := args[""]; ok && value.Kind == gs.ValueString {
+			// Check if it looks like a method call (contains "." and "(")
+			if strings.Contains(value.Str, ".") && strings.Contains(value.Str, "(") {
+				methodCallStr = value.Str
+				log.Printf("🔄 ForEach: Found method call in positional arg: %s", methodCallStr)
+			}
+		}
+	}
+
+	log.Printf("🔄 ForEach: Iterating over %d items in collection '%s'", len(collection), collectionName)
+	log.Printf("🔄 ForEach: methodCallStr='%s', collectionName='%s'", methodCallStr, collectionName)
+
+	// If we have a method call, parse and execute it for each item
+	if methodCallStr != "" {
+		// Parse method call: track.add_fx(fxname="ReaEQ")
+		// Extract method name and parameters
+		methodName, methodArgs, err := p.parseMethodCallString(methodCallStr)
+		if err != nil {
+			return fmt.Errorf("failed to parse method call '%s': %w", methodCallStr, err)
+		}
+
+		log.Printf("  ForEach: Executing method '%s' on each item", methodName)
+
+		// Execute method for each item
+		for i, item := range collection {
+			// Set iteration context
+			p.setIterationContext(map[string]any{
+				iterVar: item,
+			})
+
+			// If item is a track, set currentTrackIndex for method execution
+			if trackMap, ok := item.(map[string]any); ok {
+				if index, ok := trackMap["index"].(int); ok {
+					p.currentTrackIndex = index
+				} else if indexFloat, ok := trackMap["index"].(float64); ok {
+					p.currentTrackIndex = int(indexFloat)
+				}
+			}
+
+			// Execute the method
+			if err := p.executeMethodOnItem(methodName, methodArgs); err != nil {
+				log.Printf("  ⚠️  ForEach[%d]: Error executing method '%s': %v", i, methodName, err)
+				// Continue with next item instead of failing completely
+			}
+
+			p.clearIterationContext()
+		}
+
+		log.Printf("✅ ForEach: Processed %d items from '%s' with method '%s'", len(collection), collectionName, methodName)
+		return nil
+	}
+
+	// If no function or method specified, just iterate and set context (for chaining)
+	log.Printf("⚠️  ForEach: No function or method specified, only setting iteration context")
+	for i, item := range collection {
+		p.setIterationContext(map[string]any{
+			iterVar: item,
+		})
+
+		if trackMap, ok := item.(map[string]any); ok {
+			if index, ok := trackMap["index"].(int); ok {
+				p.currentTrackIndex = index
+			} else if indexFloat, ok := trackMap["index"].(float64); ok {
+				p.currentTrackIndex = int(indexFloat)
+			}
+		}
+
+		log.Printf("  ForEach[%d]: Processing item (index=%d)", i, p.currentTrackIndex)
+		p.clearIterationContext()
+	}
+
+	log.Printf("✅ ForEach: Processed %d items from '%s'", len(collection), collectionName)
+	return nil
+}
+
+// parseMethodCallString parses a method call string like "track.add_fx(fxname=\"ReaEQ\")"
+// Returns the method name (e.g., "add_fx") and parsed arguments
+func (p *FunctionalDSLParser) parseMethodCallString(methodCallStr string) (string, gs.Args, error) {
+	methodCallStr = strings.TrimSpace(methodCallStr)
+
+	// Find the dot that separates object from method
+	dotIndex := strings.Index(methodCallStr, ".")
+	if dotIndex < 0 {
+		return "", nil, fmt.Errorf("method call must contain a dot (e.g., track.add_fx(...))")
+	}
+
+	// Extract method name and parameters
+	methodPart := methodCallStr[dotIndex+1:]
+
+	// Find opening parenthesis
+	parenIndex := strings.Index(methodPart, "(")
+	if parenIndex < 0 {
+		return "", nil, fmt.Errorf("method call must contain parentheses")
+	}
+
+	methodName := methodPart[:parenIndex]
+	methodName = strings.TrimSpace(methodName)
+
+	// Extract parameters string
+	paramsStr := methodPart[parenIndex+1:]
+	// Find matching closing parenthesis
+	depth := 1
+	closeIndex := -1
+	for i, char := range paramsStr {
+		if char == '(' {
+			depth++
+		} else if char == ')' {
+			depth--
+			if depth == 0 {
+				closeIndex = i
+				break
+			}
+		}
+	}
+
+	if closeIndex < 0 {
+		return "", nil, fmt.Errorf("unclosed parentheses in method call")
+	}
+
+	paramsStr = paramsStr[:closeIndex]
+	paramsStr = strings.TrimSpace(paramsStr)
+
+	// Parse parameters into gs.Args
+	args := make(gs.Args)
+	if paramsStr != "" {
+		// Simple parameter parsing: key="value" or key=value
+		parts := strings.Split(paramsStr, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+
+			// Split by = to get key and value
+			eqIndex := strings.Index(part, "=")
+			if eqIndex < 0 {
+				continue
+			}
+
+			key := strings.TrimSpace(part[:eqIndex])
+			valueStr := strings.TrimSpace(part[eqIndex+1:])
+
+			// Parse value
+			var value gs.Value
+			if strings.HasPrefix(valueStr, "\"") && strings.HasSuffix(valueStr, "\"") {
+				// String value
+				value = gs.Value{
+					Kind: gs.ValueString,
+					Str:  valueStr[1 : len(valueStr)-1], // Remove quotes
+				}
+			} else if valueStr == "true" {
+				value = gs.Value{Kind: gs.ValueBool, Bool: true}
+			} else if valueStr == "false" {
+				value = gs.Value{Kind: gs.ValueBool, Bool: false}
+			} else if num, err := strconv.ParseFloat(valueStr, 64); err == nil {
+				value = gs.Value{Kind: gs.ValueNumber, Num: num}
+			} else {
+				value = gs.Value{Kind: gs.ValueString, Str: valueStr}
+			}
+
+			args[key] = value
+		}
+	}
+
+	return methodName, args, nil
+}
+
+// executeMethodOnItem executes a method on the current item in the iteration context
+func (p *FunctionalDSLParser) executeMethodOnItem(methodName string, methodArgs gs.Args) error {
+	// Convert snake_case to CamelCase for method name
+	methodNameCamel := capitalizeMethodName(methodName)
+
+	// Call the appropriate method on ReaperDSL
+	// We need to use reflection or a switch statement
+	switch methodNameCamel {
+	case "SetTrack":
+		return p.reaperDSL.SetTrack(methodArgs)
+	case "AddFx":
+		return p.reaperDSL.AddFx(methodArgs)
+	case "AddMidi":
+		return p.reaperDSL.AddMidi(methodArgs)
+	case "NewClip":
+		return p.reaperDSL.NewClip(methodArgs)
+	case "Delete":
+		return p.reaperDSL.Delete(methodArgs)
+	case "DeleteClip":
+		return p.reaperDSL.DeleteClip(methodArgs)
+	case "SetClip":
+		return p.reaperDSL.SetClip(methodArgs)
+	case "MoveClip", "SetClipPosition":
+		return p.reaperDSL.MoveClip(methodArgs)
+	default:
+		return fmt.Errorf("unknown method: %s (converted from %s)", methodNameCamel, methodName)
+	}
+}
+
+// colorNameToHex converts common color names to hex values
+func colorNameToHex(colorName string) string {
+	colorMap := map[string]string{
+		"red":        "#ff0000",
+		"green":      "#00ff00",
+		"blue":       "#0000ff",
+		"yellow":     "#ffff00",
+		"orange":     "#ffa500",
+		"purple":     "#800080",
+		"pink":       "#ffc0cb",
+		"cyan":       "#00ffff",
+		"magenta":    "#ff00ff",
+		"lime":       "#00ff00",
+		"maroon":     "#800000",
+		"navy":       "#000080",
+		"olive":      "#808000",
+		"teal":       "#008080",
+		"aqua":       "#00ffff",
+		"silver":     "#c0c0c0",
+		"gray":       "#808080",
+		"grey":       "#808080",
+		"black":      "#000000",
+		"white":      "#ffffff",
+		"brown":      "#a52a2a",
+		"violet":     "#ee82ee",
+		"indigo":     "#4b0082",
+		"gold":       "#ffd700",
+		"coral":      "#ff7f50",
+		"salmon":     "#fa8072",
+		"khaki":      "#f0e68c",
+		"tan":        "#d2b48c",
+		"beige":      "#f5f5dc",
+		"ivory":      "#fffff0",
+		"lavender":   "#e6e6fa",
+		"plum":       "#dda0dd",
+		"turquoise":  "#40e0d0",
+		"crimson":    "#dc143c",
+		"darkred":    "#8b0000",
+		"darkgreen":  "#006400",
+		"darkblue":   "#00008b",
+		"lightblue":  "#add8e6",
+		"lightgreen": "#90ee90",
+		"lightgray":  "#d3d3d3",
+		"lightgrey":  "#d3d3d3",
+		"darkgray":   "#a9a9a9",
+		"darkgrey":   "#a9a9a9",
+	}
+
+	if hex, ok := colorMap[colorName]; ok {
+		return hex
+	}
+	return ""
+}
+
+// capitalizeMethodName converts snake_case to CamelCase (track -> Track, set_track -> SetTrack)
+func capitalizeMethodName(name string) string {
+	if name == "" {
+		return name
+	}
+
+	parts := strings.Split(name, "_")
+	var result strings.Builder
+	for _, part := range parts {
+		if part != "" {
+			result.WriteString(strings.ToUpper(part[:1]) + strings.ToLower(part[1:]))
+		}
+	}
+
+	return result.String()
+}
+
 // Store stores a value in data storage.
 func (r *ReaperDSL) Store(args gs.Args) error {
 	p := r.parser
@@ -830,8 +1764,8 @@ func (r *ReaperDSL) Store(args gs.Args) error {
 
 	// Get value (would need to handle different types)
 	if valueValue, ok := args["value"]; ok {
-		// Convert Value to interface{}
-		var value interface{}
+		// Convert Value to any
+		var value any
 		switch valueValue.Kind {
 		case gs.ValueString:
 			value = valueValue.Str
@@ -858,12 +1792,12 @@ func (r *ReaperDSL) GetTracks(args gs.Args) error {
 		return nil
 	}
 
-	stateMap, ok := p.state["state"].(map[string]interface{})
+	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		stateMap = p.state
 	}
 
-	if tracks, ok := stateMap["tracks"].([]interface{}); ok {
+	if tracks, ok := stateMap["tracks"].([]any); ok {
 		p.data["tracks"] = tracks
 	}
 
@@ -879,22 +1813,22 @@ func (r *ReaperDSL) GetFXChain(args gs.Args) error {
 		return nil
 	}
 
-	stateMap, ok := p.state["state"].(map[string]interface{})
+	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		stateMap = p.state
 	}
 
-	tracks, ok := stateMap["tracks"].([]interface{})
+	tracks, ok := stateMap["tracks"].([]any)
 	if !ok || trackIndex >= len(tracks) {
 		return nil
 	}
 
-	track, ok := tracks[trackIndex].(map[string]interface{})
+	track, ok := tracks[trackIndex].(map[string]any)
 	if !ok {
 		return nil
 	}
 
-	if fxChain, ok := track["fx"].([]interface{}); ok {
+	if fxChain, ok := track["fx"].([]any); ok {
 		p.data["fx_chain"] = fxChain
 	}
 
@@ -908,18 +1842,18 @@ func (p *FunctionalDSLParser) getSelectedTrackIndex() int {
 		return -1
 	}
 
-	stateMap, ok := p.state["state"].(map[string]interface{})
+	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		stateMap = p.state
 	}
 
-	tracks, ok := stateMap["tracks"].([]interface{})
+	tracks, ok := stateMap["tracks"].([]any)
 	if !ok {
 		return -1
 	}
 
 	for i, track := range tracks {
-		trackMap, ok := track.(map[string]interface{})
+		trackMap, ok := track.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -931,9 +1865,303 @@ func (p *FunctionalDSLParser) getSelectedTrackIndex() int {
 	return -1
 }
 
+// getArgsKeys returns a list of keys in the args map for debugging
+func getArgsKeys(args gs.Args) []string {
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func getDataKeys(data map[string]any) []string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// parseAndEvaluatePredicate parses a predicate string like "track.name == \"value\"" and evaluates it
+func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any, iterVar string) bool {
+	// Remove quotes and whitespace
+	predStr = strings.TrimSpace(predStr)
+	log.Printf("🔍 parseAndEvaluatePredicate: parsing '%s' with iterVar='%s'", predStr, iterVar)
+
+	// Try to match patterns like:
+	// - track.name == "value"
+	// - track.name=="value"
+	// - track.name != "value"
+
+	// Find the operator (check longer operators first to avoid partial matches)
+	var op string
+	var opIndex int
+	if idx := strings.Index(predStr, "<="); idx != -1 {
+		op = "<="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, ">="); idx != -1 {
+		op = ">="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, "=="); idx != -1 {
+		op = "=="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, "!="); idx != -1 {
+		op = "!="
+		opIndex = idx
+	} else if idx := strings.Index(predStr, " in "); idx != -1 {
+		op = "in"
+		opIndex = idx
+	} else if idx := strings.Index(predStr, "<"); idx != -1 {
+		op = "<"
+		opIndex = idx
+	} else if idx := strings.Index(predStr, ">"); idx != -1 {
+		op = ">"
+		opIndex = idx
+	} else {
+		log.Printf("⚠️  parseAndEvaluatePredicate: No operator found in '%s'", predStr)
+		return false
+	}
+	log.Printf("🔍 parseAndEvaluatePredicate: Found operator '%s' at index %d", op, opIndex)
+
+	// Split into left (property) and right (value)
+	left := strings.TrimSpace(predStr[:opIndex])
+	right := strings.TrimSpace(predStr[opIndex+len(op):])
+
+	// For "in" operator, remove the extra spaces around it
+	if op == "in" {
+		right = strings.TrimSpace(right)
+	}
+
+	// Extract property name from "track.name" or "iterVar.name"
+	// The left side should be like "track.name" where "track" is the iterVar
+	propParts := strings.Split(left, ".")
+	if len(propParts) != 2 {
+		return false
+	}
+
+	// Verify the first part matches the iteration variable (or is a common variable name)
+	// For "track.name", we expect iterVar to be "track"
+	// For "clip.length", we expect iterVar to be "clip"
+	// Allow common variable names: track, clip, fx
+	if propParts[0] != iterVar && propParts[0] != "track" && propParts[0] != "clip" && propParts[0] != "fx" {
+		return false
+	}
+
+	propName := propParts[1]
+
+	// Check if right side is a boolean (true/false without quotes)
+	rightTrimmed := strings.TrimSpace(right)
+	isBooleanValue := rightTrimmed == "true" || rightTrimmed == "false"
+
+	// Remove quotes from right side if present (for string values)
+	if !isBooleanValue {
+		right = strings.Trim(right, "\"")
+	}
+
+	// Get the property value from the item
+	itemMap, ok := item.(map[string]any)
+	if !ok {
+		return false
+	}
+
+	itemValue, ok := itemMap[propName]
+	if !ok {
+		return false
+	}
+
+	// Handle boolean comparisons specially
+	if isBooleanValue {
+		expectedBool := rightTrimmed == "true"
+		if itemBool, ok := itemValue.(bool); ok {
+			if op == "==" {
+				return itemBool == expectedBool
+			} else if op == "!=" {
+				return itemBool != expectedBool
+			}
+		}
+		// If item value is not a bool, convert and compare as string
+		itemValueStr := fmt.Sprintf("%t", itemValue)
+		if op == "==" {
+			return itemValueStr == rightTrimmed
+		} else if op == "!=" {
+			return itemValueStr != rightTrimmed
+		}
+		return false
+	}
+
+	// Handle "in" operator: property in [value1, value2, ...]
+	if op == "in" {
+		// Parse the right side as an array: [value1, value2, ...]
+		rightTrimmed := strings.TrimSpace(right)
+		if !strings.HasPrefix(rightTrimmed, "[") || !strings.HasSuffix(rightTrimmed, "]") {
+			return false
+		}
+
+		// Extract array contents
+		arrayContents := strings.TrimSpace(rightTrimmed[1 : len(rightTrimmed)-1])
+		if arrayContents == "" {
+			return false // Empty array
+		}
+
+		// Split by comma (simple parsing, doesn't handle nested arrays or quoted commas)
+		values := strings.Split(arrayContents, ",")
+		collectionValues := make([]any, 0, len(values))
+		for _, valStr := range values {
+			valStr = strings.TrimSpace(valStr)
+			valStr = strings.Trim(valStr, "\"") // Remove quotes
+
+			// Try to parse as number first
+			if num, err := strconv.ParseFloat(valStr, 64); err == nil {
+				collectionValues = append(collectionValues, num)
+			} else if valStr == "true" {
+				collectionValues = append(collectionValues, true)
+			} else if valStr == "false" {
+				collectionValues = append(collectionValues, false)
+			} else {
+				// Treat as string
+				collectionValues = append(collectionValues, valStr)
+			}
+		}
+
+		// Check if itemValue is in the collection
+		for _, collVal := range collectionValues {
+			if compareValuesForIn(itemValue, collVal) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// For numeric comparisons (<, >, <=, >=), we need to compare as numbers
+	// For string comparisons (==, !=), we compare as strings
+	if op == "<" || op == ">" || op == "<=" || op == ">=" {
+		// Numeric comparison
+		var itemNum, rightNum float64
+		var itemOk, rightOk bool
+
+		// Convert item value to number
+		switch v := itemValue.(type) {
+		case float64:
+			itemNum = v
+			itemOk = true
+		case float32:
+			itemNum = float64(v)
+			itemOk = true
+		case int:
+			itemNum = float64(v)
+			itemOk = true
+		case int64:
+			itemNum = float64(v)
+			itemOk = true
+		case int32:
+			itemNum = float64(v)
+			itemOk = true
+		default:
+			// Try to convert via string parsing as fallback
+			if strVal := fmt.Sprintf("%v", itemValue); strVal != "" {
+				if parsed, err := strconv.ParseFloat(strVal, 64); err == nil {
+					itemNum = parsed
+					itemOk = true
+				}
+			}
+		}
+
+		log.Printf("🔍 parseAndEvaluatePredicate: itemValue type=%T, value=%v, converted to num=%v (ok=%v)", itemValue, itemValue, itemNum, itemOk)
+
+		// Parse right side as number
+		rightTrimmed := strings.TrimSpace(right)
+		rightTrimmed = strings.Trim(rightTrimmed, "\"") // Remove quotes if present
+		if parsed, err := strconv.ParseFloat(rightTrimmed, 64); err == nil {
+			rightNum = parsed
+			rightOk = true
+		} else {
+			log.Printf("⚠️  parseAndEvaluatePredicate: Failed to parse right side '%s' as number: %v", rightTrimmed, err)
+		}
+
+		log.Printf("🔍 parseAndEvaluatePredicate: right='%s', parsed to num=%v (ok=%v), comparison: %v %s %v", rightTrimmed, rightNum, rightOk, itemNum, op, rightNum)
+
+		if itemOk && rightOk {
+			var result bool
+			switch op {
+			case "<":
+				result = itemNum < rightNum
+			case ">":
+				result = itemNum > rightNum
+			case "<=":
+				result = itemNum <= rightNum
+			case ">=":
+				result = itemNum >= rightNum
+			}
+			log.Printf("✅ parseAndEvaluatePredicate: Comparison result: %v %s %v = %v", itemNum, op, rightNum, result)
+			return result
+		}
+		log.Printf("⚠️  parseAndEvaluatePredicate: Cannot compare - itemOk=%v, rightOk=%v", itemOk, rightOk)
+		return false
+	}
+
+	// String comparison (==, !=)
+	var itemValueStr string
+	switch v := itemValue.(type) {
+	case string:
+		itemValueStr = v
+	case float64:
+		itemValueStr = fmt.Sprintf("%g", v)
+	case bool:
+		itemValueStr = fmt.Sprintf("%t", v)
+	default:
+		itemValueStr = fmt.Sprintf("%v", v)
+	}
+
+	// Evaluate comparison
+	if op == "==" {
+		return itemValueStr == right
+	} else if op == "!=" {
+		return itemValueStr != right
+	}
+	return false
+}
+
+// compareValuesForIn compares two values for equality in the context of "in" operator, handling different types
+func compareValuesForIn(a, b any) bool {
+	// Handle numeric comparison
+	aNum, aIsNum := getNumericValue(a)
+	bNum, bIsNum := getNumericValue(b)
+	if aIsNum && bIsNum {
+		return aNum == bNum
+	}
+
+	// Handle boolean comparison
+	if aBool, ok := a.(bool); ok {
+		if bBool, ok := b.(bool); ok {
+			return aBool == bBool
+		}
+	}
+
+	// Handle string comparison
+	aStr := fmt.Sprintf("%v", a)
+	bStr := fmt.Sprintf("%v", b)
+	return aStr == bStr
+}
+
+// getNumericValue extracts a numeric value from an any, returning the float64 and true if successful
+func getNumericValue(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	default:
+		return 0, false
+	}
+}
+
 // evaluateSimplePredicate evaluates a simple property-based predicate.
-func evaluateSimplePredicate(item interface{}, propName, operator string, compareValue gs.Value) bool {
-	itemMap, ok := item.(map[string]interface{})
+func evaluateSimplePredicate(item any, propName, operator string, compareValue gs.Value) bool {
+	itemMap, ok := item.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -962,7 +2190,7 @@ func evaluateSimplePredicate(item interface{}, propName, operator string, compar
 }
 
 // compareValues compares two values and returns -1, 0, or 1.
-func compareValues(a interface{}, b gs.Value) int {
+func compareValues(a any, b gs.Value) int {
 	switch b.Kind {
 	case gs.ValueString:
 		aStr, ok := a.(string)
@@ -1012,11 +2240,12 @@ func GetMagdaDSLGrammarForFunctional() string {
 	// Start with base grammar
 	baseGrammar := `
 // MAGDA DSL Grammar - Functional scripting for REAPER operations
-// Syntax: track().new_clip().add_midi() with method chaining
+// Syntax: track().new_clip() with method chaining
+// NOTE: add_midi is NOT available - the arranger agent handles MIDI note generation
 
 start: statement+
 
-statement: track_call chain?
+statement: track_call chain*
          | functional_call
 
 track_call: "track" "(" track_params? ")"
@@ -1028,7 +2257,7 @@ track_param: "instrument" "=" STRING
            | "id" "=" NUMBER
            | "selected" "=" BOOLEAN
 
-chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain | selected_chain
+chain: clip_chain | fx_chain | track_properties_chain | delete_chain | delete_clip_chain | clip_properties_chain | clip_move_chain
 
 clip_chain: ".new_clip" "(" clip_params? ")"
 clip_params: clip_param ("," SP clip_param)*
@@ -1038,31 +2267,63 @@ clip_param: "bar" "=" NUMBER
           | "length" "=" NUMBER
           | "position" "=" NUMBER
 
-midi_chain: ".add_midi" "(" midi_params? ")"
-midi_params: "notes" "=" array
-
 fx_chain: ".add_fx" "(" fx_params? ")"
 fx_params: "fxname" "=" STRING
          | "instrument" "=" STRING
 
-volume_chain: ".set_volume" "(" "volume_db" "=" NUMBER ")"
-pan_chain: ".set_pan" "(" "pan" "=" NUMBER ")"
-mute_chain: ".set_mute" "(" "mute" "=" BOOLEAN ")"
-solo_chain: ".set_solo" "(" "solo" "=" BOOLEAN ")"
-name_chain: ".set_name" "(" "name" "=" STRING ")"
-selected_chain: ".set_selected" "(" "selected" "=" BOOLEAN ")"
+// Unified track properties method
+track_properties_chain: ".set_track" "(" track_properties_params? ")"
+track_properties_params: track_property_param ("," SP track_property_param)*
+track_property_param: "name" "=" STRING
+                    | "volume_db" "=" NUMBER
+                    | "pan" "=" NUMBER
+                    | "mute" "=" BOOLEAN
+                    | "solo" "=" BOOLEAN
+                    | "selected" "=" BOOLEAN
+
+// Deletion operations
+delete_chain: ".delete" "(" ")"
+delete_clip_chain: ".delete_clip" "(" delete_clip_params? ")"
+delete_clip_params: delete_clip_param ("," SP delete_clip_param)*
+delete_clip_param: "clip" "=" NUMBER
+                 | "position" "=" NUMBER
+                 | "bar" "=" NUMBER
+
+// Clip editing operations - unified set_clip method
+clip_properties_chain: ".set_clip" "(" clip_properties_params? ")"
+clip_properties_params: clip_property_param ("," SP clip_property_param)*
+clip_property_param: "name" "=" STRING
+                   | "color" "=" (STRING | NUMBER)
+                   | "selected" "=" BOOLEAN
+                   | "length" "=" NUMBER
+                   | "clip" "=" NUMBER
+                   | "position" "=" NUMBER
+                   | "bar" "=" NUMBER
+clip_move_chain: ".move_clip" "(" move_clip_params? ")"
+                | ".set_clip_position" "(" move_clip_params? ")"
+move_clip_params: move_clip_param ("," SP move_clip_param)*
+move_clip_param: "position" "=" NUMBER
+               | "bar" "=" NUMBER
+               | "clip" "=" NUMBER
+               | "old_position" "=" NUMBER
 
 // Functional operations
-functional_call: filter_call chain?
+functional_call: filter_call chain+
+                 | filter_call chain? ";" filter_call chain?
                  | map_call
                  | for_each_call
 
 filter_call: "filter" "(" IDENTIFIER "," filter_predicate ")"
-filter_predicate: property_access comparison_op value
-                | property_access comparison_op BOOLEAN
+filter_predicate: property_access comparison_op (STRING | NUMBER | BOOLEAN)
                 | property_access "==" STRING
                 | property_access "!=" STRING
                 | property_access "==" BOOLEAN
+                | property_access "!=" BOOLEAN
+                | property_access "<" NUMBER
+                | property_access ">" NUMBER
+                | property_access "<=" NUMBER
+                | property_access ">=" NUMBER
+                | property_access " in " array
 
 map_call: "map" "(" IDENTIFIER "," function_ref ")"
           | "map" "(" IDENTIFIER "," method_call ")"

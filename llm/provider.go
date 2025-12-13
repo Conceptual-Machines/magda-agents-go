@@ -13,9 +13,6 @@ type Provider interface {
 	// The provider MUST enforce the OutputSchema to ensure valid JSON responses
 	Generate(ctx context.Context, request *GenerationRequest) (*GenerationResponse, error)
 
-	// GenerateStream creates a musical composition with streaming updates and structured output
-	GenerateStream(ctx context.Context, request *GenerationRequest, callback StreamCallback) (*GenerationResponse, error)
-
 	// Name returns the provider name (e.g., "openai", "gemini")
 	Name() string
 }
