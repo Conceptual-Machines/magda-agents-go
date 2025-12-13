@@ -117,7 +117,13 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 		}
 	}
 
-	// Extract length (default: 4 beats = 1 bar)
+	// Extract note_duration (duration of each note, e.g., 0.25 for 16th notes)
+	noteDuration := 0.0
+	if noteDurValue, ok := args["note_duration"]; ok && noteDurValue.Kind == gs.ValueNumber {
+		noteDuration = noteDurValue.Num
+	}
+
+	// Extract length (default: 4 beats = 1 bar, or calculated from note_duration)
 	length := 4.0
 	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
 		length = lengthValue.Num
@@ -137,6 +143,9 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 			}
 		}
 	}
+	
+	// If note_duration is set, it overrides the length calculation
+	// note_duration specifies how long each note should be
 
 	// Extract repeat (default: 1)
 	repeat := 1
@@ -176,6 +185,9 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 		"velocity":    velocity,
 		"octave":      octave,
 		"direction":   direction,
+	}
+	if noteDuration > 0 {
+		action["note_duration"] = noteDuration
 	}
 	if pattern != "" {
 		action["pattern"] = pattern

@@ -38,6 +38,7 @@ arpeggio_named_param: "symbol" "=" chord_symbol
                     | "chord" "=" chord_symbol
                     | "length" "=" NUMBER
                     | "duration" "=" NUMBER  // alias for length
+                    | "note_duration" "=" NUMBER  // duration of each note (e.g., 0.25 for 16th)
                     | "repeat" "=" NUMBER
                     | "repetitions" "=" NUMBER  // alias for repeat
                     | "velocity" "=" NUMBER

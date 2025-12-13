@@ -101,6 +101,9 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
 	direction, _ := getString(action, "direction", "up")
+	
+	// Check for explicit note_duration (e.g., 0.25 for 16th notes)
+	explicitNoteDuration, hasNoteDuration := getFloat(action, "note_duration", 0)
 
 	// Get chord notes
 	chordNotes, err := ChordToMIDI(chordSymbol, octave)
@@ -118,9 +121,17 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 		chordNotes = append(up, down...)
 	}
 
-	// Calculate note duration (divide length by number of notes)
+	// Calculate note duration
 	noteCount := len(chordNotes)
-	noteDuration := length / float64(noteCount)
+	var noteDuration float64
+	if hasNoteDuration && explicitNoteDuration > 0 {
+		// Use explicit note duration (e.g., 0.25 for 16th notes)
+		noteDuration = explicitNoteDuration
+		log.Printf("🎵 Using explicit note_duration: %.4f beats", noteDuration)
+	} else {
+		// Divide length by number of notes
+		noteDuration = length / float64(noteCount)
+	}
 
 	var noteEvents []models.NoteEvent
 	currentBeat := startBeat

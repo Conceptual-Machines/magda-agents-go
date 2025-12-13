@@ -129,13 +129,11 @@ func (a *ArrangerAgent) GenerateActions(
 			"- arpeggio() = SEQUENTIAL notes ONLY, played ONE AFTER ANOTHER. " +
 			"- chord() = SIMULTANEOUS notes, all at same time. " +
 			"- NEVER generate chord() when user asks for arpeggio! " +
-			"- NEVER generate both chord() AND arpeggio() for same request! " +
-			"**NOTE DURATION VALUES (in beats)**: " +
-			"- 16th note = 0.25 beats, 8th note = 0.5 beats, quarter = 1 beat, half = 2 beats, whole = 4 beats. " +
-			"- For '16th note arpeggio': use length=0.25 per note. A 3-note triad with 16th notes repeating 4x = length=3 (12 notes × 0.25 = 3 beats total). " +
-			"- For '8th note arpeggio': use length=1.5 (3 notes × 0.5 = 1.5 beats). " +
-			"**TIMING IS RELATIVE**: Only specify total length and repetitions. " +
-			"Example: arpeggio(\"Em\", length=3, repeat=4) for 16th note arpeggio repeated 4 times. " +
+			"**NOTE DURATION - USE note_duration PARAMETER**: " +
+			"- 16th note = note_duration=0.25, 8th note = note_duration=0.5, quarter = note_duration=1 " +
+			"- For '16th note arpeggio': arpeggio(\"Em\", note_duration=0.25, repeat=4) " +
+			"- For '8th note arpeggio': arpeggio(\"Em\", note_duration=0.5, repeat=4) " +
+			"- The repeat parameter controls how many times the pattern plays. " +
 			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=16) - 4 beats per chord. " +
 			"**CRITICAL**: Always use chord symbols NOT discrete MIDI notes. " +
 			"**YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
