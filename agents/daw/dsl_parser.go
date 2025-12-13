@@ -18,7 +18,7 @@ const (
 
 // DSLParser parses MAGDA DSL code and translates it to REAPER API actions
 type DSLParser struct {
-	trackCounter int                    // Track index counter for implicit track references
+	trackCounter int            // Track index counter for implicit track references
 	state        map[string]any // Current REAPER state for track resolution
 }
 

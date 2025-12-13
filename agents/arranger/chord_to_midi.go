@@ -97,7 +97,7 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 	}
 
 	length, _ := getFloat(action, "length", 4.0) // Default: 1 bar (4 beats)
-	repeat, _ := getInt(action, "repeat", 0)      // 0 means auto-calculate to fill the bar
+	repeat, _ := getInt(action, "repeat", 0)     // 0 means auto-calculate to fill the bar
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
 	direction, _ := getString(action, "direction", "up")
@@ -142,7 +142,7 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 		if actualRepeat < 1 {
 			actualRepeat = 1
 		}
-		log.Printf("🎵 Auto-calculated repeat=%d to fill %.1f beats with %d notes at %.2f beats each", 
+		log.Printf("🎵 Auto-calculated repeat=%d to fill %.1f beats with %d notes at %.2f beats each",
 			actualRepeat, length, noteCount, noteDuration)
 	}
 
@@ -217,7 +217,7 @@ func convertChordToNoteEvents(action map[string]any, startBeat float64) ([]model
 // convertProgressionToNoteEvents converts a progression action to NoteEvents
 func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([]models.NoteEvent, error) {
 	log.Printf("🎵 convertProgressionToNoteEvents: action=%+v", action)
-	
+
 	chords, ok := action["chords"].([]string)
 	if !ok {
 		log.Printf("🎵 chords not []string, trying []interface{}")
@@ -453,7 +453,7 @@ func noteToMIDI(note string, octave int) int {
 		"G#": 8, "Ab": 8,
 		"A":  9,
 		"A#": 10, "Bb": 10,
-		"B":  11,
+		"B": 11,
 	}
 
 	offset, ok := noteMap[note]
@@ -509,4 +509,3 @@ func reverseSlice(s []int) []int {
 	}
 	return result
 }
-

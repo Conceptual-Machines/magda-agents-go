@@ -144,4 +144,3 @@ func TestFunctionalDSLParser_ChainedActionsUseCorrectTrackIndex(t *testing.T) {
 		t.Errorf("Expected clip to reference track 1, got %v", createClip["track"])
 	}
 }
-

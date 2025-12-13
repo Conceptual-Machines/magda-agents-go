@@ -109,17 +109,17 @@ func (p *FunctionalDSLParser) getExistingTrackCount() int {
 	if p.state == nil {
 		return 0
 	}
-	
+
 	// Check for tracks in state.state.tracks or state.tracks
 	stateMap, ok := p.state["state"].(map[string]any)
 	if !ok {
 		stateMap = p.state
 	}
-	
+
 	if tracks, ok := stateMap["tracks"].([]any); ok {
 		return len(tracks)
 	}
-	
+
 	return 0
 }
 
@@ -132,11 +132,11 @@ func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]any, error)
 	// Reset actions for new parse
 	p.actions = make([]map[string]any, 0)
 	p.currentTrackIndex = -1
-	
+
 	// Initialize trackCounter based on existing tracks in state
 	// This ensures new tracks are created at the correct index
 	p.trackCounter = p.getExistingTrackCount()
-	
+
 	p.clearIterationContext()
 
 	// Execute DSL code using Grammar School Engine
@@ -328,7 +328,7 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 		if filteredSlice, ok := filtered.([]any); ok && len(filteredSlice) > 0 {
 			log.Printf("🔍 AddFx: Found filtered collection (hasFiltered=true)")
 			log.Printf("🔍 AddFx: Filtered collection has %d items", len(filteredSlice))
-			
+
 			// Determine action type
 			var actionType string
 			var fxname string
@@ -342,7 +342,7 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 			} else {
 				return fmt.Errorf("FX call must specify fxname or instrument")
 			}
-			
+
 			// Apply to all filtered tracks
 			for _, item := range filteredSlice {
 				trackMap, ok := item.(map[string]any)
@@ -350,19 +350,19 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 					log.Printf("⚠️  AddFx: Could not convert filtered item to map: %+v", item)
 					continue
 				}
-				
+
 				trackIndex := -1
 				if idx, ok := trackMap["index"].(int); ok {
 					trackIndex = idx
 				} else if idxFloat, ok := trackMap["index"].(float64); ok {
 					trackIndex = int(idxFloat)
 				}
-				
+
 				if trackIndex < 0 {
 					log.Printf("⚠️  AddFx: Could not extract track index from %+v", trackMap)
 					continue
 				}
-				
+
 				action := map[string]any{
 					"action": actionType,
 					"track":  trackIndex,
@@ -404,40 +404,40 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 // If there's a filtered collection, applies to all tracks; otherwise uses currentTrackIndex.
 func (r *ReaperDSL) SetTrack(args gs.Args) error {
 	p := r.parser
-	
+
 	// Build action with any provided properties
 	actionProps := make(map[string]any)
-	
+
 	// Handle name
 	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
 		actionProps["name"] = nameValue.Str
 	}
-	
+
 	// Handle volume_db
 	if volumeValue, ok := args["volume_db"]; ok && volumeValue.Kind == gs.ValueNumber {
 		actionProps["volume_db"] = volumeValue.Num
 	}
-	
+
 	// Handle pan
 	if panValue, ok := args["pan"]; ok && panValue.Kind == gs.ValueNumber {
 		actionProps["pan"] = panValue.Num
 	}
-	
+
 	// Handle mute
 	if muteValue, ok := args["mute"]; ok && muteValue.Kind == gs.ValueBool {
 		actionProps["mute"] = muteValue.Bool
 	}
-	
+
 	// Handle solo
 	if soloValue, ok := args["solo"]; ok && soloValue.Kind == gs.ValueBool {
 		actionProps["solo"] = soloValue.Bool
 	}
-	
+
 	// Handle selected
 	if selectedValue, ok := args["selected"]; ok && selectedValue.Kind == gs.ValueBool {
 		actionProps["selected"] = selectedValue.Bool
 	}
-	
+
 	// Handle color (similar to SetClip)
 	if colorValue, ok := args["color"]; ok {
 		var color string
@@ -460,7 +460,7 @@ func (r *ReaperDSL) SetTrack(args gs.Args) error {
 		}
 		actionProps["color"] = color
 	}
-	
+
 	// Must have at least one property
 	if len(actionProps) == 0 {
 		return fmt.Errorf("set_track requires at least one property: name, volume_db, pan, mute, solo, selected, or color")
@@ -487,17 +487,17 @@ func (r *ReaperDSL) SetTrack(args gs.Args) error {
 							continue
 						}
 					}
-					
+
 					action := map[string]any{
 						"action": "set_track",
 						"track":  trackIndex,
 					}
-					
+
 					// Copy all properties
 					for k, v := range actionProps {
 						action[k] = v
 					}
-					
+
 					log.Printf("✅ SetTrack: Adding action for track %d, props=%+v", trackIndex, actionProps)
 					p.actions = append(p.actions, action)
 				}
@@ -516,16 +516,15 @@ func (r *ReaperDSL) SetTrack(args gs.Args) error {
 		"action": "set_track",
 		"track":  p.currentTrackIndex,
 	}
-	
+
 	// Copy all properties
 	for k, v := range actionProps {
 		action[k] = v
 	}
-	
+
 	p.actions = append(p.actions, action)
 	return nil
 }
-
 
 // Delete handles .delete() calls to delete the current track.
 // If there's a filtered collection, applies to all items; otherwise uses currentTrackIndex.
@@ -609,7 +608,7 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 					_, hasLengthField := firstItem["length"]
 					_, hasPositionField := firstItem["position"]
 					isClip := hasTrackField && (hasLengthField || hasPositionField)
-					
+
 					if isClip {
 						// This is a clips collection
 						log.Printf("🔍 DeleteClip: Detected clips collection")
@@ -626,32 +625,32 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 							} else if trackValFloat, ok := clipMap["track"].(float64); ok {
 								trackIndex = int(trackValFloat)
 							}
-							
+
 							// Get clip identifier (prefer position, then index)
 							var clipIndex *int
 							var position *float64
-							
+
 							if idx, ok := clipMap["index"].(int); ok {
 								clipIndex = &idx
 							} else if idxFloat, ok := clipMap["index"].(float64); ok {
 								idxInt := int(idxFloat)
 								clipIndex = &idxInt
 							}
-							
+
 							if pos, ok := clipMap["position"].(float64); ok {
 								position = &pos
 							}
-							
+
 							if trackIndex < 0 {
 								log.Printf("⚠️  DeleteClip: Could not extract track index from clip %+v", clipMap)
 								continue
 							}
-							
+
 							action := map[string]any{
 								"action": "delete_clip",
 								"track":  trackIndex,
 							}
-							
+
 							// Add clip identifier (prefer position, then index)
 							if position != nil {
 								action["position"] = *position
@@ -661,7 +660,7 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 								log.Printf("⚠️  DeleteClip: Could not identify clip (no index or position): %+v", clipMap)
 								continue
 							}
-							
+
 							log.Printf("✅ DeleteClip: Adding action for clip on track %d", trackIndex)
 							p.actions = append(p.actions, action)
 						}
@@ -709,15 +708,15 @@ func (r *ReaperDSL) DeleteClip(args gs.Args) error {
 // If there's a filtered collection, applies to all clips; otherwise uses currentTrackIndex.
 func (r *ReaperDSL) SetClip(args gs.Args) error {
 	p := r.parser
-	
+
 	// Build action with any provided properties
 	actionProps := make(map[string]any)
-	
+
 	// Handle name
 	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
 		actionProps["name"] = nameValue.Str
 	}
-	
+
 	// Handle color
 	if colorValue, ok := args["color"]; ok {
 		var color string
@@ -740,17 +739,17 @@ func (r *ReaperDSL) SetClip(args gs.Args) error {
 		}
 		actionProps["color"] = color
 	}
-	
+
 	// Handle selected
 	if selectedValue, ok := args["selected"]; ok && selectedValue.Kind == gs.ValueBool {
 		actionProps["selected"] = selectedValue.Bool
 	}
-	
+
 	// Handle length
 	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
 		actionProps["length"] = lengthValue.Num
 	}
-	
+
 	// Must have at least one property
 	if len(actionProps) == 0 {
 		return fmt.Errorf("set_clip requires at least one property: name, color, selected, or length")
@@ -774,36 +773,36 @@ func (r *ReaperDSL) SetClip(args gs.Args) error {
 					} else if trackValFloat, ok := clipMap["track"].(float64); ok {
 						trackIndex = int(trackValFloat)
 					}
-					
+
 					var clipIndex *int
 					var position *float64
-					
+
 					if idx, ok := clipMap["index"].(int); ok {
 						clipIndex = &idx
 					} else if idxFloat, ok := clipMap["index"].(float64); ok {
 						idxInt := int(idxFloat)
 						clipIndex = &idxInt
 					}
-					
+
 					if pos, ok := clipMap["position"].(float64); ok {
 						position = &pos
 					}
-					
+
 					if trackIndex < 0 {
 						log.Printf("⚠️  SetClip: Could not extract track index from clip %+v", clipMap)
 						continue
 					}
-					
+
 					action := map[string]any{
 						"action": "set_clip",
 						"track":  trackIndex,
 					}
-					
+
 					// Copy all properties
 					for k, v := range actionProps {
 						action[k] = v
 					}
-					
+
 					if position != nil {
 						action["position"] = *position
 					} else if clipIndex != nil {
@@ -812,7 +811,7 @@ func (r *ReaperDSL) SetClip(args gs.Args) error {
 						log.Printf("⚠️  SetClip: Could not identify clip (no index or position): %+v", clipMap)
 						continue
 					}
-					
+
 					log.Printf("✅ SetClip: Adding action for clip on track %d, props=%+v", trackIndex, actionProps)
 					p.actions = append(p.actions, action)
 				}
@@ -831,12 +830,12 @@ func (r *ReaperDSL) SetClip(args gs.Args) error {
 		"action": "set_clip",
 		"track":  p.currentTrackIndex,
 	}
-	
+
 	// Copy all properties
 	for k, v := range actionProps {
 		action[k] = v
 	}
-	
+
 	// Clip identification
 	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
 		action["clip"] = int(clipValue.Num)
@@ -847,17 +846,16 @@ func (r *ReaperDSL) SetClip(args gs.Args) error {
 	} else {
 		return fmt.Errorf("set_clip requires one of: clip (index), position (seconds), or bar (number)")
 	}
-	
+
 	p.actions = append(p.actions, action)
 	return nil
 }
-
 
 // MoveClip handles .move_clip() or .set_clip_position() calls to move a clip.
 // If there's a filtered collection, applies to all clips; otherwise uses currentTrackIndex.
 func (r *ReaperDSL) MoveClip(args gs.Args) error {
 	p := r.parser
-	
+
 	// Get position (required)
 	positionValue, ok := args["position"]
 	if !ok {
@@ -870,7 +868,7 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 			return fmt.Errorf("move_clip requires position (seconds) or bar (number)")
 		}
 	}
-	
+
 	var position float64
 	if positionValue.Kind == gs.ValueNumber {
 		position = positionValue.Num
@@ -896,32 +894,32 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 					} else if trackValFloat, ok := clipMap["track"].(float64); ok {
 						trackIndex = int(trackValFloat)
 					}
-					
+
 					var clipIndex *int
 					var oldPosition *float64
-					
+
 					if idx, ok := clipMap["index"].(int); ok {
 						clipIndex = &idx
 					} else if idxFloat, ok := clipMap["index"].(float64); ok {
 						idxInt := int(idxFloat)
 						clipIndex = &idxInt
 					}
-					
+
 					if pos, ok := clipMap["position"].(float64); ok {
 						oldPosition = &pos
 					}
-					
+
 					if trackIndex < 0 {
 						log.Printf("⚠️  MoveClip: Could not extract track index from clip %+v", clipMap)
 						continue
 					}
-					
+
 					action := map[string]any{
 						"action":   "set_clip_position",
 						"track":    trackIndex,
 						"position": position,
 					}
-					
+
 					// Use old position or index to identify the clip
 					if oldPosition != nil {
 						action["old_position"] = *oldPosition
@@ -931,7 +929,7 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 						log.Printf("⚠️  MoveClip: Could not identify clip (no index or position): %+v", clipMap)
 						continue
 					}
-					
+
 					log.Printf("✅ MoveClip: Adding action for clip on track %d, new position=%v", trackIndex, position)
 					p.actions = append(p.actions, action)
 				}
@@ -951,7 +949,7 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 		"track":    p.currentTrackIndex,
 		"position": position,
 	}
-	
+
 	// Clip identification
 	if clipValue, ok := args["clip"]; ok && clipValue.Kind == gs.ValueNumber {
 		action["clip"] = int(clipValue.Num)
@@ -962,7 +960,7 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 	} else {
 		return fmt.Errorf("move_clip requires one of: clip (index), old_position (seconds), or bar (number)")
 	}
-	
+
 	p.actions = append(p.actions, action)
 	return nil
 }
@@ -1041,7 +1039,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			key   string
 			value gs.Value
 		}{}
-		
+
 		// Add positional arg first (if it exists)
 		if posValue, ok := args[""]; ok {
 			candidates = append(candidates, struct {
@@ -1049,7 +1047,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 				value gs.Value
 			}{"", posValue})
 		}
-		
+
 		// Add all other args
 		for key, value := range args {
 			if key != "" && key != "predicate" && key != "property" && key != "operator" && key != "value" {
@@ -1059,7 +1057,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 				}{key, value})
 			}
 		}
-		
+
 		// Try each candidate to see if it resolves to a collection
 		for _, candidate := range candidates {
 			if candidate.value.Kind == gs.ValueString {
@@ -1115,7 +1113,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 			}
 		}
 	}
-	
+
 	// Final check
 	if collection == nil {
 		log.Printf("❌ Filter: Could not find collection argument. Available data keys: %v", getDataKeys(p.data))
@@ -1215,7 +1213,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 					if key == "" {
 						continue
 					}
-					
+
 					// Check if key ends with > or < (means >= or <= was split by parser)
 					var operator string
 					var propertyKey string
@@ -1274,7 +1272,7 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 							continue
 						}
 					}
-					
+
 					// Handle >= and <= cases where key ends with > or < and value is a number
 					if operator != "" && propertyKey != "" {
 						var valueStr string
@@ -1285,10 +1283,10 @@ func (r *ReaperDSL) Filter(args gs.Args) error {
 						} else {
 							continue
 						}
-						
+
 						reconstructedPred := fmt.Sprintf("%s %s %s", propertyKey, operator, valueStr)
 						log.Printf("🔍 Filter: Reconstructed predicate from split >=/<= args: '%s' (key='%s', operator='%s', value='%s')", reconstructedPred, key, operator, valueStr)
-						
+
 						// Parse and evaluate
 						if matched := p.parseAndEvaluatePredicate(reconstructedPred, item, iterVar); matched {
 							log.Printf("✅ Filter: Reconstructed predicate matched for item: %v", item)
@@ -1456,7 +1454,7 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 	// Look for args that start with a method call pattern (contains "." and "(")
 	var methodCallParts []string
 	var methodCallValue string
-	
+
 	for key, value := range args {
 		if value.Kind == gs.ValueString {
 			// Check if this looks like the start of a method call (contains "." and "(")
@@ -1475,7 +1473,7 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 			}
 		}
 	}
-	
+
 	// If we found a split method call, reconstruct it
 	if methodCallStr == "" && len(methodCallParts) > 0 {
 		// Reconstruct: "track.add_fx(fxname" + "=" + "\"ReaEQ\")"
@@ -1485,7 +1483,7 @@ func (r *ReaperDSL) ForEach(args gs.Args) error {
 		methodCallStr = methodCallKey + "=" + methodCallValue + ")"
 		log.Printf("🔄 ForEach: Reconstructed method call: %s", methodCallStr)
 	}
-	
+
 	// Try positional argument as fallback
 	if methodCallStr == "" {
 		if value, ok := args[""]; ok && value.Kind == gs.ValueString {
@@ -1576,7 +1574,7 @@ func (p *FunctionalDSLParser) parseMethodCallString(methodCallStr string) (strin
 
 	// Extract method name and parameters
 	methodPart := methodCallStr[dotIndex+1:]
-	
+
 	// Find opening parenthesis
 	parenIndex := strings.Index(methodPart, "(")
 	if parenIndex < 0 {
@@ -1687,51 +1685,51 @@ func (p *FunctionalDSLParser) executeMethodOnItem(methodName string, methodArgs 
 // colorNameToHex converts common color names to hex values
 func colorNameToHex(colorName string) string {
 	colorMap := map[string]string{
-		"red":     "#ff0000",
-		"green":   "#00ff00",
-		"blue":    "#0000ff",
-		"yellow":  "#ffff00",
-		"orange":  "#ffa500",
-		"purple":  "#800080",
-		"pink":    "#ffc0cb",
-		"cyan":    "#00ffff",
-		"magenta": "#ff00ff",
-		"lime":    "#00ff00",
-		"maroon":  "#800000",
-		"navy":    "#000080",
-		"olive":   "#808000",
-		"teal":    "#008080",
-		"aqua":    "#00ffff",
-		"silver":  "#c0c0c0",
-		"gray":    "#808080",
-		"grey":    "#808080",
-		"black":   "#000000",
-		"white":   "#ffffff",
-		"brown":   "#a52a2a",
-		"violet":  "#ee82ee",
-		"indigo":  "#4b0082",
-		"gold":    "#ffd700",
-		"coral":   "#ff7f50",
-		"salmon":  "#fa8072",
-		"khaki":   "#f0e68c",
-		"tan":     "#d2b48c",
-		"beige":   "#f5f5dc",
-		"ivory":   "#fffff0",
-		"lavender": "#e6e6fa",
-		"plum":    "#dda0dd",
-		"turquoise": "#40e0d0",
-		"crimson": "#dc143c",
-		"darkred": "#8b0000",
-		"darkgreen": "#006400",
-		"darkblue": "#00008b",
-		"lightblue": "#add8e6",
+		"red":        "#ff0000",
+		"green":      "#00ff00",
+		"blue":       "#0000ff",
+		"yellow":     "#ffff00",
+		"orange":     "#ffa500",
+		"purple":     "#800080",
+		"pink":       "#ffc0cb",
+		"cyan":       "#00ffff",
+		"magenta":    "#ff00ff",
+		"lime":       "#00ff00",
+		"maroon":     "#800000",
+		"navy":       "#000080",
+		"olive":      "#808000",
+		"teal":       "#008080",
+		"aqua":       "#00ffff",
+		"silver":     "#c0c0c0",
+		"gray":       "#808080",
+		"grey":       "#808080",
+		"black":      "#000000",
+		"white":      "#ffffff",
+		"brown":      "#a52a2a",
+		"violet":     "#ee82ee",
+		"indigo":     "#4b0082",
+		"gold":       "#ffd700",
+		"coral":      "#ff7f50",
+		"salmon":     "#fa8072",
+		"khaki":      "#f0e68c",
+		"tan":        "#d2b48c",
+		"beige":      "#f5f5dc",
+		"ivory":      "#fffff0",
+		"lavender":   "#e6e6fa",
+		"plum":       "#dda0dd",
+		"turquoise":  "#40e0d0",
+		"crimson":    "#dc143c",
+		"darkred":    "#8b0000",
+		"darkgreen":  "#006400",
+		"darkblue":   "#00008b",
+		"lightblue":  "#add8e6",
 		"lightgreen": "#90ee90",
-		"lightgray": "#d3d3d3",
-		"lightgrey": "#d3d3d3",
-		"darkgray": "#a9a9a9",
-		"darkgrey": "#a9a9a9",
+		"lightgray":  "#d3d3d3",
+		"lightgrey":  "#d3d3d3",
+		"darkgray":   "#a9a9a9",
+		"darkgrey":   "#a9a9a9",
 	}
-	
+
 	if hex, ok := colorMap[colorName]; ok {
 		return hex
 	}
@@ -1928,7 +1926,7 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any
 	// Split into left (property) and right (value)
 	left := strings.TrimSpace(predStr[:opIndex])
 	right := strings.TrimSpace(predStr[opIndex+len(op):])
-	
+
 	// For "in" operator, remove the extra spaces around it
 	if op == "in" {
 		right = strings.TrimSpace(right)
@@ -1998,20 +1996,20 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any
 		if !strings.HasPrefix(rightTrimmed, "[") || !strings.HasSuffix(rightTrimmed, "]") {
 			return false
 		}
-		
+
 		// Extract array contents
 		arrayContents := strings.TrimSpace(rightTrimmed[1 : len(rightTrimmed)-1])
 		if arrayContents == "" {
 			return false // Empty array
 		}
-		
+
 		// Split by comma (simple parsing, doesn't handle nested arrays or quoted commas)
 		values := strings.Split(arrayContents, ",")
 		collectionValues := make([]any, 0, len(values))
 		for _, valStr := range values {
 			valStr = strings.TrimSpace(valStr)
 			valStr = strings.Trim(valStr, "\"") // Remove quotes
-			
+
 			// Try to parse as number first
 			if num, err := strconv.ParseFloat(valStr, 64); err == nil {
 				collectionValues = append(collectionValues, num)
@@ -2024,7 +2022,7 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any
 				collectionValues = append(collectionValues, valStr)
 			}
 		}
-		
+
 		// Check if itemValue is in the collection
 		for _, collVal := range collectionValues {
 			if compareValuesForIn(itemValue, collVal) {
@@ -2033,14 +2031,14 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any
 		}
 		return false
 	}
-	
+
 	// For numeric comparisons (<, >, <=, >=), we need to compare as numbers
 	// For string comparisons (==, !=), we compare as strings
 	if op == "<" || op == ">" || op == "<=" || op == ">=" {
 		// Numeric comparison
 		var itemNum, rightNum float64
 		var itemOk, rightOk bool
-		
+
 		// Convert item value to number
 		switch v := itemValue.(type) {
 		case float64:
@@ -2067,9 +2065,9 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any
 				}
 			}
 		}
-		
+
 		log.Printf("🔍 parseAndEvaluatePredicate: itemValue type=%T, value=%v, converted to num=%v (ok=%v)", itemValue, itemValue, itemNum, itemOk)
-		
+
 		// Parse right side as number
 		rightTrimmed := strings.TrimSpace(right)
 		rightTrimmed = strings.Trim(rightTrimmed, "\"") // Remove quotes if present
@@ -2079,9 +2077,9 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any
 		} else {
 			log.Printf("⚠️  parseAndEvaluatePredicate: Failed to parse right side '%s' as number: %v", rightTrimmed, err)
 		}
-		
+
 		log.Printf("🔍 parseAndEvaluatePredicate: right='%s', parsed to num=%v (ok=%v), comparison: %v %s %v", rightTrimmed, rightNum, rightOk, itemNum, op, rightNum)
-		
+
 		if itemOk && rightOk {
 			var result bool
 			switch op {
@@ -2100,7 +2098,7 @@ func (p *FunctionalDSLParser) parseAndEvaluatePredicate(predStr string, item any
 		log.Printf("⚠️  parseAndEvaluatePredicate: Cannot compare - itemOk=%v, rightOk=%v", itemOk, rightOk)
 		return false
 	}
-	
+
 	// String comparison (==, !=)
 	var itemValueStr string
 	switch v := itemValue.(type) {
@@ -2131,14 +2129,14 @@ func compareValuesForIn(a, b any) bool {
 	if aIsNum && bIsNum {
 		return aNum == bNum
 	}
-	
+
 	// Handle boolean comparison
 	if aBool, ok := a.(bool); ok {
 		if bBool, ok := b.(bool); ok {
 			return aBool == bBool
 		}
 	}
-	
+
 	// Handle string comparison
 	aStr := fmt.Sprintf("%v", a)
 	bStr := fmt.Sprintf("%v", b)

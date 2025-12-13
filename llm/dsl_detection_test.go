@@ -13,18 +13,18 @@ func TestIsDSLCode(t *testing.T) {
 		// Track creation
 		{"track() call", "track(instrument=\"Serum\")", true},
 		{"track() with params", "track(name=\"Bass\", index=0)", true},
-		
+
 		// Clip operations
 		{"new_clip()", "track().new_clip(bar=1)", true},
 		{"new_clip() standalone", "new_clip(bar=1)", false}, // Must be chained or after track()
-		
+
 		// MIDI operations
 		{"add_midi()", "track().add_midi(notes=[])", true},
-		
+
 		// Delete operations
 		{"delete()", "track().delete()", true},
 		{"delete_clip()", "track().delete_clip(bar=1)", true},
-		
+
 		// Functional operations (can be standalone or chained)
 		{"filter() standalone", "filter(tracks, track.name == \"X\")", true},
 		{"filter() chained", "track().filter(tracks, track.name == \"X\")", true},
@@ -32,7 +32,7 @@ func TestIsDSLCode(t *testing.T) {
 		{"map() chained", "track().map(tracks, @get_name)", true},
 		{"for_each() standalone", "for_each(tracks, @add_reverb)", true},
 		{"for_each() chained", "track().for_each(tracks, @add_reverb)", true},
-		
+
 		// Track property setters - THESE WERE MISSING!
 		{"set_selected()", "track().set_selected(selected=true)", true},
 		{"set_selected() with filter", "filter(tracks, track.name == \"X\").set_selected(selected=true)", true},
@@ -42,11 +42,11 @@ func TestIsDSLCode(t *testing.T) {
 		{"set_pan()", "track().set_pan(pan=0.5)", true},
 		{"set_name()", "track().set_name(name=\"Bass\")", true},
 		{"add_fx()", "track().add_fx(fxname=\"ReaEQ\")", true},
-		
+
 		// Complex chains
 		{"complex chain", "track(instrument=\"Serum\").set_name(name=\"Bass\").set_volume(volume_db=-3.0).set_selected(selected=true)", true},
 		{"filter with set_selected", "filter(tracks, track.muted == false).set_selected(selected=true)", true},
-		
+
 		// Invalid DSL
 		{"empty string", "", false},
 		{"plain text", "This is not DSL code", false},
@@ -70,7 +70,7 @@ func TestIsDSLCode(t *testing.T) {
 func TestIsDSLCode_AllMethods(t *testing.T) {
 	// This test ensures we don't forget to add new methods to isDSLCode()
 	// If a new method is added to the grammar but not to isDSLCode(), this test will fail
-	
+
 	allMethods := []string{
 		"track(",
 		".new_clip(",
@@ -109,4 +109,3 @@ func TestIsDSLCode_AllMethods(t *testing.T) {
 		})
 	}
 }
-

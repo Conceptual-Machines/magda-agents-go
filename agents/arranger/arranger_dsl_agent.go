@@ -77,10 +77,10 @@ func newArrangerAgent(cfg *config.Config, useMCP bool, mcpURL, mcpLabel string) 
 }
 
 type ArrangerResult struct {
-	Actions []map[string]any `json:"actions"` // Parsed DSL actions
-	Usage   any              `json:"usage"`
-	MCPUsed bool             `json:"mcpUsed,omitempty"`
-	MCPCalls int             `json:"mcpCalls,omitempty"`
+	Actions  []map[string]any `json:"actions"` // Parsed DSL actions
+	Usage    any              `json:"usage"`
+	MCPUsed  bool             `json:"mcpUsed,omitempty"`
+	MCPCalls int              `json:"mcpCalls,omitempty"`
 }
 
 // GenerateActions generates musical content using chord symbols
@@ -105,7 +105,7 @@ func (a *ArrangerAgent) GenerateActions(
 	}
 	transaction.SetContext("arranger", map[string]any{
 		"question_length": len(question),
-		"mcp_enabled":      a.useMCP,
+		"mcp_enabled":     a.useMCP,
 	})
 
 	// Build input messages
@@ -169,9 +169,9 @@ func (a *ArrangerAgent) GenerateActions(
 	}
 
 	result := &ArrangerResult{
-		Actions: actions,
-		Usage:   resp.Usage,
-		MCPUsed: resp.MCPUsed,
+		Actions:  actions,
+		Usage:    resp.Usage,
+		MCPUsed:  resp.MCPUsed,
 		MCPCalls: resp.MCPCalls,
 	}
 
@@ -235,4 +235,3 @@ func (a *ArrangerAgent) parseActionsFromResponse(resp *llm.GenerationResponse) (
 
 	return actions, nil
 }
-

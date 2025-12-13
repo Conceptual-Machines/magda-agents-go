@@ -237,7 +237,7 @@ func TestArrangerDSLParser_NoteDuration(t *testing.T) {
 	}
 
 	action := actions[0]
-	
+
 	// Check note_duration is captured
 	noteDuration, ok := action["note_duration"].(float64)
 	if !ok {
@@ -248,4 +248,3 @@ func TestArrangerDSLParser_NoteDuration(t *testing.T) {
 		t.Errorf("Expected note_duration 0.25, got %f", noteDuration)
 	}
 }
-

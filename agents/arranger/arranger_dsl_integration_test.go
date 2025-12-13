@@ -16,7 +16,7 @@ func TestArrangerIntegration_ArpeggioWith16thNotes(t *testing.T) {
 
 	// The simplified grammar only allows: arpeggio(symbol=Em, note_duration=0.25)
 	dsl := `arpeggio(symbol=Em, note_duration=0.25)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -75,7 +75,7 @@ func TestArrangerIntegration_ArpeggioWith8thNotes(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Am, note_duration=0.5)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -108,7 +108,7 @@ func TestArrangerIntegration_TwoBarArpeggio(t *testing.T) {
 
 	// 2 bars = 8 beats, 16th notes = 0.25 beats per note
 	dsl := `arpeggio(symbol=Em, note_duration=0.25, length=8)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -141,7 +141,7 @@ func TestArrangerIntegration_ChordSimultaneous(t *testing.T) {
 	}
 
 	dsl := `chord(symbol=C, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -188,7 +188,7 @@ func TestArrangerIntegration_Progression(t *testing.T) {
 	}
 
 	dsl := `progression(chords=[C, Am, F, G], length=16)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -211,12 +211,12 @@ func TestArrangerIntegration_Progression(t *testing.T) {
 
 	// 16 beats / 4 chords = 4 beats per chord
 	expectedStarts := []float64{
-		0, 0, 0,       // C chord at beat 0
-		4, 4, 4,       // Am chord at beat 4
-		8, 8, 8,       // F chord at beat 8
-		12, 12, 12,    // G chord at beat 12
+		0, 0, 0, // C chord at beat 0
+		4, 4, 4, // Am chord at beat 4
+		8, 8, 8, // F chord at beat 8
+		12, 12, 12, // G chord at beat 12
 	}
-	
+
 	for i, note := range noteEvents {
 		if note.StartBeats != expectedStarts[i] {
 			t.Errorf("Note %d: expected start %.1f, got %.1f", i, expectedStarts[i], note.StartBeats)
@@ -236,20 +236,20 @@ func TestArrangerIntegration_FilterRedundantChords(t *testing.T) {
 	// Even if we somehow get old-style DSL with both chord and arpeggio,
 	// the filter should remove the redundant chord
 	// Note: This tests the filterRedundantChords function
-	
+
 	// Simulate what the filter does by creating actions directly
 	actions := []map[string]any{
 		{"type": "chord", "chord": "Em", "length": 4.0},
 		{"type": "arpeggio", "chord": "Em", "note_duration": 0.25, "length": 4.0},
 	}
-	
+
 	filtered := parser.filterRedundantChords(actions)
-	
+
 	// Should only have the arpeggio
 	if len(filtered) != 1 {
 		t.Errorf("Expected 1 action after filtering, got %d", len(filtered))
 	}
-	
+
 	if filtered[0]["type"] != "arpeggio" {
 		t.Errorf("Expected arpeggio to remain, got %v", filtered[0]["type"])
 	}
@@ -263,7 +263,7 @@ func TestArrangerIntegration_DefaultNoteDuration(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Em)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -295,7 +295,7 @@ func TestArrangerIntegration_ArpeggioNoChordGenerated(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Em, note_duration=0.25)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -315,7 +315,7 @@ func TestArrangerIntegration_ArpeggioNoChordGenerated(t *testing.T) {
 
 	for startTime, count := range startTimes {
 		if count > 1 {
-			t.Errorf("Found %d notes starting at %.2f - arpeggio should have sequential notes only!", 
+			t.Errorf("Found %d notes starting at %.2f - arpeggio should have sequential notes only!",
 				count, startTime)
 		}
 	}
@@ -329,7 +329,7 @@ func TestArrangerIntegration_ChordAllSimultaneous(t *testing.T) {
 	}
 
 	dsl := `chord(symbol=Am7, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -344,7 +344,7 @@ func TestArrangerIntegration_ChordAllSimultaneous(t *testing.T) {
 	// All notes should start at exactly 0.0
 	for i, note := range noteEvents {
 		if note.StartBeats != 0.0 {
-			t.Errorf("Chord note %d starts at %.2f - all chord notes should start at same time!", 
+			t.Errorf("Chord note %d starts at %.2f - all chord notes should start at same time!",
 				i, note.StartBeats)
 		}
 	}
@@ -360,7 +360,7 @@ func TestArrangerIntegration_ArpeggioQuarterNotes(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=C, note_duration=1.0, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -400,7 +400,7 @@ func TestArrangerIntegration_ArpeggioFourBars(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Dm, note_duration=0.25, length=16)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -442,7 +442,7 @@ func TestArrangerIntegration_ArpeggioMajor7thChord(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Cmaj7, note_duration=0.5, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -477,7 +477,7 @@ func TestArrangerIntegration_ArpeggioWithOctave(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Em, note_duration=0.25, length=4, octave=5)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -507,7 +507,7 @@ func TestArrangerIntegration_ArpeggioWithVelocity(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Am, note_duration=0.5, length=4, velocity=80)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -534,7 +534,7 @@ func TestArrangerIntegration_ArpeggioStartOffset(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=G, note_duration=0.25, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -570,7 +570,7 @@ func TestArrangerIntegration_ArpeggioMinor7th(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Am7, note_duration=0.5, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -600,7 +600,7 @@ func TestArrangerIntegration_ArpeggioDiminished(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Bdim, note_duration=0.25, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -630,7 +630,7 @@ func TestArrangerIntegration_ArpeggioTimingExact(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Em, note_duration=0.25, length=2)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -668,7 +668,7 @@ func TestArrangerIntegration_ArpeggioSharpFlat(t *testing.T) {
 
 	// Test F# minor
 	dsl := `arpeggio(symbol=F#m, note_duration=0.5, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -698,7 +698,7 @@ func TestArrangerIntegration_ArpeggioFlatKey(t *testing.T) {
 	}
 
 	dsl := `arpeggio(symbol=Bb, note_duration=0.5, length=4)`
-	
+
 	actions, err := parser.ParseDSL(dsl)
 	if err != nil {
 		t.Fatalf("ParseDSL failed: %v", err)
@@ -719,4 +719,3 @@ func TestArrangerIntegration_ArpeggioFlatKey(t *testing.T) {
 		}
 	}
 }
-

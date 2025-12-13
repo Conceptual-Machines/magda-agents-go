@@ -176,7 +176,7 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 	}
 	// Note: positional args for arpeggio are handled separately (chord symbol first, then optionally length)
 	// We don't use positional fallback for length when named params like note_duration are present
-	
+
 	// If note_duration is set, it overrides the length calculation
 	// note_duration specifies how long each note should be
 
@@ -211,13 +211,13 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 
 	// Create action
 	action := map[string]any{
-		"type":        "arpeggio",
-		"chord":       chordSymbol,
-		"length":      length,
-		"repeat":      repeat,
-		"velocity":    velocity,
-		"octave":      octave,
-		"direction":   direction,
+		"type":      "arpeggio",
+		"chord":     chordSymbol,
+		"length":    length,
+		"repeat":    repeat,
+		"velocity":  velocity,
+		"octave":    octave,
+		"direction": direction,
 	}
 	if noteDuration > 0 {
 		action["note_duration"] = noteDuration
@@ -340,12 +340,12 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 
 	// Grammar School has issues parsing arrays - extract chords from raw DSL instead
 	chords := []string{}
-	
+
 	// Use regex to extract chords array from raw DSL
 	// Pattern: chords=[...] or chords = [...]
 	rawDSL := p.rawDSL
 	log.Printf("🎵 Raw DSL: %s", rawDSL)
-	
+
 	// Find chords=[...] pattern
 	chordsStart := strings.Index(rawDSL, "chords=[")
 	if chordsStart == -1 {
@@ -357,7 +357,7 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 	if chordsStart == -1 {
 		chordsStart = strings.Index(rawDSL, "chords = [")
 	}
-	
+
 	if chordsStart != -1 {
 		// Find the opening bracket
 		bracketStart := strings.Index(rawDSL[chordsStart:], "[")
@@ -370,7 +370,7 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 				// Extract the array content
 				arrayContent := rawDSL[bracketStart+1 : bracketEnd]
 				log.Printf("🎵 Extracted array content: %q", arrayContent)
-				
+
 				// Split by comma and clean up
 				parts := strings.Split(arrayContent, ",")
 				for _, part := range parts {
@@ -383,7 +383,7 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 			}
 		}
 	}
-	
+
 	log.Printf("🎵 Extracted chords: %v (len=%d)", chords, len(chords))
 
 	if len(chords) == 0 {
@@ -468,4 +468,3 @@ func (a *ArrangerDSL) Choice(args gs.Args) error {
 	// Content items will be parsed as separate statements
 	return nil
 }
-

@@ -615,13 +615,13 @@ const expandedKeywordsJSON = `{
 
 // Orchestrator coordinates multiple agents (DAW + Arranger) running in parallel
 type Orchestrator struct {
-	dawAgent           *daw.DawAgent
-	arrangerAgent      ArrangerAgent // Will be set when we integrate
-	llmProvider        llm.Provider
-	dawKeywords        []string
-	arrangerKeywords   []string
+	dawAgent          *daw.DawAgent
+	arrangerAgent     ArrangerAgent // Will be set when we integrate
+	llmProvider       llm.Provider
+	dawKeywords       []string
+	arrangerKeywords  []string
 	keywordsLoaded    bool
-	keywordsLoadMutex  sync.Mutex
+	keywordsLoadMutex sync.Mutex
 }
 
 // ArrangerAgent interface for the arranger agent
@@ -774,15 +774,15 @@ func (o *Orchestrator) DetectAgentsNeeded(ctx context.Context, question string) 
 	if err != nil {
 		return false, false, fmt.Errorf("LLM classification failed: %w", err)
 	}
-	
+
 	needsDAW = llmDAW
 	needsArranger = llmArranger
-	
+
 	// Runtime (orchestrator) checks: if LLM returns both false, the request is out of scope
 	if !needsDAW && !needsArranger {
 		return false, false, fmt.Errorf("request is out of scope: no agents can handle this request")
 	}
-	
+
 	return needsDAW, needsArranger, nil
 }
 
@@ -855,10 +855,10 @@ func (o *Orchestrator) detectAgentsNeededKeywords(question string) (needsDAW boo
 
 	// Check for DAW operations (independent check)
 	needsDAW = containsAny(questionLower, dawKeywordsFiltered)
-	
+
 	// Check for musical content (independent check - can be true alongside DAW)
 	needsArranger = containsAny(questionLower, arrangerKeywordsFiltered)
-	
+
 	// Both can be true! Example: "add a chord progression to track 1"
 	// - "add", "track" → needsDAW = true
 	// - "chord", "progression" → needsArranger = true
@@ -1165,5 +1165,3 @@ func containsAny(text string, keywords []string) bool {
 	}
 	return false
 }
-
-

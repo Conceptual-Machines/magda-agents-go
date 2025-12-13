@@ -15,20 +15,20 @@ func TestDSLDetection(t *testing.T) {
 	}{
 		// Track operations
 		{"track()", "track(instrument=\"Serum\")", true},
-		
+
 		// Clip operations
 		{"new_clip()", "track().new_clip(bar=1)", true},
 		// NOTE: add_midi is no longer part of DAW DSL grammar - handled by arranger agent
-		
+
 		// Delete operations
 		{"delete()", "track().delete()", true},
 		{"delete_clip()", "track().delete_clip(bar=1)", true},
-		
+
 		// Functional operations
 		{"filter()", "filter(tracks, track.name == \"X\")", true},
 		{"map()", "map(tracks, @get_name)", true},
 		{"for_each()", "for_each(tracks, @add_reverb)", true},
-		
+
 		// Track property setters - Unified methods
 		{"set_track()", "track().set_track(selected=true)", true},
 		{"set_track() with filter", "filter(tracks, track.name == \"X\").set_track(selected=true)", true},
@@ -38,11 +38,11 @@ func TestDSLDetection(t *testing.T) {
 		{"set_track() name", "track().set_track(name=\"Bass\")", true},
 		{"set_clip()", "track().set_clip(name=\"Clip\")", true},
 		{"add_fx()", "track().add_fx(fxname=\"ReaEQ\")", true},
-		
+
 		// Complex chains
 		{"complex chain with set_track", "track(instrument=\"Serum\").set_track(name=\"Bass\", selected=true)", true},
 		{"filter with set_track", "filter(tracks, track.muted == false).set_track(selected=true)", true},
-		
+
 		// Invalid DSL
 		{"empty string", "", false},
 		{"plain text", "This is not DSL code", false},
@@ -89,5 +89,3 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
-
-

@@ -251,9 +251,9 @@ func TestConvertArrangerActionToNoteEvents_Progression(t *testing.T) {
 
 func TestChordQualities(t *testing.T) {
 	tests := []struct {
-		name          string
-		chordSymbol   string
-		intervals     []int // expected intervals from root
+		name        string
+		chordSymbol string
+		intervals   []int // expected intervals from root
 	}{
 		{"major", "C", []int{0, 4, 7}},
 		{"minor", "Cm", []int{0, 3, 7}},
@@ -282,4 +282,3 @@ func TestChordQualities(t *testing.T) {
 		})
 	}
 }
-

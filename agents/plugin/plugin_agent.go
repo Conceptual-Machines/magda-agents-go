@@ -75,7 +75,7 @@ func (a *PluginAgent) GenerateAliases(ctx context.Context, plugins []PluginInfo)
 	log.Printf("🔧 Generating aliases programmatically for %d plugins", len(plugins))
 
 	aliases := make(map[string]string)
-	
+
 	// Process all plugins
 	for _, plugin := range plugins {
 		pluginAliases := a.generateAliasesForPlugin(plugin)
@@ -85,7 +85,7 @@ func (a *PluginAgent) GenerateAliases(ctx context.Context, plugins []PluginInfo)
 			if normalized != "" {
 				// Handle conflicts: keep first mapping
 				if existing, exists := aliases[normalized]; exists && existing != plugin.FullName {
-					log.Printf("⚠️  Alias conflict: '%s' maps to both '%s' and '%s' (keeping first)", 
+					log.Printf("⚠️  Alias conflict: '%s' maps to both '%s' and '%s' (keeping first)",
 						normalized, existing, plugin.FullName)
 				} else if !exists {
 					aliases[normalized] = plugin.FullName
@@ -101,35 +101,35 @@ func (a *PluginAgent) GenerateAliases(ctx context.Context, plugins []PluginInfo)
 // generateAliasesForPlugin generates all possible aliases for a single plugin
 func (a *PluginAgent) generateAliasesForPlugin(plugin PluginInfo) []string {
 	aliases := make(map[string]bool) // Use map to avoid duplicates
-	
+
 	// Extract base name from full name
 	baseName := a.extractBaseName(plugin.FullName)
 	if baseName == "" {
 		return []string{}
 	}
-	
+
 	// 1. Simple lowercase alias
 	simple := strings.ToLower(baseName)
 	aliases[simple] = true
-	
+
 	// 2. Remove spaces
 	noSpaces := strings.ReplaceAll(simple, " ", "")
 	if noSpaces != simple {
 		aliases[noSpaces] = true
 	}
-	
+
 	// 3. Extract version number and create versioned aliases
 	versionAliases := a.generateVersionAliases(baseName)
 	for _, v := range versionAliases {
 		aliases[strings.ToLower(v)] = true
 	}
-	
+
 	// 4. Split camelCase/PascalCase words
 	camelAliases := a.splitCamelCase(baseName)
 	for _, ca := range camelAliases {
 		aliases[strings.ToLower(ca)] = true
 	}
-	
+
 	// 5. Manufacturer prefix aliases
 	if plugin.Manufacturer != "" {
 		manufacturerAliases := a.generateManufacturerAliases(baseName, plugin.Manufacturer)
@@ -137,79 +137,82 @@ func (a *PluginAgent) generateAliasesForPlugin(plugin PluginInfo) []string {
 			aliases[strings.ToLower(ma)] = true
 		}
 	}
-	
+
 	// 6. Common abbreviation patterns
 	abbrevAliases := a.generateAbbreviationAliases(baseName)
 	for _, aa := range abbrevAliases {
 		aliases[strings.ToLower(aa)] = true
 	}
-	
+
 	// Convert map to slice
 	result := make([]string, 0, len(aliases))
 	for alias := range aliases {
 		result = append(result, alias)
 	}
-	
+
 	return result
 }
 
 // extractBaseName extracts the base plugin name from full name
 // Examples:
-//   "VST3: Serum (Xfer Records)" -> "Serum"
-//   "JS: ReaEQ" -> "ReaEQ"
-//   "VST: Kontakt 7 (Native Instruments)" -> "Kontakt 7"
+//
+//	"VST3: Serum (Xfer Records)" -> "Serum"
+//	"JS: ReaEQ" -> "ReaEQ"
+//	"VST: Kontakt 7 (Native Instruments)" -> "Kontakt 7"
 func (a *PluginAgent) extractBaseName(fullName string) string {
 	// Remove format prefix (VST3:, VST:, JS:, etc.)
 	formatPrefix := regexp.MustCompile(`^(VST3|VST|AU|JS|ReaPlugs):\s*`)
 	name := formatPrefix.ReplaceAllString(fullName, "")
-	
+
 	// Remove manufacturer suffix in parentheses
 	manufacturerSuffix := regexp.MustCompile(`\s*\([^)]+\)\s*$`)
 	name = manufacturerSuffix.ReplaceAllString(name, "")
-	
+
 	return strings.TrimSpace(name)
 }
 
 // generateVersionAliases extracts version numbers and creates aliases
 // Examples:
-//   "Kontakt 7" -> ["kontakt", "kontakt7", "kontakt 7"]
-//   "Serum 1.2" -> ["serum", "serum1.2", "serum 1.2"]
+//
+//	"Kontakt 7" -> ["kontakt", "kontakt7", "kontakt 7"]
+//	"Serum 1.2" -> ["serum", "serum1.2", "serum 1.2"]
 func (a *PluginAgent) generateVersionAliases(baseName string) []string {
 	aliases := []string{}
-	
+
 	// Match version patterns: "Name 7", "Name 1.2", "Name v2", etc.
 	versionPattern := regexp.MustCompile(`(.+?)\s+([vV]?\d+(?:\.\d+)*)`)
 	matches := versionPattern.FindStringSubmatch(baseName)
-	
+
 	if len(matches) >= 3 {
 		namePart := strings.TrimSpace(matches[1])
 		versionPart := matches[2]
-		
+
 		// Add name without version
 		aliases = append(aliases, namePart)
-		
+
 		// Add name with version (no space)
 		aliases = append(aliases, namePart+versionPart)
-		
+
 		// Add name with version (with space)
 		aliases = append(aliases, namePart+" "+versionPart)
 	}
-	
+
 	return aliases
 }
 
 // splitCamelCase splits camelCase/PascalCase and generates aliases
 // Examples:
-//   "ReaEQ" -> ["reaeq", "rea-eq", "rea eq", "eq"]
-//   "ReaComp" -> ["reacomp", "rea-comp", "rea comp", "comp"]
+//
+//	"ReaEQ" -> ["reaeq", "rea-eq", "rea eq", "eq"]
+//	"ReaComp" -> ["reacomp", "rea-comp", "rea comp", "comp"]
 func (a *PluginAgent) splitCamelCase(name string) []string {
 	aliases := []string{}
-	
+
 	// Split on camelCase boundaries
 	// Handle both: "ReaEQ" (consecutive uppercase) and "ReaComp" (normal camelCase)
 	var words []string
 	var currentWord strings.Builder
-	
+
 	for i, r := range name {
 		// Split on uppercase if:
 		// 1. Not the first character AND
@@ -219,7 +222,7 @@ func (a *PluginAgent) splitCamelCase(name string) []string {
 			prevRune := rune(name[i-1])
 			nextIsLower := i+1 < len(name) && unicode.IsLower(rune(name[i+1]))
 			prevIsLower := unicode.IsLower(prevRune)
-			
+
 			// Split if previous was lowercase OR if this is start of a new word (next is lowercase)
 			if prevIsLower || (nextIsLower && currentWord.Len() > 0) {
 				if currentWord.Len() > 0 {
@@ -233,98 +236,100 @@ func (a *PluginAgent) splitCamelCase(name string) []string {
 	if currentWord.Len() > 0 {
 		words = append(words, currentWord.String())
 	}
-	
+
 	if len(words) <= 1 {
 		return aliases
 	}
-	
+
 	// Generate combinations
 	// Full joined: "ReaEQ" -> "reaeq"
 	aliases = append(aliases, strings.Join(words, ""))
-	
+
 	// Hyphenated: "ReaEQ" -> "rea-eq"
 	aliases = append(aliases, strings.Join(words, "-"))
-	
+
 	// Spaced: "ReaEQ" -> "rea eq"
 	aliases = append(aliases, strings.Join(words, " "))
-	
+
 	// Last word only (common abbreviation): "ReaEQ" -> "eq"
 	if len(words) > 1 {
 		aliases = append(aliases, words[len(words)-1])
 	}
-	
+
 	return aliases
 }
 
 // generateManufacturerAliases creates manufacturer-prefixed aliases
 // Examples:
-//   baseName="Serum", manufacturer="Xfer Records" -> ["xfer serum", "xferrecords serum"]
+//
+//	baseName="Serum", manufacturer="Xfer Records" -> ["xfer serum", "xferrecords serum"]
 func (a *PluginAgent) generateManufacturerAliases(baseName, manufacturer string) []string {
 	aliases := []string{}
-	
+
 	// Extract key words from manufacturer (remove common words)
 	manufacturerLower := strings.ToLower(manufacturer)
 	manufacturerWords := strings.Fields(manufacturerLower)
-	
+
 	// Filter out common words
 	commonWords := map[string]bool{
 		"records": true, "inc": true, "ltd": true, "llc": true,
 		"audio": true, "music": true, "technologies": true,
 	}
-	
+
 	var keyWords []string
 	for _, word := range manufacturerWords {
 		if !commonWords[word] && len(word) > 2 {
 			keyWords = append(keyWords, word)
 		}
 	}
-	
+
 	if len(keyWords) == 0 {
 		// If no key words, use first word
 		if len(manufacturerWords) > 0 {
 			keyWords = []string{manufacturerWords[0]}
 		}
 	}
-	
+
 	// Generate aliases
 	for _, keyword := range keyWords {
 		aliases = append(aliases, keyword+" "+baseName)
 		aliases = append(aliases, keyword+baseName)
 	}
-	
+
 	return aliases
 }
 
 // generateAbbreviationAliases creates common abbreviation patterns
 // Examples:
-//   "ReaEQ" -> ["eq"] (if it ends with EQ)
-//   "ReaComp" -> ["comp"] (if it ends with Comp)
+//
+//	"ReaEQ" -> ["eq"] (if it ends with EQ)
+//	"ReaComp" -> ["comp"] (if it ends with Comp)
 func (a *PluginAgent) generateAbbreviationAliases(baseName string) []string {
 	aliases := []string{}
 	baseLower := strings.ToLower(baseName)
-	
+
 	// Common suffix patterns
 	suffixPatterns := map[string]string{
-		"eq":      "eq",
-		"comp":    "comp",
-		"compressor": "comp",
-		"verb":    "verb",
-		"reverb":  "verb",
-		"delay":   "delay",
-		"limiter": "limit",
-		"gate":    "gate",
-		"filter":  "filter",
-		"synth":   "synth",
+		"eq":          "eq",
+		"comp":        "comp",
+		"compressor":  "comp",
+		"verb":        "verb",
+		"reverb":      "verb",
+		"delay":       "delay",
+		"limiter":     "limit",
+		"gate":        "gate",
+		"filter":      "filter",
+		"synth":       "synth",
 		"synthesizer": "synth",
 	}
-	
+
 	for suffix, abbrev := range suffixPatterns {
 		if strings.HasSuffix(baseLower, suffix) {
 			aliases = append(aliases, abbrev)
 			break
 		}
 	}
-	
+
 	return aliases
 }
 
@@ -410,4 +415,3 @@ func (a *PluginAgent) getFormatPriority(format string, priorityMap map[string]in
 	// Default to lowest priority (highest number)
 	return 999
 }
-

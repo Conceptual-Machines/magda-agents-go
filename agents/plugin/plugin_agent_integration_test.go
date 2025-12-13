@@ -66,7 +66,7 @@ func TestPluginProcessingWithLargeList(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL+"/api/v1/magda/plugins/process", 
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL+"/api/v1/magda/plugins/process",
 		io.NopCloser(bytes.NewReader(jsonBody)))
 	require.NoError(t, err)
 
@@ -90,16 +90,16 @@ func TestPluginProcessingWithLargeList(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify response
-	assert.Equal(t, http.StatusOK, resp.StatusCode, 
+	assert.Equal(t, http.StatusOK, resp.StatusCode,
 		"Expected 200 OK, got %d: %s", resp.StatusCode, string(body))
 
 	// Parse response
 	var response struct {
-		Plugins            []PluginInfo `json:"plugins"`
-		Aliases            map[string]string `json:"aliases"`
-		OriginalCount      int          `json:"original_count"`
-		DeduplicatedCount  int          `json:"deduplicated_count"`
-		AliasesCount       int          `json:"aliases_count"`
+		Plugins           []PluginInfo      `json:"plugins"`
+		Aliases           map[string]string `json:"aliases"`
+		OriginalCount     int               `json:"original_count"`
+		DeduplicatedCount int               `json:"deduplicated_count"`
+		AliasesCount      int               `json:"aliases_count"`
 	}
 
 	err = json.Unmarshal(body, &response)
@@ -109,7 +109,7 @@ func TestPluginProcessingWithLargeList(t *testing.T) {
 	assert.Greater(t, len(response.Plugins), 0, "Should have deduplicated plugins")
 	assert.Greater(t, len(response.Aliases), 0, "Should have generated aliases")
 	assert.Equal(t, len(plugins), response.OriginalCount, "Original count should match")
-	assert.LessOrEqual(t, response.DeduplicatedCount, response.OriginalCount, 
+	assert.LessOrEqual(t, response.DeduplicatedCount, response.OriginalCount,
 		"Deduplicated count should be <= original")
 	assert.Equal(t, len(response.Aliases), response.AliasesCount, "Aliases count should match")
 
@@ -132,7 +132,7 @@ func authenticate(apiURL, email, password string) (string, error) {
 		return "", err
 	}
 
-	resp, err := http.Post(apiURL+"/api/auth/login", "application/json", 
+	resp, err := http.Post(apiURL+"/api/auth/login", "application/json",
 		bytes.NewReader(jsonBody))
 	if err != nil {
 		return "", err
@@ -196,4 +196,3 @@ func loadPluginsFromTestFile() ([]PluginInfo, error) {
 
 	return result.Plugins, nil
 }
-

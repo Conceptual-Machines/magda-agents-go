@@ -16,51 +16,51 @@ func TestOrchestrator_DetectAgentsNeeded_Keywords(t *testing.T) {
 	orchestrator := NewOrchestrator(cfg)
 
 	tests := []struct {
-		name           string
-		question       string
-		expectedDAW    bool
+		name             string
+		question         string
+		expectedDAW      bool
 		expectedArranger bool
 	}{
 		{
-			name:            "DAW only - add reverb",
-			question:        "add reverb to track 1",
-			expectedDAW:     true,
+			name:             "DAW only - add reverb",
+			question:         "add reverb to track 1",
+			expectedDAW:      true,
 			expectedArranger: false,
 		},
 		{
-			name:            "DAW only - set volume",
-			question:        "set volume to -3dB on track 2",
-			expectedDAW:     true,
+			name:             "DAW only - set volume",
+			question:         "set volume to -3dB on track 2",
+			expectedDAW:      true,
 			expectedArranger: false,
 		},
 		{
-			name:            "Arranger only - chord progression",
-			question:        "create I VI IV progression",
-			expectedDAW:     true, // "create" triggers DAW, but should also need Arranger
+			name:             "Arranger only - chord progression",
+			question:         "create I VI IV progression",
+			expectedDAW:      true, // "create" triggers DAW, but should also need Arranger
 			expectedArranger: true,
 		},
 		{
-			name:            "Both - musical content on track",
-			question:        "add I VI IV progression to piano track at bar 9",
-			expectedDAW:     true,
+			name:             "Both - musical content on track",
+			question:         "add I VI IV progression to piano track at bar 9",
+			expectedDAW:      true,
 			expectedArranger: true,
 		},
 		{
-			name:            "Both - arpeggio in clip",
-			question:        "add a clip with an arpeggio in e minor",
-			expectedDAW:     true,
+			name:             "Both - arpeggio in clip",
+			question:         "add a clip with an arpeggio in e minor",
+			expectedDAW:      true,
 			expectedArranger: true, // "minor" should trigger
 		},
 		{
-			name:            "Musical term - bassline",
-			question:        "add a clip with a bassline",
-			expectedDAW:     true,
+			name:             "Musical term - bassline",
+			question:         "add a clip with a bassline",
+			expectedDAW:      true,
 			expectedArranger: true, // "bassline" should trigger
 		},
 		{
-			name:            "Musical term - riff",
-			question:        "add a clip with a riff",
-			expectedDAW:     true,
+			name:             "Musical term - riff",
+			question:         "add a clip with a riff",
+			expectedDAW:      true,
 			expectedArranger: true, // "riff" should trigger
 		},
 	}
@@ -147,7 +147,7 @@ func TestOrchestrator_GenerateActions_DAWOnly(t *testing.T) {
 
 	// This will fail without real API keys, but tests the structure
 	_, err := orchestrator.GenerateActions(ctx, "add reverb to track 1", nil)
-	
+
 	// We expect an error without real setup, but the structure should be correct
 	if err != nil {
 		t.Logf("Expected error without real API setup: %v", err)
@@ -186,7 +186,7 @@ func TestOrchestrator_DetectAgentsNeeded_EdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			needsDAW, needsArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
 			t.Logf("Question: %q -> DAW=%v, Arranger=%v", tt.question, needsDAW, needsArranger)
-			
+
 			// These edge cases should ideally trigger LLM fallback
 			// For now, just verify they don't crash
 			assert.NotPanics(t, func() {
@@ -236,4 +236,3 @@ func TestOrchestrator_ContainsAny(t *testing.T) {
 		})
 	}
 }
-

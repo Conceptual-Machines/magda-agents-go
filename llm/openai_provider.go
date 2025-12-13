@@ -104,50 +104,50 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 		var paramsMap map[string]any
 		if json.Unmarshal(paramsJSON, &paramsMap) == nil {
 			// Add CFG tool (MAGDA always uses DSL)
-				// Use grammar-school utility to build OpenAI CFG tool payload
-				cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
-					ToolName:    request.CFGGrammar.ToolName,
-					Description: request.CFGGrammar.Description,
-					Grammar:     request.CFGGrammar.Grammar,
-					Syntax:      request.CFGGrammar.Syntax,
-				})
-				log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+			// Use grammar-school utility to build OpenAI CFG tool payload
+			cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
+				ToolName:    request.CFGGrammar.ToolName,
+				Description: request.CFGGrammar.Description,
+				Grammar:     request.CFGGrammar.Grammar,
+				Syntax:      request.CFGGrammar.Syntax,
+			})
+			log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 
-				// Set text format to plain text (not JSON schema) when using CFG
-				paramsMap["text"] = gs.GetOpenAITextFormatForCFG()
+			// Set text format to plain text (not JSON schema) when using CFG
+			paramsMap["text"] = gs.GetOpenAITextFormatForCFG()
 
-				// Initialize tools array if not present
-				var tools []any
-				if paramsMap["tools"] == nil {
-					tools = []any{}
-				} else {
-					var ok bool
-					tools, ok = paramsMap["tools"].([]any)
-					if !ok {
-						// If tools is not a slice, try to convert from existing tools
-						if existingTools, ok := paramsMap["tools"].([]responses.ToolUnionParam); ok {
-							tools = make([]any, 0, len(existingTools))
-							for _, t := range existingTools {
-								toolJSON, _ := json.Marshal(t)
-								var toolMap map[string]any
-								if unmarshalErr := json.Unmarshal(toolJSON, &toolMap); unmarshalErr != nil {
-									log.Printf("⚠️  Failed to unmarshal tool: %v", unmarshalErr)
-									continue
-								}
-								tools = append(tools, toolMap)
+			// Initialize tools array if not present
+			var tools []any
+			if paramsMap["tools"] == nil {
+				tools = []any{}
+			} else {
+				var ok bool
+				tools, ok = paramsMap["tools"].([]any)
+				if !ok {
+					// If tools is not a slice, try to convert from existing tools
+					if existingTools, ok := paramsMap["tools"].([]responses.ToolUnionParam); ok {
+						tools = make([]any, 0, len(existingTools))
+						for _, t := range existingTools {
+							toolJSON, _ := json.Marshal(t)
+							var toolMap map[string]any
+							if unmarshalErr := json.Unmarshal(toolJSON, &toolMap); unmarshalErr != nil {
+								log.Printf("⚠️  Failed to unmarshal tool: %v", unmarshalErr)
+								continue
 							}
-						} else {
-							tools = []any{}
+							tools = append(tools, toolMap)
 						}
+					} else {
+						tools = []any{}
 					}
 				}
-				tools = append(tools, cfgTool)
-				paramsMap["tools"] = tools
-				paramsMap["parallel_tool_calls"] = false // CFG tools typically don't use parallel calls
+			}
+			tools = append(tools, cfgTool)
+			paramsMap["tools"] = tools
+			paramsMap["parallel_tool_calls"] = false // CFG tools typically don't use parallel calls
 
 			// Log the actual tool structure for debugging
 			toolJSON, _ := json.MarshalIndent(cfgTool, "", "  ")
-				log.Printf("🔧 Added CFG tool: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+			log.Printf("🔧 Added CFG tool: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 			log.Printf("🔧 CFG tool structure: %s", truncateString(string(toolJSON), 2000))
 
 			// Verify instructions are in paramsMap
@@ -251,17 +251,17 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 						}
 
 						// Fallback: parse as SDK struct for other fields
-					resp = &responses.Response{}
-					if json.Unmarshal(body, resp) != nil {
-						err = fmt.Errorf("failed to parse response")
-					} else {
+						resp = &responses.Response{}
+						if json.Unmarshal(body, resp) != nil {
+							err = fmt.Errorf("failed to parse response")
+						} else {
 							// Process response with CFG support (MAGDA always uses DSL)
 							processedResp, processErr := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
-						if processErr != nil {
-							err = processErr
-						} else {
-							// Return the processed response
-							return processedResp, nil
+							if processErr != nil {
+								err = processErr
+							} else {
+								// Return the processed response
+								return processedResp, nil
 							}
 						}
 					}
@@ -295,21 +295,21 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 	if request.CFGGrammar != nil {
 		// MAGDA DSL uses CFG grammar
 		result, err := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		transaction.SetTag("success", "true")
+		return result, nil
 	}
-	transaction.SetTag("success", "true")
-	return result, nil
-}
 
 	// Handle JSON Schema output (e.g., for orchestrator classification)
 	if request.OutputSchema != nil {
 		result, err := p.processResponseWithJSONSchema(resp, startTime, transaction, request.OutputSchema)
-	if err != nil {
-		return nil, err
-	}
-	transaction.SetTag("success", "true")
-	return result, nil
+		if err != nil {
+			return nil, err
+		}
+		transaction.SetTag("success", "true")
+		return result, nil
 	}
 
 	// This should never happen for MAGDA, but handle it gracefully
@@ -360,22 +360,22 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 
 	var reasoningEffort shared.ReasoningEffort
 	if supportsReasoning {
-	switch request.ReasoningMode {
-	case reasoningNone:
-		// "none" is not a valid enum, use "low" as the fastest option
-		reasoningEffort = shared.ReasoningEffort("none")
-	case reasoningMinimal, reasoningMin:
-		// "minimal" is not supported by GPT-5.1, fall back to "low"
-		reasoningEffort = responses.ReasoningEffortLow
-	case reasoningLow:
-		reasoningEffort = responses.ReasoningEffortLow
-	case reasoningMedium, reasoningMed:
-		reasoningEffort = responses.ReasoningEffortMedium
-	case reasoningHigh:
-		reasoningEffort = responses.ReasoningEffortHigh
-	default:
-		// Default to "low" for GPT-5.1
-		reasoningEffort = responses.ReasoningEffortLow
+		switch request.ReasoningMode {
+		case reasoningNone:
+			// "none" is not a valid enum, use "low" as the fastest option
+			reasoningEffort = shared.ReasoningEffort("none")
+		case reasoningMinimal, reasoningMin:
+			// "minimal" is not supported by GPT-5.1, fall back to "low"
+			reasoningEffort = responses.ReasoningEffortLow
+		case reasoningLow:
+			reasoningEffort = responses.ReasoningEffortLow
+		case reasoningMedium, reasoningMed:
+			reasoningEffort = responses.ReasoningEffortMedium
+		case reasoningHigh:
+			reasoningEffort = responses.ReasoningEffortHigh
+		default:
+			// Default to "low" for GPT-5.1
+			reasoningEffort = responses.ReasoningEffortLow
 		}
 	}
 
@@ -403,7 +403,7 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 		cleanedGrammar := gs.CleanGrammarForCFG(request.CFGGrammar.Grammar)
 		log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
 		log.Printf("📝 Grammar cleaned for CFG: %d chars (original: %d chars)", len(cleanedGrammar), len(request.CFGGrammar.Grammar))
-		
+
 		// Use grammar-school utility to build OpenAI CFG tool payload
 		cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
 			ToolName:    request.CFGGrammar.ToolName,
@@ -411,15 +411,15 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 			Grammar:     cleanedGrammar,
 			Syntax:      request.CFGGrammar.Syntax,
 		})
-		
+
 		// Note: Text format is not set when using CFG - the CFG tool handles the output format
 		// Setting Text format would conflict with CFG tool output
-		
+
 		// Initialize tools array if not present
 		if params.Tools == nil {
 			params.Tools = []responses.ToolUnionParam{}
 		}
-		
+
 		// Convert CFG tool map to ToolUnionParam
 		// BuildOpenAICFGTool returns map[string]any, we need to convert it
 		cfgToolJSON, err := json.Marshal(cfgTool)
@@ -435,7 +435,7 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 				// For now, try to add it as a custom tool
 				// Note: This may need adjustment based on SDK support
 				log.Printf("🔧 Attempting to add CFG tool to streaming params: %+v", cfgToolMap)
-				
+
 				// The CFG tool should have type "custom" with format.grammar
 				if toolType, ok := cfgToolMap["type"].(string); ok && toolType == "custom" {
 					// Convert the map structure to the SDK's expected format
@@ -445,7 +445,7 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 				}
 			}
 		}
-		
+
 		params.ParallelToolCalls = openai.Bool(false) // CFG tools typically don't use parallel calls
 	}
 
@@ -504,16 +504,16 @@ func truncateString(s string, maxLen int) string {
 // extractDSLFromCFGToolCall searches for DSL code in CFG tool call response
 func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) string {
 	log.Printf("🔍 Searching for CFG tool call in %d output items", len(resp.Output))
-	
+
 	for i, outputItem := range resp.Output {
 		outputItemJSON, _ := json.Marshal(outputItem)
 		var outputItemMap map[string]any
 		if json.Unmarshal(outputItemJSON, &outputItemMap) != nil {
 			continue
 		}
-		
+
 		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
-		
+
 		// Check for type field - ALWAYS log it
 		typeVal, typeExists := outputItemMap["type"]
 		if typeExists {
@@ -549,13 +549,13 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 		} else {
 			log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
 		}
-		
+
 		// Fallback: Check all possible locations for DSL code
 		if dslCode := p.findDSLInOutputItem(outputItemMap); dslCode != "" {
 			return dslCode
 		}
 	}
-	
+
 	log.Printf("⚠️  No CFG tool call found in response output items")
 	return ""
 }
@@ -575,7 +575,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 		log.Printf("📋 FULL DSL CODE from CFG tool code (%d chars, NO TRUNCATION):\n%s", len(code), code)
 		return code
 	}
-	
+
 	// Check nested code map
 	if codeVal, ok := itemMap["code"]; ok {
 		if codeMap, ok := codeVal.(map[string]any); ok {
@@ -587,7 +587,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			}
 		}
 	}
-	
+
 	// Check direct fields - with detailed logging
 	log.Printf("🔍 ========== findDSLInOutputItem: Checking direct fields (input, action, arguments) ==========")
 	for _, field := range []string{"input", "action", "arguments"} {
@@ -639,7 +639,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			}
 		}
 	}
-	
+
 	// Check "outputs" array
 	if outputs, ok := itemMap["outputs"].([]any); ok && len(outputs) > 0 {
 		log.Printf("🔍 Found 'outputs' array with %d items", len(outputs))
@@ -702,15 +702,15 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 						if p.isDSLCode(vStr) {
 							log.Printf("🔧 ✅✅✅ FOUND DSL IN tools[%s]: %s", k, truncateString(vStr, maxPreviewChars))
 							return vStr
-			}
-		}
+						}
+					}
 				}
 			}
 		}
 	} else {
 		log.Printf("🔍 Field 'tools' DOES NOT EXIST")
 	}
-	
+
 	// Check tool_calls array
 	if toolCalls, ok := itemMap["tool_calls"].([]any); ok {
 		for j, toolCall := range toolCalls {
@@ -728,7 +728,7 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			}
 		}
 	}
-	
+
 	// Check nested tool_call
 	if toolCall, ok := itemMap["tool_call"].(map[string]any); ok {
 		if input, ok := toolCall["input"].(string); ok && input != "" {
@@ -736,28 +736,28 @@ func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
 			return input
 		}
 	}
-	
+
 	return ""
 }
 
 // extractAndCleanTextOutput extracts and cleans text output from response
 func (p *OpenAIProvider) extractAndCleanTextOutput(resp *responses.Response) string {
 	textOutput := resp.OutputText()
-	
+
 	if textOutput == "" {
 		return ""
 	}
-	
+
 	// Strip markdown code blocks
 	cleaned := strings.TrimPrefix(textOutput, "```json")
 	cleaned = strings.TrimPrefix(cleaned, "```")
 	cleaned = strings.TrimSuffix(cleaned, "```")
 	cleaned = strings.TrimSpace(cleaned)
-	
+
 	if cleaned != textOutput {
 		log.Printf("🧹 Stripped markdown code blocks from output: %d -> %d chars", len(textOutput), len(cleaned))
 	}
-	
+
 	return cleaned
 }
 
@@ -837,7 +837,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 
 	// MAGDA always uses DSL, so we should never reach here
 	return nil, fmt.Errorf("unexpected code path in processResponseWithCFG")
-	}
+}
 
 // processResponseWithJSONSchema extracts JSON output from OpenAI response when using JSON Schema
 func (p *OpenAIProvider) processResponseWithJSONSchema(
@@ -856,7 +856,7 @@ func (p *OpenAIProvider) processResponseWithJSONSchema(
 
 	if textOutput == "" {
 		return nil, fmt.Errorf("openai response did not include any output text")
-		}
+	}
 
 	// Log usage stats
 	p.logUsageStats(resp.Usage)

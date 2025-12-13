@@ -17,11 +17,11 @@ import (
 func init() {
 	// Load .env file from project root for tests
 	// Try multiple paths in case tests are run from different directories
-	_ = godotenv.Load()                      // Current directory
-	_ = godotenv.Load(".env")               // Current directory explicit
-	_ = godotenv.Load("../.env")            // Parent directory
-	_ = godotenv.Load("../../.env")         // Project root from agents/daw/
-	
+	_ = godotenv.Load()             // Current directory
+	_ = godotenv.Load(".env")       // Current directory explicit
+	_ = godotenv.Load("../.env")    // Parent directory
+	_ = godotenv.Load("../../.env") // Project root from agents/daw/
+
 	// Also try to find project root by looking for go.mod
 	dir, _ := os.Getwd()
 	for i := 0; i < 5; i++ {
@@ -59,11 +59,11 @@ func TestDawAgent_OutOfScope_Request(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name           string
-		question       string
-		description    string
-		expectError    bool
-		errorContains  string
+		name          string
+		question      string
+		description   string
+		expectError   bool
+		errorContains string
 	}{
 		{
 			name:          "cooking_request",
@@ -119,16 +119,16 @@ func TestDawAgent_OutOfScope_Request(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err, "Expected error for out-of-scope request")
 				t.Logf("✅ Got expected error: %v", err)
-				
+
 				if tt.errorContains != "" {
 					assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tt.errorContains),
 						"Error message should contain '%s'", tt.errorContains)
 				}
-				
+
 				// Verify error format
 				assert.Contains(t, err.Error(), "out of scope",
 					"Error should indicate request is out of scope")
-				
+
 				// Should not have actions
 				if result != nil {
 					assert.Empty(t, result.Actions, "Out-of-scope request should not produce actions")
@@ -189,12 +189,12 @@ func TestDawAgent_ParseErrorComment(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err, "Expected error for error comment format")
 				t.Logf("✅ Got expected error: %v", err)
-				
+
 				if tt.errorContains != "" {
 					assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tt.errorContains),
 						"Error message should contain '%s'", tt.errorContains)
 				}
-				
+
 				assert.Nil(t, actions, "Error comment should not produce actions")
 			} else {
 				require.NoError(t, err, "Valid DSL should not error")
@@ -210,4 +210,3 @@ func getTestConfigForKeywords(t *testing.T) *config.Config {
 		OpenAIAPIKey: "test-key", // Not used for parsing tests
 	}
 }
-

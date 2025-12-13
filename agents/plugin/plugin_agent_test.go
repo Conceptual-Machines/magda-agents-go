@@ -103,9 +103,9 @@ func TestGenerateAliases_Programmatic(t *testing.T) {
 				},
 			},
 			expected: map[string]string{
-				"reaeq":  "JS: ReaEQ",      // First one wins
+				"reaeq":  "JS: ReaEQ", // First one wins
 				"rea-eq": "JS: ReaEQ",
-				"eq":     "JS: ReaEQ",      // First one wins
+				"eq":     "JS: ReaEQ", // First one wins
 			},
 		},
 	}
@@ -119,7 +119,7 @@ func TestGenerateAliases_Programmatic(t *testing.T) {
 			// Check that all expected aliases exist
 			for expectedAlias, expectedFullName := range tt.expected {
 				if fullName, exists := aliases[expectedAlias]; exists {
-					assert.Equal(t, expectedFullName, fullName, 
+					assert.Equal(t, expectedFullName, fullName,
 						"Alias '%s' should map to '%s'", expectedAlias, expectedFullName)
 				} else {
 					t.Errorf("Expected alias '%s' not found in generated aliases", expectedAlias)
@@ -137,8 +137,8 @@ func TestExtractBaseName(t *testing.T) {
 	agent := NewPluginAgent(cfg)
 
 	tests := []struct {
-		fullName   string
-		expected   string
+		fullName string
+		expected string
 	}{
 		{"VST3: Serum (Xfer Records)", "Serum"},
 		{"JS: ReaEQ", "ReaEQ"},
@@ -154,5 +154,3 @@ func TestExtractBaseName(t *testing.T) {
 		})
 	}
 }
-
-
