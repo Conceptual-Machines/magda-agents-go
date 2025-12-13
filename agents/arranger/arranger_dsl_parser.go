@@ -301,29 +301,40 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 	}
 
 	// Extract chords array
-	// Grammar School may pass arrays as strings that need parsing
+	// Grammar School splits arrays incorrectly - we need to reconstruct from all string args
+	// It passes: chords="[C", ""="Am", ""="F", ""="G]" etc.
 	chords := []string{}
-	if chordsValue, ok := args["chords"]; ok {
-		log.Printf("🎵 Found 'chords' arg: Kind=%d, Str=%q", chordsValue.Kind, chordsValue.Str)
-		if chordsValue.Kind == gs.ValueString {
-			// Parse string representation like ["C", "Am", "F", "G"] or [C, Am, F, G]
-			chordsStr := strings.TrimSpace(chordsValue.Str)
-			chordsStr = strings.TrimPrefix(chordsStr, "[")
-			chordsStr = strings.TrimSuffix(chordsStr, "]")
-			if chordsStr != "" {
-				// Split by comma and clean up quotes/spaces
-				parts := strings.Split(chordsStr, ",")
-				for _, part := range parts {
-					part = strings.TrimSpace(part)
-					// Remove quotes if present, but keep the chord symbol
-					part = strings.Trim(part, "\"'")
-					if part != "" {
-						chords = append(chords, part)
-					}
-				}
+	
+	// First, try to reconstruct from all string values
+	allStringParts := []string{}
+	for _, v := range args {
+		if v.Kind == gs.ValueString && v.Str != "" {
+			allStringParts = append(allStringParts, v.Str)
+		}
+	}
+	
+	// Join all string parts and parse as array
+	fullArrayStr := strings.Join(allStringParts, ", ")
+	log.Printf("🎵 Reconstructed array string: %q", fullArrayStr)
+	
+	// Clean up and extract chord symbols
+	fullArrayStr = strings.TrimSpace(fullArrayStr)
+	fullArrayStr = strings.TrimPrefix(fullArrayStr, "[")
+	fullArrayStr = strings.TrimSuffix(fullArrayStr, "]")
+	if fullArrayStr != "" {
+		// Split by comma and clean up
+		parts := strings.Split(fullArrayStr, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			part = strings.Trim(part, "\"'[]")
+			// Skip if it looks like a partial bracket
+			if part != "" && part != "[" && part != "]" {
+				chords = append(chords, part)
 			}
 		}
 	}
+	
+	log.Printf("🎵 Extracted chords: %v", chords)
 
 	if len(chords) == 0 {
 		return fmt.Errorf("progression: missing chords array")
