@@ -13,9 +13,10 @@ import (
 // ArrangerDSLParser parses Arranger DSL code with chord symbols.
 // Uses Grammar School Engine for parsing.
 type ArrangerDSLParser struct {
-	engine    *gs.Engine
+	engine      *gs.Engine
 	arrangerDSL *ArrangerDSL
-	actions   []map[string]any
+	actions     []map[string]any
+	rawDSL      string // Store raw DSL for manual parsing (Grammar School has array issues)
 }
 
 // ArrangerDSL implements the DSL methods for musical composition.
@@ -54,6 +55,9 @@ func (p *ArrangerDSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 	if dslCode == "" {
 		return nil, fmt.Errorf("empty DSL code")
 	}
+
+	// Store raw DSL for manual parsing (Grammar School has issues with arrays)
+	p.rawDSL = dslCode
 
 	// Reset actions for new parse
 	p.actions = make([]map[string]any, 0)
@@ -296,45 +300,54 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 
 	// DEBUG: Log all args to see what Grammar School passes
 	log.Printf("🎵 Progression called with args: %+v", args)
-	for k, v := range args {
-		log.Printf("🎵   arg[%q] = Kind:%d, Str:%q, Num:%f", k, v.Kind, v.Str, v.Num)
-	}
 
-	// Extract chords array
-	// Grammar School splits arrays incorrectly - we need to reconstruct from all string args
-	// It passes: chords="[C", ""="Am", ""="F", ""="G]" etc.
+	// Grammar School has issues parsing arrays - extract chords from raw DSL instead
 	chords := []string{}
 	
-	// First, try to reconstruct from all string values
-	allStringParts := []string{}
-	for _, v := range args {
-		if v.Kind == gs.ValueString && v.Str != "" {
-			allStringParts = append(allStringParts, v.Str)
-		}
+	// Use regex to extract chords array from raw DSL
+	// Pattern: chords=[...] or chords = [...]
+	rawDSL := p.rawDSL
+	log.Printf("🎵 Raw DSL: %s", rawDSL)
+	
+	// Find chords=[...] pattern
+	chordsStart := strings.Index(rawDSL, "chords=[")
+	if chordsStart == -1 {
+		chordsStart = strings.Index(rawDSL, "chords =[")
+	}
+	if chordsStart == -1 {
+		chordsStart = strings.Index(rawDSL, "chords= [")
+	}
+	if chordsStart == -1 {
+		chordsStart = strings.Index(rawDSL, "chords = [")
 	}
 	
-	// Join all string parts and parse as array
-	fullArrayStr := strings.Join(allStringParts, ", ")
-	log.Printf("🎵 Reconstructed array string: %q", fullArrayStr)
-	
-	// Clean up and extract chord symbols
-	fullArrayStr = strings.TrimSpace(fullArrayStr)
-	fullArrayStr = strings.TrimPrefix(fullArrayStr, "[")
-	fullArrayStr = strings.TrimSuffix(fullArrayStr, "]")
-	if fullArrayStr != "" {
-		// Split by comma and clean up
-		parts := strings.Split(fullArrayStr, ",")
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			part = strings.Trim(part, "\"'[]")
-			// Skip if it looks like a partial bracket
-			if part != "" && part != "[" && part != "]" {
-				chords = append(chords, part)
+	if chordsStart != -1 {
+		// Find the opening bracket
+		bracketStart := strings.Index(rawDSL[chordsStart:], "[")
+		if bracketStart != -1 {
+			bracketStart += chordsStart
+			// Find the closing bracket
+			bracketEnd := strings.Index(rawDSL[bracketStart:], "]")
+			if bracketEnd != -1 {
+				bracketEnd += bracketStart
+				// Extract the array content
+				arrayContent := rawDSL[bracketStart+1 : bracketEnd]
+				log.Printf("🎵 Extracted array content: %q", arrayContent)
+				
+				// Split by comma and clean up
+				parts := strings.Split(arrayContent, ",")
+				for _, part := range parts {
+					part = strings.TrimSpace(part)
+					part = strings.Trim(part, "\"'")
+					if part != "" {
+						chords = append(chords, part)
+					}
+				}
 			}
 		}
 	}
 	
-	log.Printf("🎵 Extracted chords: %v", chords)
+	log.Printf("🎵 Extracted chords: %v (len=%d)", chords, len(chords))
 
 	if len(chords) == 0 {
 		return fmt.Errorf("progression: missing chords array")
