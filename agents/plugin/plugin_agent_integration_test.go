@@ -20,8 +20,8 @@ import (
 // TestPluginProcessingWithLargeList tests the plugin processing endpoint
 // with a large list of plugins (e.g., 737 plugins from REAPER)
 func TestPluginProcessingWithLargeList(t *testing.T) {
-	// Load environment variables
-	godotenv.Load()
+	// Load environment variables (ignore error - file may not exist)
+	_ = godotenv.Load()
 
 	// Get API URL from environment or use default
 	apiURL := os.Getenv("AIDEAS_API_URL")
@@ -81,7 +81,7 @@ func TestPluginProcessingWithLargeList(t *testing.T) {
 	duration := time.Since(startTime)
 
 	require.NoError(t, err, "Request failed")
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	t.Logf("Request completed in %v", duration)
 
@@ -137,7 +137,7 @@ func authenticate(apiURL, email, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

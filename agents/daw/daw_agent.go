@@ -15,11 +15,6 @@ import (
 	"github.com/openai/openai-go/responses"
 )
 
-const (
-	streamEventCompleted = "completed"
-	maxErrorPreviewChars = 500
-)
-
 // DawAgent handles DAW (Digital Audio Workstation) operations for MAGDA
 // This is the main agent that translates natural language to REAPER actions
 type DawAgent struct {
@@ -443,98 +438,4 @@ func (a *DawAgent) parseActionsIncremental(text string, state map[string]any) ([
 
 	log.Printf("✅ Translated DSL to %d REAPER API actions", len(actions))
 	return actions, nil
-}
-
-// handleStreamEvent processes a single stream event to reduce cyclomatic complexity
-func (a *DawAgent) handleStreamEvent(
-	event llm.StreamEvent,
-	accumulatedText *string,
-	allActions *[]map[string]any,
-	usage *any,
-	callback StreamActionCallback,
-	state map[string]any,
-) error {
-	switch event.Type {
-	case "output_text.delta":
-		return a.handleTextDelta(event, accumulatedText, allActions, callback, state)
-	case "output_progress", "output_started":
-		// Just acknowledge these events
-		return nil
-	case streamEventCompleted:
-		return a.handleStreamCompleted(event, accumulatedText, allActions, usage, callback, state)
-	}
-	return nil
-}
-
-// handleTextDelta processes text delta events
-func (a *DawAgent) handleTextDelta(
-	event llm.StreamEvent,
-	accumulatedText *string,
-	allActions *[]map[string]any,
-	callback StreamActionCallback,
-	state map[string]any,
-) error {
-	text, ok := event.Data["text"].(string)
-	if !ok || text == "" {
-		return nil
-	}
-
-	*accumulatedText += text
-	log.Printf("📝 MAGDA: Accumulated %d chars (delta: %d)", len(*accumulatedText), len(text))
-
-	// Log full accumulated text every 100 chars to see DSL as it builds
-	if len(*accumulatedText)%100 < len(text) || len(*accumulatedText) < 500 {
-		log.Printf("📋 MAGDA: Full accumulated text so far (%d chars): %s", len(*accumulatedText), *accumulatedText)
-	}
-
-	// Try to parse actions from accumulated text after each delta
-	actions, err := a.parseActionsIncremental(*accumulatedText, state)
-	if err == nil && len(actions) > len(*allActions) {
-		// New actions found - call callback for each new one
-		for i := len(*allActions); i < len(actions); i++ {
-			log.Printf("✅ MAGDA: Parsed action %d: %s", i+1, actions[i]["action"])
-			if callbackErr := callback(actions[i]); callbackErr != nil {
-				return callbackErr
-			}
-			*allActions = append(*allActions, actions[i])
-		}
-	} else if err != nil {
-		// Log parse errors but continue (might be incomplete JSON)
-		log.Printf("⚠️  MAGDA: Parse attempt failed (might be incomplete): %v", err)
-	}
-	return nil
-}
-
-// handleStreamCompleted processes the stream completion event
-func (a *DawAgent) handleStreamCompleted(
-	event llm.StreamEvent,
-	accumulatedText *string,
-	allActions *[]map[string]any,
-	usage *any,
-	callback StreamActionCallback,
-	state map[string]any,
-) error {
-	log.Printf("📦 MAGDA: Stream completed, final parse of %d chars", len(*accumulatedText))
-	log.Printf("📋 MAGDA: FULL accumulated text at completion (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
-	if *accumulatedText != "" {
-		actions, err := a.parseActionsIncremental(*accumulatedText, state)
-		if err == nil {
-			// Call callback for any remaining actions
-			for i := len(*allActions); i < len(actions); i++ {
-				log.Printf("✅ MAGDA: Final parse - action %d: %s", i+1, actions[i]["action"])
-				if callbackErr := callback(actions[i]); callbackErr != nil {
-					return callbackErr
-				}
-				*allActions = append(*allActions, actions[i])
-			}
-		} else {
-			log.Printf("❌ MAGDA: Final parse failed: %v", err)
-			log.Printf("❌ MAGDA: Accumulated text (first %d chars): %s", maxErrorPreviewChars, truncate(*accumulatedText, maxErrorPreviewChars))
-			log.Printf("📋 MAGDA: FULL accumulated text on error (%d chars, NO TRUNCATION):\n%s", len(*accumulatedText), *accumulatedText)
-		}
-	}
-	if usageData, ok := event.Data["usage"]; ok {
-		*usage = usageData
-	}
-	return nil
 }

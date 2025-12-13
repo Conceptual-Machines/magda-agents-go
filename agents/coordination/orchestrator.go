@@ -1144,17 +1144,6 @@ func getInt(m map[string]any, key string) (int, bool) {
 	return 0, false
 }
 
-// buildArrangerInput converts question to arranger agent input format
-func (o *Orchestrator) buildArrangerInput(question string) []map[string]any {
-	// Simple conversion - arranger agent expects array of message maps
-	return []map[string]any{
-		{
-			"role":    "user",
-			"content": question,
-		},
-	}
-}
-
 // containsAny checks if text contains any of the keywords (case-insensitive)
 func containsAny(text string, keywords []string) bool {
 	textLower := strings.ToLower(text)

@@ -76,16 +76,3 @@ func TestDSLDetection(t *testing.T) {
 		})
 	}
 }
-
-// Helper function to match strings.Contains behavior
-func containsSubstring(s, substr string) bool {
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
