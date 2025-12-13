@@ -64,35 +64,10 @@ type DawResult struct {
 	Usage   any                      `json:"usage"`
 }
 
-func (a *DawAgent) GenerateActions(
-	ctx context.Context, question string, state map[string]any,
-) (*DawResult, error) {
-	startTime := time.Now()
-	log.Printf("🤖 MAGDA REQUEST STARTED: question=%s", question)
-
-	// Start Sentry transaction
-	transaction := sentry.StartTransaction(ctx, "magda.generate_actions")
-	defer transaction.Finish()
-
-	transaction.SetTag("model", "gpt-5.1") // GPT-5.1 for MAGDA
-	transaction.SetContext("magda", map[string]any{
-		"question_length": len(question),
-		"has_state":       state != nil,
-	})
-
-	// Build input messages
-	inputArray := a.buildInputMessages(question, state)
-
-	// Build provider request - support both JSON Schema and CFG/DSL modes
-	request := &llm.GenerationRequest{
-		Model:         "gpt-5.1", // GPT-5.1 for MAGDA - best for complex reasoning and code-heavy tasks
-		InputArray:    inputArray,
-		ReasoningMode: "none", // GPT-5.1 defaults to "none" for faster, low-latency responses
-		SystemPrompt:  a.systemPrompt,
-	}
-
-	// Always use CFG grammar for DSL output (DSL mode is always enabled)
-	request.CFGGrammar = &llm.CFGConfig{
+// getCFGGrammarConfig returns the CFG grammar configuration for the DAW agent
+// This is shared between GenerateActions and GenerateActionsStream to avoid duplication
+func (a *DawAgent) getCFGGrammarConfig() *llm.CFGConfig {
+	return &llm.CFGConfig{
 		ToolName: "magda_dsl",
 		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
 			"Executes REAPER operations using the MAGDA DSL. " +
@@ -124,6 +99,37 @@ func (a *DawAgent) GenerateActions(
 		Grammar: GetMagdaDSLGrammarForFunctional(),
 		Syntax:  "lark",
 	}
+}
+
+func (a *DawAgent) GenerateActions(
+	ctx context.Context, question string, state map[string]any,
+) (*DawResult, error) {
+	startTime := time.Now()
+	log.Printf("🤖 MAGDA REQUEST STARTED: question=%s", question)
+
+	// Start Sentry transaction
+	transaction := sentry.StartTransaction(ctx, "magda.generate_actions")
+	defer transaction.Finish()
+
+	transaction.SetTag("model", "gpt-5.1") // GPT-5.1 for MAGDA
+	transaction.SetContext("magda", map[string]any{
+		"question_length": len(question),
+		"has_state":       state != nil,
+	})
+
+	// Build input messages
+	inputArray := a.buildInputMessages(question, state)
+
+	// Build provider request - support both JSON Schema and CFG/DSL modes
+	request := &llm.GenerationRequest{
+		Model:         "gpt-5.1", // GPT-5.1 for MAGDA - best for complex reasoning and code-heavy tasks
+		InputArray:    inputArray,
+		ReasoningMode: "none", // GPT-5.1 defaults to "none" for faster, low-latency responses
+		SystemPrompt:  a.systemPrompt,
+	}
+
+	// Always use CFG grammar for DSL output (DSL mode is always enabled)
+	request.CFGGrammar = a.getCFGGrammarConfig()
 	log.Printf("🔧 Using DSL mode (CFG grammar) - always enabled")
 
 	// Call provider
@@ -306,38 +312,7 @@ func (a *DawAgent) GenerateActionsStream(
 	}
 
 	// Always use CFG grammar for DSL output (DSL mode is always enabled)
-	request.CFGGrammar = &llm.CFGConfig{
-		ToolName: "magda_dsl",
-		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
-			"Executes REAPER operations using the MAGDA DSL. " +
-			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4). " +
-			"**CRITICAL - MUSICAL CONTENT**: DO NOT generate add_midi() with notes when the user requests musical content (chords, arpeggios, progressions, melodies). " +
-			"The arranger agent will handle all musical note generation. Your job is ONLY to create tracks, clips, and set track properties. " +
-			"Examples: 'add a C Am F G progression' → track().new_clip() ONLY (no add_midi). 'add an E minor arpeggio' → track().new_clip() ONLY (no add_midi). " +
-			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
-			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
-			"**CRITICAL - DELETE OPERATIONS**: " +
-			"- When user says 'delete [track name]' or 'remove [track name]', you MUST generate DSL code: filter(tracks, track.name == \"[name]\").delete() " +
-			"- For delete by track id: track(id=1).delete() where id is 1-based " +
-			"- Example: 'delete Nebula Drift' → filter(tracks, track.name == \"Nebula Drift\").delete() " +
-			"- Example: 'remove track 1' → track(id=1).delete() " +
-			"- NEVER use set_track(mute=true) or set_track(selected=true) for delete operations - 'delete' means permanently remove the track " +
-			"**CRITICAL - SELECTION OPERATIONS**: " +
-			"- When user says 'select track' or 'select all tracks named X', they mean VISUAL SELECTION (highlighting tracks in REAPER's arrangement view). " +
-			"- You MUST generate DSL code: filter(tracks, track.name == \"X\").set_track(selected=true) " +
-			"- NEVER generate set_track(solo=true) for selection - 'select' ≠ 'solo'. " +
-			"- Example: 'select all tracks named foo' → filter(tracks, track.name == \"foo\").set_track(selected=true) " +
-			"- 'solo' means audio isolation and uses set_track(solo=true), but 'select' means visual highlighting and uses set_track(selected=true). " +
-			"For selection operations on multiple tracks, ALWAYS use: filter(tracks, track.name == \"X\").set_track(selected=true). " +
-			"This efficiently filters the collection and applies the action to all matching tracks. " +
-			"Use functional methods for collections when appropriate: filter(tracks, track.name == \"FX\"), map(@get_name, tracks), for_each(tracks, @add_reverb). " +
-			"ALWAYS check the current REAPER state to see which tracks exist and use the correct track indices. " +
-			"If no track is specified in a chain, it applies to the track created by track(). " +
-			"YOU MUST REASON HEAVILY ABOUT THE OPERATIONS AND MAKE SURE THE CODE OBEYS THE GRAMMAR. " +
-			"**REMEMBER: YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
-		Grammar: GetMagdaDSLGrammarForFunctional(),
-		Syntax:  "lark",
-	}
+	request.CFGGrammar = a.getCFGGrammarConfig()
 	log.Printf("🔧 Using DSL mode (CFG grammar) - always enabled")
 
 	// Call non-streaming provider
