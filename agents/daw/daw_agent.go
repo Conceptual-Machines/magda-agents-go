@@ -96,7 +96,10 @@ func (a *DawAgent) GenerateActions(
 		ToolName: "magda_dsl",
 		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
 			"Executes REAPER operations using the MAGDA DSL. " +
-			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
+			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4). " +
+			"**CRITICAL - MUSICAL CONTENT**: DO NOT generate add_midi() with notes when the user requests musical content (chords, arpeggios, progressions, melodies). " +
+			"The arranger agent will handle all musical note generation. Your job is ONLY to create tracks, clips, and set track properties. " +
+			"Examples: 'add a C Am F G progression' → track().new_clip() ONLY (no add_midi). 'add an E minor arpeggio' → track().new_clip() ONLY (no add_midi). " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
 			"**CRITICAL - DELETE OPERATIONS**: " +
@@ -307,7 +310,10 @@ func (a *DawAgent) GenerateActionsStream(
 		ToolName: "magda_dsl",
 		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
 			"Executes REAPER operations using the MAGDA DSL. " +
-			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4).add_midi(notes=[...]). " +
+			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4). " +
+			"**CRITICAL - MUSICAL CONTENT**: DO NOT generate add_midi() with notes when the user requests musical content (chords, arpeggios, progressions, melodies). " +
+			"The arranger agent will handle all musical note generation. Your job is ONLY to create tracks, clips, and set track properties. " +
+			"Examples: 'add a C Am F G progression' → track().new_clip() ONLY (no add_midi). 'add an E minor arpeggio' → track().new_clip() ONLY (no add_midi). " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"For existing tracks, use track(id=1).new_clip(bar=3) where id is 1-based (track 1 = first track). " +
 			"**CRITICAL - DELETE OPERATIONS**: " +
