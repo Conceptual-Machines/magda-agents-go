@@ -2219,7 +2219,8 @@ func GetMagdaDSLGrammarForFunctional() string {
 	// Start with base grammar
 	baseGrammar := `
 // MAGDA DSL Grammar - Functional scripting for REAPER operations
-// Syntax: track().new_clip().add_midi() with method chaining
+// Syntax: track().new_clip() with method chaining
+// NOTE: add_midi is NOT available - the arranger agent handles MIDI note generation
 
 start: statement+
 
@@ -2235,7 +2236,7 @@ track_param: "instrument" "=" STRING
            | "id" "=" NUMBER
            | "selected" "=" BOOLEAN
 
-chain: clip_chain | midi_chain | fx_chain | track_properties_chain | delete_chain | delete_clip_chain | clip_properties_chain | clip_move_chain
+chain: clip_chain | fx_chain | track_properties_chain | delete_chain | delete_clip_chain | clip_properties_chain | clip_move_chain
 
 clip_chain: ".new_clip" "(" clip_params? ")"
 clip_params: clip_param ("," SP clip_param)*
@@ -2244,9 +2245,6 @@ clip_param: "bar" "=" NUMBER
           | "length_bars" "=" NUMBER
           | "length" "=" NUMBER
           | "position" "=" NUMBER
-
-midi_chain: ".add_midi" "(" midi_params? ")"
-midi_params: "notes" "=" array
 
 fx_chain: ".add_fx" "(" fx_params? ")"
 fx_params: "fxname" "=" STRING

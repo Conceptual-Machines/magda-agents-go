@@ -18,7 +18,7 @@ func TestDSLDetection(t *testing.T) {
 		
 		// Clip operations
 		{"new_clip()", "track().new_clip(bar=1)", true},
-		{"add_midi()", "track().add_midi(notes=[])", true},
+		// NOTE: add_midi is no longer part of DAW DSL grammar - handled by arranger agent
 		
 		// Delete operations
 		{"delete()", "track().delete()", true},
@@ -54,7 +54,6 @@ func TestDSLDetection(t *testing.T) {
 			// Test the DSL detection logic from parseActionsFromResponse
 			hasTrackPrefix := strings.HasPrefix(tt.dslCode, "track(")
 			hasNewClip := strings.Contains(tt.dslCode, ".new_clip(")
-			hasAddMidi := strings.Contains(tt.dslCode, ".add_midi(")
 			hasFilter := strings.Contains(tt.dslCode, ".filter(") || strings.HasPrefix(tt.dslCode, "filter(")
 			hasMap := strings.Contains(tt.dslCode, ".map(") || strings.HasPrefix(tt.dslCode, "map(")
 			hasForEach := strings.Contains(tt.dslCode, ".for_each(") || strings.HasPrefix(tt.dslCode, "for_each(")
@@ -64,13 +63,13 @@ func TestDSLDetection(t *testing.T) {
 			hasSetClip := strings.Contains(tt.dslCode, ".set_clip(")
 			hasAddFx := strings.Contains(tt.dslCode, ".add_fx(")
 
-			isDSL := hasTrackPrefix || hasNewClip || hasAddMidi || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
+			isDSL := hasTrackPrefix || hasNewClip || hasFilter || hasMap || hasForEach || hasDelete || hasDeleteClip ||
 				hasSetTrack || hasSetClip || hasAddFx
 
 			if isDSL != tt.expected {
 				t.Errorf("DSL detection for %q = %v, want %v", tt.dslCode, isDSL, tt.expected)
-				t.Logf("  hasTrackPrefix=%v, hasNewClip=%v, hasAddMidi=%v, hasFilter=%v, hasMap=%v, hasForEach=%v",
-					hasTrackPrefix, hasNewClip, hasAddMidi, hasFilter, hasMap, hasForEach)
+				t.Logf("  hasTrackPrefix=%v, hasNewClip=%v, hasFilter=%v, hasMap=%v, hasForEach=%v",
+					hasTrackPrefix, hasNewClip, hasFilter, hasMap, hasForEach)
 				t.Logf("  hasDelete=%v, hasDeleteClip=%v, hasSetTrack=%v, hasSetClip=%v, hasAddFx=%v",
 					hasDelete, hasDeleteClip, hasSetTrack, hasSetClip, hasAddFx)
 			}

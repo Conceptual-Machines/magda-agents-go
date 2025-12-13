@@ -193,23 +193,33 @@ func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([
 		}
 	}
 
+	fmt.Printf("🎵 DEBUG convertProgressionToNoteEvents: chords=%v, len=%d\n", chords, len(chords))
+
 	length, _ := getFloat(action, "length", float64(len(chords)))
 	repeat, _ := getInt(action, "repeat", 1)
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
 
+	fmt.Printf("🎵 DEBUG params: length=%.2f, repeat=%d, velocity=%d, octave=%d\n", length, repeat, velocity, octave)
+
 	// Calculate chord duration
 	chordDuration := length / float64(len(chords))
+
+	fmt.Printf("🎵 DEBUG chordDuration=%.2f (length %.2f / %d chords)\n", chordDuration, length, len(chords))
 
 	var noteEvents []models.NoteEvent
 	currentBeat := startBeat
 
 	for r := 0; r < repeat; r++ {
-		for _, chordSymbol := range chords {
+		fmt.Printf("🎵 DEBUG repeat %d/%d\n", r+1, repeat)
+		for chordIdx, chordSymbol := range chords {
+			fmt.Printf("🎵 DEBUG chord %d/%d: %s\n", chordIdx+1, len(chords), chordSymbol)
 			chordNotes, err := ChordToMIDI(chordSymbol, octave)
 			if err != nil {
 				return nil, fmt.Errorf("invalid chord in progression: %s: %w", chordSymbol, err)
 			}
+
+			fmt.Printf("🎵 DEBUG chord %s generated %d notes: %v\n", chordSymbol, len(chordNotes), chordNotes)
 
 			// All notes of the chord start simultaneously
 			for _, midiNote := range chordNotes {
@@ -225,6 +235,7 @@ func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([
 		}
 	}
 
+	fmt.Printf("🎵 DEBUG convertProgressionToNoteEvents: returning %d noteEvents\n", len(noteEvents))
 	return noteEvents, nil
 }
 
