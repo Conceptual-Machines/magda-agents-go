@@ -751,6 +751,215 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 	return o.mergeResults(dawResult, arrangerResult)
 }
 
+// StreamActionCallback is called for each action found during streaming
+type StreamActionCallback func(action map[string]any) error
+
+// GenerateActionsStream coordinates agents and emits actions progressively via callback.
+// This allows the UI to execute actions (create track, create clip) as they arrive,
+// masking latency. MIDI notes are buffered until the clip is created, then emitted.
+func (o *Orchestrator) GenerateActionsStream(
+	ctx context.Context,
+	question string,
+	state map[string]any,
+	callback StreamActionCallback,
+) (*OrchestratorResult, error) {
+	// Step 1: Detect which agents are needed
+	needsDAW, needsArranger, err := o.DetectAgentsNeeded(ctx, question)
+	if err != nil {
+		log.Printf("⚠️ Detection error, defaulting to DAW: %v", err)
+		needsDAW = true
+		needsArranger = false
+	}
+
+	log.Printf("🔍 [Stream] Agent detection: DAW=%v, Arranger=%v", needsDAW, needsArranger)
+
+	// Track state for dependency resolution
+	var (
+		mu              sync.Mutex
+		pendingNotes    []models.NoteEvent
+		clipCreated     bool
+		targetTrackIdx  int = 0
+		allActions      []map[string]any
+		dawComplete     bool
+		arrangerComplete bool
+	)
+
+	// Helper to emit action via callback and track it
+	emitAction := func(action map[string]any) error {
+		mu.Lock()
+		allActions = append(allActions, action)
+		mu.Unlock()
+		if callback != nil {
+			return callback(action)
+		}
+		return nil
+	}
+
+	// Helper to check if we can emit add_midi (needs both clip and notes)
+	tryEmitMidi := func() error {
+		mu.Lock()
+		defer mu.Unlock()
+		
+		if clipCreated && len(pendingNotes) > 0 && dawComplete && arrangerComplete {
+			// Convert NoteEvents to map format
+			notesArray := make([]map[string]any, len(pendingNotes))
+			for i, note := range pendingNotes {
+				notesArray[i] = map[string]any{
+					"pitch":    note.MidiNoteNumber,
+					"velocity": note.Velocity,
+					"start":    note.StartBeats,
+					"length":   note.DurationBeats,
+				}
+			}
+
+			midiAction := map[string]any{
+				"action": "add_midi",
+				"track":  targetTrackIdx,
+				"notes":  notesArray,
+			}
+
+			log.Printf("🎵 [Stream] Emitting add_midi with %d notes to track %d", len(pendingNotes), targetTrackIdx)
+			allActions = append(allActions, midiAction)
+			pendingNotes = nil // Clear buffer
+			
+			if callback != nil {
+				// Unlock before callback to avoid deadlock
+				mu.Unlock()
+				err := callback(midiAction)
+				mu.Lock()
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Step 2: Launch agents
+	var wg sync.WaitGroup
+	var dawErr, arrangerErr error
+
+	if needsDAW {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				mu.Lock()
+				dawComplete = true
+				mu.Unlock()
+				_ = tryEmitMidi()
+			}()
+
+			// Use streaming DAW agent
+			dawCallback := func(action map[string]any) error {
+				actionType, _ := action["action"].(string)
+				log.Printf("🎬 [Stream] DAW action: %s", actionType)
+
+				// Track clip creation for dependency resolution
+				if actionType == "create_clip_at_bar" || actionType == "new_clip" {
+					mu.Lock()
+					clipCreated = true
+					if trackIdx, ok := action["track"].(int); ok {
+						targetTrackIdx = trackIdx
+					}
+					mu.Unlock()
+					log.Printf("📋 [Stream] Clip created on track %d", targetTrackIdx)
+				}
+
+				// Track the track index from create_track
+				if actionType == "create_track" {
+					if idx, ok := action["index"].(int); ok {
+						mu.Lock()
+						targetTrackIdx = idx
+						mu.Unlock()
+					}
+				}
+
+				// Emit immediately (create_track, create_clip, etc.)
+				return emitAction(action)
+			}
+
+			_, err := o.dawAgent.GenerateActionsStream(ctx, question, state, dawCallback)
+			if err != nil {
+				dawErr = fmt.Errorf("daw agent stream: %w", err)
+				log.Printf("❌ [Stream] DAW agent error: %v", err)
+			}
+		}()
+	} else {
+		mu.Lock()
+		dawComplete = true
+		mu.Unlock()
+	}
+
+	if needsArranger && o.arrangerAgent != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				mu.Lock()
+				arrangerComplete = true
+				mu.Unlock()
+				_ = tryEmitMidi()
+			}()
+
+			result, err := o.arrangerAgent.GenerateActions(ctx, question)
+			if err != nil {
+				arrangerErr = fmt.Errorf("arranger agent: %w", err)
+				log.Printf("❌ [Stream] Arranger agent error: %v", err)
+				return
+			}
+
+			// Convert arranger actions to NoteEvents and buffer them
+			currentBeat := 0.0
+			for _, action := range result.Actions {
+				noteEvents, err := arranger.ConvertArrangerActionToNoteEvents(action, currentBeat)
+				if err != nil {
+					log.Printf("⚠️ [Stream] Failed to convert arranger action: %v", err)
+					continue
+				}
+
+				mu.Lock()
+				pendingNotes = append(pendingNotes, noteEvents...)
+				mu.Unlock()
+
+				log.Printf("📦 [Stream] Buffered %d notes (total: %d)", len(noteEvents), len(pendingNotes))
+
+				// Update beat position
+				if length, ok := getFloat(action, "length"); ok {
+					if repeat, ok := getInt(action, "repeat"); ok && repeat > 0 {
+						currentBeat += length * float64(repeat)
+					} else {
+						currentBeat += length
+					}
+				}
+			}
+		}()
+	} else {
+		mu.Lock()
+		arrangerComplete = true
+		mu.Unlock()
+	}
+
+	// Wait for all agents
+	wg.Wait()
+
+	// Final check - emit any remaining MIDI
+	_ = tryEmitMidi()
+
+	// Handle errors
+	if dawErr != nil && arrangerErr != nil {
+		return nil, fmt.Errorf("both agents failed: %v, %v", dawErr, arrangerErr)
+	}
+
+	// Return all collected actions
+	mu.Lock()
+	result := &OrchestratorResult{
+		Actions: allActions,
+	}
+	mu.Unlock()
+
+	log.Printf("✅ [Stream] Complete: %d total actions emitted", len(result.Actions))
+	return result, nil
+}
+
 // DetectAgentsNeeded uses hybrid keywords + LLM to detect which agents are needed
 func (o *Orchestrator) DetectAgentsNeeded(ctx context.Context, question string) (needsDAW bool, needsArranger bool, err error) {
 	// Fast path: Enhanced keyword matching (<1ms)
