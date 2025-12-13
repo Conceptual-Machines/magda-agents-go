@@ -99,6 +99,41 @@ func TestArrangerIntegration_ArpeggioWith8thNotes(t *testing.T) {
 	}
 }
 
+func TestArrangerIntegration_TwoBarArpeggio(t *testing.T) {
+	// Test: "2 bar E minor arpeggio with 16th notes"
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	// 2 bars = 8 beats, 16th notes = 0.25 beats per note
+	dsl := `arpeggio(symbol=Em, note_duration=0.25, length=8)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// 8 beats / 0.25 beats per note = 32 notes
+	if len(noteEvents) != 32 {
+		t.Errorf("Expected 32 notes (16th notes filling 2 bars), got %d", len(noteEvents))
+	}
+
+	// Last note should end at beat 8
+	lastNote := noteEvents[len(noteEvents)-1]
+	expectedLastEnd := 8.0
+	actualLastEnd := lastNote.StartBeats + lastNote.DurationBeats
+	if actualLastEnd != expectedLastEnd {
+		t.Errorf("Expected last note to end at %.1f, got %.4f", expectedLastEnd, actualLastEnd)
+	}
+}
+
 func TestArrangerIntegration_ChordSimultaneous(t *testing.T) {
 	parser, err := NewArrangerDSLParser()
 	if err != nil {

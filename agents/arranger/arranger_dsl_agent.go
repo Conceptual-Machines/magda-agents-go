@@ -123,12 +123,15 @@ func (a *ArrangerAgent) GenerateActions(
 	request.CFGGrammar = &llm.CFGConfig{
 		ToolName: "arranger_dsl",
 		Description: "Generate ONE musical call. Choose exactly ONE:\n" +
-			"1. ARPEGGIO (sequential notes): arpeggio(symbol=Em, note_duration=0.25)\n" +
+			"1. ARPEGGIO (sequential notes): arpeggio(symbol=Em, note_duration=0.25, length=8)\n" +
 			"   - note_duration: 0.25=16th, 0.5=8th, 1=quarter note\n" +
+			"   - length: total beats (1 bar=4 beats, 2 bars=8 beats, 4 bars=16 beats)\n" +
 			"2. CHORD (simultaneous notes): chord(symbol=C, length=4)\n" +
 			"3. PROGRESSION (chord sequence): progression(chords=[C, Am, F, G], length=16)\n" +
+			"**LENGTH CONVERSION**: 1 bar = 4 beats. So '2 bar arpeggio' = length=8, '4 bars' = length=16\n" +
 			"Examples:\n" +
-			"- 'E minor arpeggio' → arpeggio(symbol=Em, note_duration=0.25)\n" +
+			"- 'E minor arpeggio' → arpeggio(symbol=Em, note_duration=0.25, length=4)\n" +
+			"- '2 bar E minor arpeggio' → arpeggio(symbol=Em, note_duration=0.25, length=8)\n" +
 			"- 'C major chord' → chord(symbol=C, length=4)\n" +
 			"- 'I-vi-IV-V in C' → progression(chords=[C, Am, F, G], length=16)",
 		Grammar: llm.GetArrangerDSLGrammar(),
