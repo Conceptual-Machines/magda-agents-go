@@ -2,14 +2,13 @@ package plugin
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/Conceptual-Machines/magda-agents-go/config"
-	"github.com/Conceptual-Machines/magda-agents-go/llm"
 )
 
 // PluginInfo represents a REAPER plugin
@@ -46,16 +45,13 @@ func DefaultPreferences() Preferences {
 
 // PluginAgent handles plugin-related operations
 type PluginAgent struct {
-	llmProvider llm.Provider
-	cfg         *config.Config
+	cfg *config.Config
 }
 
 // NewPluginAgent creates a new plugin agent
 func NewPluginAgent(cfg *config.Config) *PluginAgent {
-	provider := llm.NewOpenAIProvider(cfg.OpenAIAPIKey)
 	return &PluginAgent{
-		llmProvider: provider,
-		cfg:         cfg,
+		cfg: cfg,
 	}
 }
 
@@ -69,43 +65,267 @@ type GenerateAliasesResponse struct {
 	Aliases map[string]PluginAlias `json:"aliases"` // alias -> PluginAlias
 }
 
-// GenerateAliases uses LLM to generate smart aliases for plugins
-func (a *PluginAgent) GenerateAliases(ctx context.Context, plugins []PluginInfo) (map[string]PluginAlias, error) {
+// GenerateAliases programmatically generates smart aliases for plugins
+// Returns a map of alias -> full_name (simple string mapping)
+func (a *PluginAgent) GenerateAliases(ctx context.Context, plugins []PluginInfo) (map[string]string, error) {
 	if len(plugins) == 0 {
-		return make(map[string]PluginAlias), nil
+		return make(map[string]string), nil
 	}
 
-	log.Printf("🤖 Generating aliases for %d plugins", len(plugins))
+	log.Printf("🔧 Generating aliases programmatically for %d plugins", len(plugins))
 
-	// Build prompt for LLM
-	prompt := a.buildAliasPrompt(plugins)
-
-	// Call LLM
-	request := &llm.GenerationRequest{
-		Model:         "gpt-5.1",
-		InputArray:    []map[string]interface{}{{"role": "user", "content": prompt}},
-		ReasoningMode: "none",
-		SystemPrompt:  "You are a helpful assistant that generates smart aliases for REAPER plugins. Return only valid JSON.",
-		OutputSchema: &llm.OutputSchema{
-			Name:        "PluginAliases",
-			Description: "Map of aliases to plugin full names",
-			Schema:      a.getAliasSchemaMap(),
-		},
+	aliases := make(map[string]string)
+	
+	// Process all plugins
+	for _, plugin := range plugins {
+		pluginAliases := a.generateAliasesForPlugin(plugin)
+		for _, alias := range pluginAliases {
+			// Normalize to lowercase
+			normalized := strings.ToLower(strings.TrimSpace(alias))
+			if normalized != "" {
+				// Handle conflicts: keep first mapping
+				if existing, exists := aliases[normalized]; exists && existing != plugin.FullName {
+					log.Printf("⚠️  Alias conflict: '%s' maps to both '%s' and '%s' (keeping first)", 
+						normalized, existing, plugin.FullName)
+				} else if !exists {
+					aliases[normalized] = plugin.FullName
+				}
+			}
+		}
 	}
 
-	resp, err := a.llmProvider.Generate(ctx, request)
-	if err != nil {
-		return nil, fmt.Errorf("LLM generation failed: %w", err)
-	}
-
-	// Parse response
-	aliases, err := a.parseAliasResponse(resp.RawOutput, plugins)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse alias response: %w", err)
-	}
-
-	log.Printf("✅ Generated %d aliases", len(aliases))
+	log.Printf("✅ Generated %d aliases for %d plugins", len(aliases), len(plugins))
 	return aliases, nil
+}
+
+// generateAliasesForPlugin generates all possible aliases for a single plugin
+func (a *PluginAgent) generateAliasesForPlugin(plugin PluginInfo) []string {
+	aliases := make(map[string]bool) // Use map to avoid duplicates
+	
+	// Extract base name from full name
+	baseName := a.extractBaseName(plugin.FullName)
+	if baseName == "" {
+		return []string{}
+	}
+	
+	// 1. Simple lowercase alias
+	simple := strings.ToLower(baseName)
+	aliases[simple] = true
+	
+	// 2. Remove spaces
+	noSpaces := strings.ReplaceAll(simple, " ", "")
+	if noSpaces != simple {
+		aliases[noSpaces] = true
+	}
+	
+	// 3. Extract version number and create versioned aliases
+	versionAliases := a.generateVersionAliases(baseName)
+	for _, v := range versionAliases {
+		aliases[strings.ToLower(v)] = true
+	}
+	
+	// 4. Split camelCase/PascalCase words
+	camelAliases := a.splitCamelCase(baseName)
+	for _, ca := range camelAliases {
+		aliases[strings.ToLower(ca)] = true
+	}
+	
+	// 5. Manufacturer prefix aliases
+	if plugin.Manufacturer != "" {
+		manufacturerAliases := a.generateManufacturerAliases(baseName, plugin.Manufacturer)
+		for _, ma := range manufacturerAliases {
+			aliases[strings.ToLower(ma)] = true
+		}
+	}
+	
+	// 6. Common abbreviation patterns
+	abbrevAliases := a.generateAbbreviationAliases(baseName)
+	for _, aa := range abbrevAliases {
+		aliases[strings.ToLower(aa)] = true
+	}
+	
+	// Convert map to slice
+	result := make([]string, 0, len(aliases))
+	for alias := range aliases {
+		result = append(result, alias)
+	}
+	
+	return result
+}
+
+// extractBaseName extracts the base plugin name from full name
+// Examples:
+//   "VST3: Serum (Xfer Records)" -> "Serum"
+//   "JS: ReaEQ" -> "ReaEQ"
+//   "VST: Kontakt 7 (Native Instruments)" -> "Kontakt 7"
+func (a *PluginAgent) extractBaseName(fullName string) string {
+	// Remove format prefix (VST3:, VST:, JS:, etc.)
+	formatPrefix := regexp.MustCompile(`^(VST3|VST|AU|JS|ReaPlugs):\s*`)
+	name := formatPrefix.ReplaceAllString(fullName, "")
+	
+	// Remove manufacturer suffix in parentheses
+	manufacturerSuffix := regexp.MustCompile(`\s*\([^)]+\)\s*$`)
+	name = manufacturerSuffix.ReplaceAllString(name, "")
+	
+	return strings.TrimSpace(name)
+}
+
+// generateVersionAliases extracts version numbers and creates aliases
+// Examples:
+//   "Kontakt 7" -> ["kontakt", "kontakt7", "kontakt 7"]
+//   "Serum 1.2" -> ["serum", "serum1.2", "serum 1.2"]
+func (a *PluginAgent) generateVersionAliases(baseName string) []string {
+	aliases := []string{}
+	
+	// Match version patterns: "Name 7", "Name 1.2", "Name v2", etc.
+	versionPattern := regexp.MustCompile(`(.+?)\s+([vV]?\d+(?:\.\d+)*)`)
+	matches := versionPattern.FindStringSubmatch(baseName)
+	
+	if len(matches) >= 3 {
+		namePart := strings.TrimSpace(matches[1])
+		versionPart := matches[2]
+		
+		// Add name without version
+		aliases = append(aliases, namePart)
+		
+		// Add name with version (no space)
+		aliases = append(aliases, namePart+versionPart)
+		
+		// Add name with version (with space)
+		aliases = append(aliases, namePart+" "+versionPart)
+	}
+	
+	return aliases
+}
+
+// splitCamelCase splits camelCase/PascalCase and generates aliases
+// Examples:
+//   "ReaEQ" -> ["reaeq", "rea-eq", "rea eq", "eq"]
+//   "ReaComp" -> ["reacomp", "rea-comp", "rea comp", "comp"]
+func (a *PluginAgent) splitCamelCase(name string) []string {
+	aliases := []string{}
+	
+	// Split on camelCase boundaries
+	// Handle both: "ReaEQ" (consecutive uppercase) and "ReaComp" (normal camelCase)
+	var words []string
+	var currentWord strings.Builder
+	
+	for i, r := range name {
+		// Split on uppercase if:
+		// 1. Not the first character AND
+		// 2. Current char is uppercase AND
+		// 3. Either previous char was lowercase OR next char is lowercase (to handle "ReaEQ")
+		if i > 0 && unicode.IsUpper(r) {
+			prevRune := rune(name[i-1])
+			nextIsLower := i+1 < len(name) && unicode.IsLower(rune(name[i+1]))
+			prevIsLower := unicode.IsLower(prevRune)
+			
+			// Split if previous was lowercase OR if this is start of a new word (next is lowercase)
+			if prevIsLower || (nextIsLower && currentWord.Len() > 0) {
+				if currentWord.Len() > 0 {
+					words = append(words, currentWord.String())
+					currentWord.Reset()
+				}
+			}
+		}
+		currentWord.WriteRune(r)
+	}
+	if currentWord.Len() > 0 {
+		words = append(words, currentWord.String())
+	}
+	
+	if len(words) <= 1 {
+		return aliases
+	}
+	
+	// Generate combinations
+	// Full joined: "ReaEQ" -> "reaeq"
+	aliases = append(aliases, strings.Join(words, ""))
+	
+	// Hyphenated: "ReaEQ" -> "rea-eq"
+	aliases = append(aliases, strings.Join(words, "-"))
+	
+	// Spaced: "ReaEQ" -> "rea eq"
+	aliases = append(aliases, strings.Join(words, " "))
+	
+	// Last word only (common abbreviation): "ReaEQ" -> "eq"
+	if len(words) > 1 {
+		aliases = append(aliases, words[len(words)-1])
+	}
+	
+	return aliases
+}
+
+// generateManufacturerAliases creates manufacturer-prefixed aliases
+// Examples:
+//   baseName="Serum", manufacturer="Xfer Records" -> ["xfer serum", "xferrecords serum"]
+func (a *PluginAgent) generateManufacturerAliases(baseName, manufacturer string) []string {
+	aliases := []string{}
+	
+	// Extract key words from manufacturer (remove common words)
+	manufacturerLower := strings.ToLower(manufacturer)
+	manufacturerWords := strings.Fields(manufacturerLower)
+	
+	// Filter out common words
+	commonWords := map[string]bool{
+		"records": true, "inc": true, "ltd": true, "llc": true,
+		"audio": true, "music": true, "technologies": true,
+	}
+	
+	var keyWords []string
+	for _, word := range manufacturerWords {
+		if !commonWords[word] && len(word) > 2 {
+			keyWords = append(keyWords, word)
+		}
+	}
+	
+	if len(keyWords) == 0 {
+		// If no key words, use first word
+		if len(manufacturerWords) > 0 {
+			keyWords = []string{manufacturerWords[0]}
+		}
+	}
+	
+	// Generate aliases
+	for _, keyword := range keyWords {
+		aliases = append(aliases, keyword+" "+baseName)
+		aliases = append(aliases, keyword+baseName)
+	}
+	
+	return aliases
+}
+
+// generateAbbreviationAliases creates common abbreviation patterns
+// Examples:
+//   "ReaEQ" -> ["eq"] (if it ends with EQ)
+//   "ReaComp" -> ["comp"] (if it ends with Comp)
+func (a *PluginAgent) generateAbbreviationAliases(baseName string) []string {
+	aliases := []string{}
+	baseLower := strings.ToLower(baseName)
+	
+	// Common suffix patterns
+	suffixPatterns := map[string]string{
+		"eq":      "eq",
+		"comp":    "comp",
+		"compressor": "comp",
+		"verb":    "verb",
+		"reverb":  "verb",
+		"delay":   "delay",
+		"limiter": "limit",
+		"gate":    "gate",
+		"filter":  "filter",
+		"synth":   "synth",
+		"synthesizer": "synth",
+	}
+	
+	for suffix, abbrev := range suffixPatterns {
+		if strings.HasSuffix(baseLower, suffix) {
+			aliases = append(aliases, abbrev)
+			break
+		}
+	}
+	
+	return aliases
 }
 
 // DeduplicatePlugins removes duplicate plugins based on user preferences
@@ -191,99 +411,3 @@ func (a *PluginAgent) getFormatPriority(format string, priorityMap map[string]in
 	return 999
 }
 
-// buildAliasPrompt builds the LLM prompt for generating aliases
-func (a *PluginAgent) buildAliasPrompt(plugins []PluginInfo) string {
-	var builder strings.Builder
-	builder.WriteString("Analyze these REAPER plugins and generate smart aliases for each one.\n\n")
-	builder.WriteString("For each plugin, create multiple aliases:\n")
-	builder.WriteString("- Short name (Serum -> \"serum\")\n")
-	builder.WriteString("- Manufacturer prefix (Xfer Records -> \"xfer serum\")\n")
-	builder.WriteString("- Common abbreviations (ReaEQ -> \"reaeq\", \"rea-eq\", \"eq\")\n")
-	builder.WriteString("- Version numbers (Kontakt 7 -> \"kontakt\", \"kontakt7\")\n")
-	builder.WriteString("- Category names if applicable (synth, eq, compressor)\n\n")
-	builder.WriteString("Return a JSON object mapping aliases to full plugin names.\n\n")
-	builder.WriteString("Plugins:\n")
-
-	// Limit to first 100 plugins to avoid token limits
-	maxPlugins := 100
-	if len(plugins) > maxPlugins {
-		log.Printf("⚠️  Limiting plugin list to %d plugins for alias generation", maxPlugins)
-		plugins = plugins[:maxPlugins]
-	}
-
-	for i, plugin := range plugins {
-		builder.WriteString(fmt.Sprintf("%d. %s (Format: %s, Manufacturer: %s, Instrument: %v)\n",
-			i+1, plugin.FullName, plugin.Format, plugin.Manufacturer, plugin.IsInstrument))
-	}
-
-	return builder.String()
-}
-
-// getAliasSchemaMap returns the JSON schema map for alias generation
-func (a *PluginAgent) getAliasSchemaMap() map[string]any {
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"aliases": map[string]any{
-				"type": "object",
-				"additionalProperties": map[string]any{
-					"type": "string",
-				},
-				"description": "Map of alias -> full plugin name",
-			},
-		},
-		"required": []string{"aliases"},
-	}
-}
-
-// parseAliasResponse parses the LLM response and creates alias mappings
-func (a *PluginAgent) parseAliasResponse(response string, plugins []PluginInfo) (map[string]PluginAlias, error) {
-	// Create a map of full_name -> PluginInfo for lookup
-	pluginMap := make(map[string]*PluginInfo)
-	for i := range plugins {
-		pluginMap[plugins[i].FullName] = &plugins[i]
-	}
-
-	// Parse JSON response
-	var result struct {
-		Aliases map[string]string `json:"aliases"`
-	}
-
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	// Convert to PluginAlias map
-	aliases := make(map[string]PluginAlias)
-	for alias, fullName := range result.Aliases {
-		// Normalize alias to lowercase
-		normalizedAlias := strings.ToLower(strings.TrimSpace(alias))
-		if normalizedAlias == "" {
-			continue
-		}
-
-		// Find matching plugin
-		var plugin *PluginInfo
-		if p, exists := pluginMap[fullName]; exists {
-			plugin = p
-		} else {
-			// Try fuzzy match (case-insensitive)
-			for i := range plugins {
-				if strings.EqualFold(plugins[i].FullName, fullName) {
-					plugin = &plugins[i]
-					break
-				}
-			}
-		}
-
-		if plugin != nil {
-			aliases[normalizedAlias] = PluginAlias{
-				Alias:    normalizedAlias,
-				FullName: plugin.FullName,
-				Format:   plugin.Format,
-			}
-		}
-	}
-
-	return aliases, nil
-}

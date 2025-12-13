@@ -152,12 +152,32 @@
 - ⚠️ Document unified `set_track` and `set_clip` methods with all supported properties
 - ⚠️ Add examples for method chaining in documentation
 
+## Future Optimizations
+
+### Plugin Alias Generation Caching
+**Status**: Future Enhancement
+**Priority**: Low (Cost Optimization)
+- **Concept**: Implement persistent caching at the API level to avoid regenerating aliases for plugins that have already been processed
+- **Benefits**: 
+  - Reduce LLM API costs by avoiding redundant alias generation
+  - Faster response times for repeated plugin scans
+  - Better user experience (instant results for cached plugins)
+- **Implementation Notes**:
+  - Cache should be persistent (database or file-based)
+  - Cache key: plugin full name + format (or plugin hash)
+  - Cache invalidation: when plugin list changes or user requests refresh
+  - API-level implementation (not in agent or extension)
+- **Files to Consider**:
+  - `aideas-api/internal/api/handlers/magda.go` - Add cache check before calling `GenerateAliases()`
+  - Database schema for storing cached aliases (or use existing UserPreferences cache)
+
 ## Summary
 
 **✅ Recently Completed**:
 - Unified `set_track` and `set_clip` actions with full filtered collection support
 - Grammar fixes for method chaining and predicate parsing
 - All integration tests passing
+- Parallel batch processing for plugin alias generation
 
 **High Priority (Next Steps)**:
 - Track color support (add to `set_track`)
@@ -168,5 +188,8 @@
 - Track folder/grouping (`set_track_folder`)
 - Complete MIDI operations (notes array parsing)
 - Complete map() and for_each() function reference execution
+
+**Future Optimizations**:
+- Plugin alias generation caching (API-level persistent cache)
 
 

@@ -117,7 +117,7 @@ func TestSelectionWithStateIntegration(t *testing.T) {
 
 		if actionType == "set_track" {
 			if _, ok := action["selected"]; ok {
-				foundSelection = true
+			foundSelection = true
 			track, ok := action["track"].(int)
 			assert.True(t, ok, "Action should have 'track' field")
 			// Track id=1 is 0-based index 0 (first track)
@@ -126,7 +126,7 @@ func TestSelectionWithStateIntegration(t *testing.T) {
 
 			selected, ok := action["selected"].(bool)
 			assert.True(t, ok, "Action should have 'selected' field")
-				assert.True(t, selected, "Track should be selected")
+			assert.True(t, selected, "Track should be selected")
 			}
 		}
 	}
@@ -165,15 +165,15 @@ func TestSelectionActionChainIntegration(t *testing.T) {
 		if actionType == "set_track" {
 			action := actions[i]
 			if _, ok := action["selected"]; ok {
-				hasSelection = true
-				// Verify it comes after other operations
-				assert.Greater(t, i, 0,
-					"Selection should come after track creation")
+			hasSelection = true
+			// Verify it comes after other operations
+			assert.Greater(t, i, 0,
+				"Selection should come after track creation")
 
-				// Verify selection is true
-				selected, ok := action["selected"].(bool)
+			// Verify selection is true
+			selected, ok := action["selected"].(bool)
 				assert.True(t, ok, "set_track should have 'selected' field")
-				assert.True(t, selected, "Track should be selected")
+			assert.True(t, selected, "Track should be selected")
 			}
 		}
 	}
@@ -234,7 +234,7 @@ func TestDawAgentSelectionFlow(t *testing.T) {
 			hasSelection = true
 			selected, ok := action["selected"].(bool)
 			assert.True(t, ok, "Action should have 'selected' field")
-				assert.True(t, selected, "Track should be selected")
+			assert.True(t, selected, "Track should be selected")
 			}
 		}
 	}

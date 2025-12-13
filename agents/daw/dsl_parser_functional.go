@@ -202,6 +202,7 @@ func (r *ReaperDSL) Track(args gs.Args) error {
 	}
 
 	if instrumentValue, ok := args["instrument"]; ok && instrumentValue.Kind == gs.ValueString {
+		// Plugin name is passed as-is - extension will resolve aliases
 		action["instrument"] = instrumentValue.Str
 	}
 	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
@@ -313,6 +314,7 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 				fxname = fxnameValue.Str
 			} else if instrumentValue, ok := args["instrument"]; ok && instrumentValue.Kind == gs.ValueString {
 				actionType = "add_instrument"
+				// Plugin name is passed as-is - extension will resolve aliases
 				fxname = instrumentValue.Str
 			} else {
 				return fmt.Errorf("FX call must specify fxname or instrument")
@@ -365,6 +367,7 @@ func (r *ReaperDSL) AddFx(args gs.Args) error {
 		action["fxname"] = fxnameValue.Str
 	} else if instrumentValue, ok := args["instrument"]; ok && instrumentValue.Kind == gs.ValueString {
 		action["action"] = "add_instrument"
+		// Plugin name is passed as-is - extension will resolve aliases
 		action["fxname"] = instrumentValue.Str
 	} else {
 		return fmt.Errorf("FX call must specify fxname or instrument")
@@ -412,9 +415,32 @@ func (r *ReaperDSL) SetTrack(args gs.Args) error {
 		actionProps["selected"] = selectedValue.Bool
 	}
 	
+	// Handle color (similar to SetClip)
+	if colorValue, ok := args["color"]; ok {
+		var color string
+		if colorValue.Kind == gs.ValueString {
+			colorStr := strings.ToLower(strings.TrimSpace(colorValue.Str))
+			// Convert color name to hex if it's a known color name
+			if hexColor := colorNameToHex(colorStr); hexColor != "" {
+				color = hexColor
+			} else if strings.HasPrefix(colorStr, "#") {
+				// Already a hex color
+				color = colorStr
+			} else {
+				// Unknown color name, pass through (might be handled by C++ backend)
+				color = colorValue.Str
+			}
+		} else if colorValue.Kind == gs.ValueNumber {
+			color = fmt.Sprintf("#%06x", int(colorValue.Num))
+		} else {
+			return fmt.Errorf("color must be a string or number")
+		}
+		actionProps["color"] = color
+	}
+	
 	// Must have at least one property
 	if len(actionProps) == 0 {
-		return fmt.Errorf("set_track requires at least one property: name, volume_db, pan, mute, solo, or selected")
+		return fmt.Errorf("set_track requires at least one property: name, volume_db, pan, mute, solo, selected, or color")
 	}
 
 	// Check if we have a filtered collection to apply to

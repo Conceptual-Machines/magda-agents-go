@@ -8,9 +8,11 @@ import (
 	"strings"
 	"sync"
 
+	arranger "github.com/Conceptual-Machines/magda-agents-go/agents/arranger"
 	"github.com/Conceptual-Machines/magda-agents-go/agents/daw"
 	"github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
+	"github.com/Conceptual-Machines/magda-agents-go/models"
 )
 
 // expandedKeywordsJSON contains the expanded keywords as embedded JSON
@@ -622,26 +624,16 @@ type Orchestrator struct {
 	keywordsLoadMutex  sync.Mutex
 }
 
-// ArrangerAgent interface for the arranger agent (to be implemented/integrated)
+// ArrangerAgent interface for the arranger agent
+// Uses the actual arranger agent's ArrangerResult type
 type ArrangerAgent interface {
-	Generate(ctx context.Context, model string, inputArray []map[string]any, reasoningMode, outputFormat string) (*ArrangerGenerationResult, error)
+	GenerateActions(ctx context.Context, question string) (*arranger.ArrangerResult, error)
 }
 
-// ArrangerGenerationResult matches the arranger agent's GenerationResult
-type ArrangerGenerationResult struct {
-	OutputParsed struct {
-		Choices []MusicalChoice `json:"choices"`
-	} `json:"output_parsed"`
-	Usage    any      `json:"usage"`
-	MCPUsed  bool     `json:"mcpUsed,omitempty"`
-	MCPCalls int      `json:"mcpCalls,omitempty"`
-	MCPTools []string `json:"mcpTools,omitempty"`
-}
-
-// ArrangerResult represents the output from the arranger agent
+// ArrangerResult represents the output from the arranger agent (internal format)
 type ArrangerResult struct {
-	Choices []MusicalChoice `json:"choices"`
-	Usage   any             `json:"usage"`
+	Actions []map[string]any `json:"actions"` // Parsed DSL actions
+	Usage   any              `json:"usage"`
 }
 
 // MusicalChoice represents a musical composition choice
@@ -669,10 +661,13 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	dawAgent := daw.NewDawAgent(cfg)
 	llmProvider := llm.NewOpenAIProvider(cfg.OpenAIAPIKey)
 
+	// Initialize arranger agent (basic, no MCP for now)
+	arrangerAgent := arranger.NewBasicArrangerAgent(cfg)
+
 	o := &Orchestrator{
-		dawAgent:    dawAgent,
-		llmProvider: llmProvider,
-		// arrangerAgent will be set when we integrate
+		dawAgent:      dawAgent,
+		arrangerAgent: arrangerAgent,
+		llmProvider:   llmProvider,
 	}
 
 	// Load expanded keywords (lazy load on first use if file not found)
@@ -722,16 +717,15 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// Build arranger input from question
-			inputArray := o.buildArrangerInput(question)
-			result, err := o.arrangerAgent.Generate(ctx, "gpt-5.1", inputArray, "none", "dsl")
+			// Call arranger agent with question
+			result, err := o.arrangerAgent.GenerateActions(ctx, question)
 			if err != nil {
 				arrangerErr = fmt.Errorf("arranger agent: %w", err)
 				return
 			}
-			// Convert arranger result to our format
+			// Use arranger result directly
 			arrangerResult = &ArrangerResult{
-				Choices: result.OutputParsed.Choices,
+				Actions: result.Actions,
 				Usage:   result.Usage,
 			}
 		}()
@@ -969,17 +963,185 @@ func (o *Orchestrator) mergeResults(dawResult *daw.DawResult, arrangerResult *Ar
 		Actions: []map[string]any{},
 	}
 
+	// If we only have arranger results (no DAW), convert arranger actions to NoteEvents
+	// and create a simple DAW action structure
+	if arrangerResult != nil && len(arrangerResult.Actions) > 0 && (dawResult == nil || len(dawResult.Actions) == 0) {
+		// Convert arranger actions to NoteEvents
+		allNoteEvents := []models.NoteEvent{}
+		currentBeat := 0.0
+
+		for _, action := range arrangerResult.Actions {
+			noteEvents, err := arranger.ConvertArrangerActionToNoteEvents(action, currentBeat)
+			if err != nil {
+				log.Printf("⚠️ Failed to convert arranger action to NoteEvents: %v", err)
+				continue
+			}
+
+			allNoteEvents = append(allNoteEvents, noteEvents...)
+
+			// Update currentBeat for next action (sum of lengths)
+			if length, ok := getFloat(action, "length"); ok {
+				if repeat, ok := getInt(action, "repeat"); ok {
+					currentBeat += length * float64(repeat)
+				} else {
+					currentBeat += length
+				}
+			}
+		}
+
+		// Create a DAW action to add MIDI notes
+		if len(allNoteEvents) > 0 {
+			// Convert models.NoteEvent to map format expected by DAW
+			notesArray := make([]map[string]any, len(allNoteEvents))
+			for i, note := range allNoteEvents {
+				notesArray[i] = map[string]any{
+					"pitch":    note.MidiNoteNumber,
+					"velocity": note.Velocity,
+					"start":    note.StartBeats,
+					"length":   note.DurationBeats,
+				}
+			}
+
+			// Create add_midi action
+			midiAction := map[string]any{
+				"action": "add_midi",
+				"notes":  notesArray,
+			}
+			result.Actions = append(result.Actions, midiAction)
+		}
+	}
+
 	// Add DAW actions
 	if dawResult != nil {
-		result.Actions = append(result.Actions, dawResult.Actions...)
+		// If we have both DAW and arranger results, inject arranger NoteEvents into DAW actions
+		if arrangerResult != nil && len(arrangerResult.Actions) > 0 {
+			log.Printf("🔄 Merging %d DAW actions with %d arranger actions", len(dawResult.Actions), len(arrangerResult.Actions))
+
+			// Convert all arranger actions to NoteEvents
+			allNoteEvents := []models.NoteEvent{}
+			currentBeat := 0.0
+
+			for _, action := range arrangerResult.Actions {
+				log.Printf("🎵 Converting arranger action: type=%v, chord=%v", action["type"], action["chord"])
+				noteEvents, err := arranger.ConvertArrangerActionToNoteEvents(action, currentBeat)
+				if err != nil {
+					log.Printf("⚠️ Failed to convert arranger action to NoteEvents: %v", err)
+					continue
+				}
+
+				log.Printf("✅ Converted to %d NoteEvents (starting at beat %.2f)", len(noteEvents), currentBeat)
+				allNoteEvents = append(allNoteEvents, noteEvents...)
+
+				// Update currentBeat for next action
+				if length, ok := getFloat(action, "length"); ok {
+					if repeat, ok := getInt(action, "repeat"); ok {
+						currentBeat += length * float64(repeat)
+					} else {
+						currentBeat += length
+					}
+				}
+			}
+
+			log.Printf("📊 Total NoteEvents from arranger: %d", len(allNoteEvents))
+
+			// Find add_midi actions and inject NoteEvents, or create one if needed
+			hasMidiAction := false
+			for _, action := range dawResult.Actions {
+				actionType, ok := action["action"].(string)
+				if !ok {
+					result.Actions = append(result.Actions, action)
+					continue
+				}
+
+				if actionType == "add_midi" {
+					hasMidiAction = true
+					// Convert models.NoteEvent to map format expected by DAW
+					notesArray := make([]map[string]any, len(allNoteEvents))
+					for i, note := range allNoteEvents {
+						notesArray[i] = map[string]any{
+							"pitch":    note.MidiNoteNumber,
+							"velocity": note.Velocity,
+							"start":    note.StartBeats,
+							"length":   note.DurationBeats,
+						}
+					}
+					action["notes"] = notesArray
+					log.Printf("✅ Injected %d notes into add_midi action", len(notesArray))
+				}
+				result.Actions = append(result.Actions, action)
+			}
+
+			// If no add_midi action exists but we have NoteEvents, create one
+			if !hasMidiAction && len(allNoteEvents) > 0 {
+				// Find the last track index from DAW actions
+				lastTrackIndex := -1
+				for _, action := range dawResult.Actions {
+					if track, ok := action["track"].(int); ok {
+						lastTrackIndex = track
+					} else if track, ok := action["index"].(int); ok {
+						lastTrackIndex = track
+					}
+				}
+
+				// Convert NoteEvents to map format
+				notesArray := make([]map[string]any, len(allNoteEvents))
+				for i, note := range allNoteEvents {
+					notesArray[i] = map[string]any{
+						"pitch":    note.MidiNoteNumber,
+						"velocity": note.Velocity,
+						"start":    note.StartBeats,
+						"length":   note.DurationBeats,
+					}
+				}
+
+				midiAction := map[string]any{
+					"action": "add_midi",
+					"notes":  notesArray,
+				}
+				if lastTrackIndex >= 0 {
+					midiAction["track"] = lastTrackIndex
+				}
+
+				result.Actions = append(result.Actions, midiAction)
+				log.Printf("✅ Created new add_midi action with %d notes (track=%d)", len(notesArray), lastTrackIndex)
+			}
+		} else {
+			// No arranger results, just add DAW actions as-is
+			result.Actions = append(result.Actions, dawResult.Actions...)
+		}
 		result.Usage = dawResult.Usage // TODO: merge usage from both agents
 	}
 
-	// TODO: Inject Arranger musical content into DAW actions (placeholder resolution)
-	// For now, just return DAW actions
-	// Phase 2 will implement placeholder resolution
-
 	return result, nil
+}
+
+// Helper functions for type conversion
+func getFloat(m map[string]any, key string) (float64, bool) {
+	if v, ok := m[key]; ok {
+		switch val := v.(type) {
+		case float64:
+			return val, true
+		case int:
+			return float64(val), true
+		case int64:
+			return float64(val), true
+		}
+	}
+	return 0, false
+}
+
+func getInt(m map[string]any, key string) (int, bool) {
+	if v, ok := m[key]; ok {
+		switch val := v.(type) {
+		case int:
+			return val, true
+		case int64:
+			return int(val), true
+		case float64:
+			return int(val), true
+		}
+	}
+	return 0, false
 }
 
 // buildArrangerInput converts question to arranger agent input format
