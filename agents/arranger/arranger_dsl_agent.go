@@ -125,15 +125,19 @@ func (a *ArrangerAgent) GenerateActions(
 		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
 			"Generates musical content using chord symbols and arpeggios. " +
 			"Use chord symbols like 'Em' (E minor), 'C' (C major), 'Am7' (A minor 7th), 'Cmaj7' (C major 7th). " +
-			"**CRITICAL - ARPEGGIO vs CHORD**: " +
-			"- arpeggio() = SEQUENTIAL notes, played ONE AFTER ANOTHER (broken chord pattern). " +
-			"- chord() = SIMULTANEOUS notes, all played AT THE SAME TIME. " +
-			"When user asks for 'arpeggio', ONLY use arpeggio(), do NOT also add a chord(). " +
-			"**TIMING IS RELATIVE**: Do NOT use start times. Only specify length and repetitions. " +
-			"Generate DSL: arpeggio(\"Em\", length=4) OR chord(\"C\", length=4, repeat=2) - NOT BOTH for same request. " +
-			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=16) - length is TOTAL beats. " +
-			"**DEFAULT: 1 bar (4 beats). For N chords in progression, use length = N * 4.** " +
-			"**CRITICAL**: Always use chord symbols (Em, C, Am7) NOT discrete MIDI notes. " +
+			"**CRITICAL - ARPEGGIO vs CHORD - NEVER MIX**: " +
+			"- arpeggio() = SEQUENTIAL notes ONLY, played ONE AFTER ANOTHER. " +
+			"- chord() = SIMULTANEOUS notes, all at same time. " +
+			"- NEVER generate chord() when user asks for arpeggio! " +
+			"- NEVER generate both chord() AND arpeggio() for same request! " +
+			"**NOTE DURATION VALUES (in beats)**: " +
+			"- 16th note = 0.25 beats, 8th note = 0.5 beats, quarter = 1 beat, half = 2 beats, whole = 4 beats. " +
+			"- For '16th note arpeggio': use length=0.25 per note. A 3-note triad with 16th notes repeating 4x = length=3 (12 notes × 0.25 = 3 beats total). " +
+			"- For '8th note arpeggio': use length=1.5 (3 notes × 0.5 = 1.5 beats). " +
+			"**TIMING IS RELATIVE**: Only specify total length and repetitions. " +
+			"Example: arpeggio(\"Em\", length=3, repeat=4) for 16th note arpeggio repeated 4 times. " +
+			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=16) - 4 beats per chord. " +
+			"**CRITICAL**: Always use chord symbols NOT discrete MIDI notes. " +
 			"**YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
 		Grammar: llm.GetArrangerDSLGrammar(),
 		Syntax:  "lark",
