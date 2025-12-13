@@ -127,8 +127,9 @@ func (a *ArrangerAgent) GenerateActions(
 			"Use chord symbols like 'Em' (E minor), 'C' (C major), 'Am7' (A minor 7th), 'Cmaj7' (C major 7th). " +
 			"**CRITICAL - TIMING IS RELATIVE**: Do NOT use start times. Only specify length and repetitions. " +
 			"The DAW agent handles absolute positioning when creating clips. " +
-			"Generate DSL code like: arpeggio(\"Em\", length=2) or chord(\"C\", length=1, repeat=4). " +
-			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=4, repeat=2). " +
+			"Generate DSL code like: arpeggio(\"Em\", length=4) or chord(\"C\", length=4, repeat=2). " +
+			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=16) - length is TOTAL beats, so 4 chords with 1 bar each = 16 beats. " +
+			"**DEFAULT: 1 bar (4 beats) per chord. For N chords, use length = N * 4.** " +
 			"**CRITICAL**: Always use chord symbols (Em, C, Am7) NOT discrete MIDI notes. " +
 			"**YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
 		Grammar: llm.GetArrangerDSLGrammar(),
