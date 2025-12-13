@@ -103,17 +103,40 @@ func (p *FunctionalDSLParser) SetState(state map[string]any) {
 	}
 }
 
+// getExistingTrackCount returns the number of existing tracks from the state.
+// This is used to initialize trackCounter so new tracks are created at the correct index.
+func (p *FunctionalDSLParser) getExistingTrackCount() int {
+	if p.state == nil {
+		return 0
+	}
+	
+	// Check for tracks in state.state.tracks or state.tracks
+	stateMap, ok := p.state["state"].(map[string]any)
+	if !ok {
+		stateMap = p.state
+	}
+	
+	if tracks, ok := stateMap["tracks"].([]any); ok {
+		return len(tracks)
+	}
+	
+	return 0
+}
+
 // ParseDSL parses DSL code and returns REAPER API actions.
 func (p *FunctionalDSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 	if dslCode == "" {
 		return nil, fmt.Errorf("empty DSL code")
 	}
 
-
 	// Reset actions for new parse
 	p.actions = make([]map[string]any, 0)
 	p.currentTrackIndex = -1
-	p.trackCounter = 0
+	
+	// Initialize trackCounter based on existing tracks in state
+	// This ensures new tracks are created at the correct index
+	p.trackCounter = p.getExistingTrackCount()
+	
 	p.clearIterationContext()
 
 	// Execute DSL code using Grammar School Engine

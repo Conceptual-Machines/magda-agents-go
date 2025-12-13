@@ -350,3 +350,373 @@ func TestArrangerIntegration_ChordAllSimultaneous(t *testing.T) {
 	}
 }
 
+// ===== COMPREHENSIVE ARPEGGIO INTEGRATION TESTS =====
+
+func TestArrangerIntegration_ArpeggioQuarterNotes(t *testing.T) {
+	// Quarter notes (1 beat each) filling 1 bar = 4 notes
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=C, note_duration=1.0, length=4)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// 4 beats / 1 beat per note = 4 notes
+	if len(noteEvents) != 4 {
+		t.Errorf("Expected 4 notes (quarter notes in 1 bar), got %d", len(noteEvents))
+	}
+
+	for i, note := range noteEvents {
+		if note.DurationBeats != 1.0 {
+			t.Errorf("Note %d: expected duration 1.0 (quarter note), got %.4f", i, note.DurationBeats)
+		}
+	}
+
+	// Verify sequential timing: 0, 1, 2, 3
+	expectedStarts := []float64{0, 1, 2, 3}
+	for i, note := range noteEvents {
+		if note.StartBeats != expectedStarts[i] {
+			t.Errorf("Note %d: expected start %.1f, got %.4f", i, expectedStarts[i], note.StartBeats)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioFourBars(t *testing.T) {
+	// 4 bars = 16 beats with 16th notes
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Dm, note_duration=0.25, length=16)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// 16 beats / 0.25 beats per note = 64 notes
+	if len(noteEvents) != 64 {
+		t.Errorf("Expected 64 notes (16th notes in 4 bars), got %d", len(noteEvents))
+	}
+
+	// First note at 0, last note should end at 16
+	lastNote := noteEvents[len(noteEvents)-1]
+	lastEnd := lastNote.StartBeats + lastNote.DurationBeats
+	if lastEnd != 16.0 {
+		t.Errorf("Expected last note to end at 16.0, got %.4f", lastEnd)
+	}
+
+	// Verify D minor pitches (D=50, F=53, A=57 in octave 4)
+	expectedPitches := []int{50, 53, 57}
+	for i, note := range noteEvents {
+		expectedPitch := expectedPitches[i%3]
+		if note.MidiNoteNumber != expectedPitch {
+			t.Errorf("Note %d: expected pitch %d (D minor), got %d", i, expectedPitch, note.MidiNoteNumber)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioMajor7thChord(t *testing.T) {
+	// Test with Cmaj7 chord (4 notes: C, E, G, B)
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Cmaj7, note_duration=0.5, length=4)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// 4 beats / 0.5 beats per note = 8 notes
+	if len(noteEvents) != 8 {
+		t.Errorf("Expected 8 notes (8th notes in 1 bar), got %d", len(noteEvents))
+	}
+
+	// Cmaj7 = C(48), E(52), G(55), B(59)
+	expectedPitches := []int{48, 52, 55, 59}
+	for i, note := range noteEvents {
+		expectedPitch := expectedPitches[i%4]
+		if note.MidiNoteNumber != expectedPitch {
+			t.Errorf("Note %d: expected pitch %d (Cmaj7), got %d", i, expectedPitch, note.MidiNoteNumber)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioWithOctave(t *testing.T) {
+	// Test arpeggio in octave 5
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Em, note_duration=0.25, length=4, octave=5)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// E minor in octave 5: E=64, G=67, B=71
+	expectedPitches := []int{64, 67, 71}
+	for i, note := range noteEvents {
+		expectedPitch := expectedPitches[i%3]
+		if note.MidiNoteNumber != expectedPitch {
+			t.Errorf("Note %d: expected pitch %d (Em octave 5), got %d", i, expectedPitch, note.MidiNoteNumber)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioWithVelocity(t *testing.T) {
+	// Test arpeggio with custom velocity
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Am, note_duration=0.5, length=4, velocity=80)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	for i, note := range noteEvents {
+		if note.Velocity != 80 {
+			t.Errorf("Note %d: expected velocity 80, got %d", i, note.Velocity)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioStartOffset(t *testing.T) {
+	// Test arpeggio with start offset (e.g., after a chord)
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=G, note_duration=0.25, length=4)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	// Start at beat 8 (after 2 bars of other content)
+	startOffset := 8.0
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, startOffset)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// First note should start at offset
+	if noteEvents[0].StartBeats != startOffset {
+		t.Errorf("First note: expected start %.1f, got %.4f", startOffset, noteEvents[0].StartBeats)
+	}
+
+	// Last note should end at 8 + 4 = 12
+	lastNote := noteEvents[len(noteEvents)-1]
+	lastEnd := lastNote.StartBeats + lastNote.DurationBeats
+	expectedEnd := startOffset + 4.0
+	if lastEnd != expectedEnd {
+		t.Errorf("Expected last note to end at %.1f, got %.4f", expectedEnd, lastEnd)
+	}
+}
+
+func TestArrangerIntegration_ArpeggioMinor7th(t *testing.T) {
+	// Test Am7 arpeggio (A, C, E, G)
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Am7, note_duration=0.5, length=4)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// Am7 in octave 4: A=57, C=60, E=64, G=67
+	expectedPitches := []int{57, 60, 64, 67}
+	for i, note := range noteEvents {
+		expectedPitch := expectedPitches[i%4]
+		if note.MidiNoteNumber != expectedPitch {
+			t.Errorf("Note %d: expected pitch %d (Am7), got %d", i, expectedPitch, note.MidiNoteNumber)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioDiminished(t *testing.T) {
+	// Test Bdim arpeggio (B, D, F)
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Bdim, note_duration=0.25, length=4)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// Bdim in octave 4: B=59, D=62, F=65
+	expectedPitches := []int{59, 62, 65}
+	for i, note := range noteEvents {
+		expectedPitch := expectedPitches[i%3]
+		if note.MidiNoteNumber != expectedPitch {
+			t.Errorf("Note %d: expected pitch %d (Bdim), got %d", i, expectedPitch, note.MidiNoteNumber)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioTimingExact(t *testing.T) {
+	// Verify exact timing of each note in 16th note arpeggio
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Em, note_duration=0.25, length=2)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// 2 beats / 0.25 = 8 notes
+	if len(noteEvents) != 8 {
+		t.Fatalf("Expected 8 notes, got %d", len(noteEvents))
+	}
+
+	// Verify exact timing: 0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75
+	expectedStarts := []float64{0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75}
+	for i, note := range noteEvents {
+		if note.StartBeats != expectedStarts[i] {
+			t.Errorf("Note %d: expected start %.2f, got %.4f", i, expectedStarts[i], note.StartBeats)
+		}
+		if note.DurationBeats != 0.25 {
+			t.Errorf("Note %d: expected duration 0.25, got %.4f", i, note.DurationBeats)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioSharpFlat(t *testing.T) {
+	// Test arpeggios with sharps and flats
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	// Test F# minor
+	dsl := `arpeggio(symbol=F#m, note_duration=0.5, length=4)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// F#m in octave 4: F#=54, A=57, C#=61
+	expectedPitches := []int{54, 57, 61}
+	for i, note := range noteEvents {
+		expectedPitch := expectedPitches[i%3]
+		if note.MidiNoteNumber != expectedPitch {
+			t.Errorf("Note %d: expected pitch %d (F#m), got %d", i, expectedPitch, note.MidiNoteNumber)
+		}
+	}
+}
+
+func TestArrangerIntegration_ArpeggioFlatKey(t *testing.T) {
+	// Test Bb major arpeggio
+	parser, err := NewArrangerDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `arpeggio(symbol=Bb, note_duration=0.5, length=4)`
+	
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("ParseDSL failed: %v", err)
+	}
+
+	action := actions[0]
+	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 0.0)
+	if err != nil {
+		t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+	}
+
+	// Bb major in octave 4: Bb=58, D=62, F=65
+	expectedPitches := []int{58, 62, 65}
+	for i, note := range noteEvents {
+		expectedPitch := expectedPitches[i%3]
+		if note.MidiNoteNumber != expectedPitch {
+			t.Errorf("Note %d: expected pitch %d (Bb), got %d", i, expectedPitch, note.MidiNoteNumber)
+		}
+	}
+}
+
