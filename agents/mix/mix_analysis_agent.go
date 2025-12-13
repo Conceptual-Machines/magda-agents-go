@@ -21,12 +21,23 @@ const (
 	ModeMaster     AnalysisMode = "master"      // Master bus / mastering analysis
 )
 
+// AccuracyLevel controls depth of analysis (maps to LLM reasoning)
+type AccuracyLevel string
+
+const (
+	AccuracyFast     AccuracyLevel = "fast"     // No reasoning - quick results
+	AccuracyBalanced AccuracyLevel = "balanced" // Low reasoning - good tradeoff
+	AccuracyDeep     AccuracyLevel = "deep"     // Medium reasoning - thorough analysis
+	AccuracyMax      AccuracyLevel = "max"      // XHigh reasoning (GPT-5.2) - maximum for complex tasks
+)
+
 // AnalysisRequest contains DSP analysis data and context for the mix agent
 type AnalysisRequest struct {
 	Mode         AnalysisMode     `json:"mode"`
 	AnalysisData *DSPAnalysisData `json:"analysis_data"`
 	Context      *AnalysisContext `json:"context"`
 	UserRequest  string           `json:"user_request,omitempty"` // Optional specific request
+	Accuracy     AccuracyLevel    `json:"accuracy,omitempty"`     // Analysis depth (fast/balanced/deep/max)
 }
 
 // DSPAnalysisData contains the DSP analysis results from REAPER
@@ -346,6 +357,36 @@ func NewMixAnalysisAgent(cfg *config.Config) *MixAnalysisAgent {
 	}
 }
 
+// mapAccuracyToReasoning converts accuracy level to LLM reasoning mode
+// Also considers analysis mode - multi-track and master benefit from more reasoning
+func (a *MixAnalysisAgent) mapAccuracyToReasoning(accuracy AccuracyLevel, mode AnalysisMode) string {
+	// If not specified, auto-select based on mode
+	if accuracy == "" {
+		switch mode {
+		case ModeMultiTrack:
+			return "medium" // Multi-track needs relationship analysis
+		case ModeMaster:
+			return "low" // Mastering benefits from some reasoning
+		default:
+			return "none" // Single track is fast by default
+		}
+	}
+
+	// Map explicit accuracy settings to GPT-5.2 reasoning levels
+	switch accuracy {
+	case AccuracyFast:
+		return "none"
+	case AccuracyBalanced:
+		return "low"
+	case AccuracyDeep:
+		return "medium"
+	case AccuracyMax:
+		return "xhigh" // GPT-5.2 maximum reasoning for complex multi-track analysis
+	default:
+		return "none"
+	}
+}
+
 func getMixAnalysisSystemPrompt() string {
 	return `You are an expert audio engineer and mix analyst. Your role is to analyze DSP data from audio tracks and provide professional mixing recommendations.
 
@@ -485,10 +526,15 @@ func (a *MixAnalysisAgent) Analyze(ctx context.Context, request *AnalysisRequest
 		return nil, fmt.Errorf("failed to build prompt: %w", err)
 	}
 
+	// Map accuracy level to reasoning mode
+	reasoningMode := a.mapAccuracyToReasoning(request.Accuracy, request.Mode)
+	log.Printf("🎯 Accuracy: %s → Reasoning: %s", request.Accuracy, reasoningMode)
+
 	// Create LLM request with structured output
 	llmRequest := &llm.GenerationRequest{
-		Model:        "gpt-4.1",
-		SystemPrompt: a.systemPrompt,
+		Model:         "gpt-5.2",
+		SystemPrompt:  a.systemPrompt,
+		ReasoningMode: reasoningMode,
 		InputArray: []map[string]any{
 			{
 				"role":    "user",
@@ -608,10 +654,9 @@ func getAnalysisResultSchema() map[string]any {
 							"type":                 "object",
 							"additionalProperties": false,
 							"properties": map[string]any{
-								"type":            map[string]any{"type": "string"},
-								"severity":        map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
-								"description":     map[string]any{"type": "string"},
-								"frequency_range": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
+								"type":        map[string]any{"type": "string"},
+								"severity":    map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
+								"description": map[string]any{"type": "string"},
 							},
 							"required": []string{"type", "severity", "description"},
 						},
@@ -629,26 +674,19 @@ func getAnalysisResultSchema() map[string]any {
 					"type":                 "object",
 					"additionalProperties": false,
 					"properties": map[string]any{
-						"id":          map[string]any{"type": "string"},
-						"priority":    map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
-						"description": map[string]any{"type": "string"},
-						"explanation": map[string]any{"type": "string"},
-						"action": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"properties": map[string]any{
-								"type":      map[string]any{"type": "string"},
-								"track":     map[string]any{"type": "integer"},
-								"fx_name":   map[string]any{"type": "string"},
-								"fx_index":  map[string]any{"type": "integer"},
-								"parameter": map[string]any{"type": "string"},
-								"value":     map[string]any{"type": "number"},
-								"preset":    map[string]any{"type": "object", "additionalProperties": true},
-							},
-							"required": []string{"type"},
-						},
+						"id":           map[string]any{"type": "string"},
+						"priority":     map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
+						"description":  map[string]any{"type": "string"},
+						"explanation":  map[string]any{"type": "string"},
+						"action_type":  map[string]any{"type": "string", "enum": []string{"add_fx", "modify_fx_param", "set_volume", "set_pan"}},
+						"fx_name":      map[string]any{"type": "string"},
+						"fx_index":     map[string]any{"type": "integer"},
+						"track":        map[string]any{"type": "integer"},
+						"parameter":    map[string]any{"type": "string"},
+						"value":        map[string]any{"type": "number"},
+						"value_string": map[string]any{"type": "string"},
 					},
-					"required": []string{"priority", "description", "explanation", "action"},
+					"required": []string{"id", "priority", "description", "explanation", "action_type", "fx_name", "fx_index", "track", "parameter", "value", "value_string"},
 				},
 			},
 			"relationship_issues": map[string]any{
@@ -660,12 +698,11 @@ func getAnalysisResultSchema() map[string]any {
 						"tracks":         map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
 						"issue":          map[string]any{"type": "string"},
 						"recommendation": map[string]any{"type": "string"},
-						"actions":        map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": true}},
 					},
 					"required": []string{"tracks", "issue", "recommendation"},
 				},
 			},
 		},
-		"required": []string{"analysis", "recommendations"},
+		"required": []string{"analysis", "recommendations", "relationship_issues"},
 	}
 }

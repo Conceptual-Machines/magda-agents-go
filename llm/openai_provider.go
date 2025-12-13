@@ -28,11 +28,12 @@ const (
 	mcpCallType    = "mcp_call"
 
 	// Reasoning effort levels
-	reasoningNone    = "none" // GPT-5.1 supports "none" for low-latency
+	reasoningNone    = "none"  // GPT-5.2 default - lowest latency
 	reasoningMinimal = "minimal"
 	reasoningLow     = "low"
 	reasoningMedium  = "medium"
 	reasoningHigh    = "high"
+	reasoningXHigh   = "xhigh" // GPT-5.2 new level - maximum reasoning
 
 	// Heartbeat interval for streaming (send every 10 seconds to keep connection alive during long operations)
 	heartbeatIntervalSeconds = 10
@@ -348,13 +349,22 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 	}
 
 	// Determine reasoning effort
-	// Only include reasoning parameter for models that support it (e.g., gpt-5-mini, gpt-5)
+	// Only include reasoning parameter for models that support it (GPT-5 family)
 	// Models like gpt-4.1-mini do NOT support reasoning parameters
 	modelsWithReasoning := map[string]bool{
-		"gpt-5-mini": true,
+		// GPT-5 base
 		"gpt-5":      true,
-		"o3-mini":    true,
-		"o3":         true,
+		"gpt-5-mini": true,
+		"gpt-5-nano": true,
+		// GPT-5.1
+		"gpt-5.1":      true,
+		"gpt-5.1-mini": true,
+		"gpt-5.1-nano": true,
+		// GPT-5.2
+		"gpt-5.2":      true,
+		"gpt-5.2-mini": true,
+		"gpt-5.2-nano": true,
+		"gpt-5.2-pro":  true,
 	}
 	supportsReasoning := modelsWithReasoning[request.Model]
 
@@ -362,10 +372,9 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 	if supportsReasoning {
 		switch request.ReasoningMode {
 		case reasoningNone:
-			// "none" is not a valid enum, use "low" as the fastest option
+			// GPT-5.2 default - lowest latency
 			reasoningEffort = shared.ReasoningEffort("none")
 		case reasoningMinimal, reasoningMin:
-			// "minimal" is not supported by GPT-5.1, fall back to "low"
 			reasoningEffort = responses.ReasoningEffortLow
 		case reasoningLow:
 			reasoningEffort = responses.ReasoningEffortLow
@@ -373,9 +382,12 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 			reasoningEffort = responses.ReasoningEffortMedium
 		case reasoningHigh:
 			reasoningEffort = responses.ReasoningEffortHigh
+		case reasoningXHigh:
+			// GPT-5.2 new level - maximum reasoning for tough problems
+			reasoningEffort = shared.ReasoningEffort("xhigh")
 		default:
-			// Default to "low" for GPT-5.1
-			reasoningEffort = responses.ReasoningEffortLow
+			// Default to "none" for GPT-5.2 (lowest latency)
+			reasoningEffort = shared.ReasoningEffort("none")
 		}
 	}
 
