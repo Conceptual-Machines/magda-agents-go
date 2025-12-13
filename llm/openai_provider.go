@@ -868,8 +868,6 @@ func (p *OpenAIProvider) processResponseWithJSONSchema(
 		RawOutput: textOutput, // JSON string from OutputSchema
 		Usage:     resp.Usage,
 	}, nil
-	// If we do, it means CFG was not configured, which is an error
-	return nil, fmt.Errorf("CFG grammar is required for MAGDA - this code path should never be reached")
 }
 
 // analyzeMCPUsage checks if MCP was used and returns usage details
