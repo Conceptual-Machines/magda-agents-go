@@ -122,21 +122,15 @@ func (a *ArrangerAgent) GenerateActions(
 	// Use CFG grammar for DSL output
 	request.CFGGrammar = &llm.CFGConfig{
 		ToolName: "arranger_dsl",
-		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
-			"Generates musical content using chord symbols and arpeggios. " +
-			"Use chord symbols like 'Em' (E minor), 'C' (C major), 'Am7' (A minor 7th), 'Cmaj7' (C major 7th). " +
-			"**CRITICAL - ARPEGGIO vs CHORD - NEVER MIX**: " +
-			"- arpeggio() = SEQUENTIAL notes ONLY, played ONE AFTER ANOTHER. " +
-			"- chord() = SIMULTANEOUS notes, all at same time. " +
-			"- NEVER generate chord() when user asks for arpeggio! " +
-			"**NOTE DURATION - USE note_duration PARAMETER**: " +
-			"- 16th note = note_duration=0.25, 8th note = note_duration=0.5, quarter = note_duration=1 " +
-			"- For '16th note arpeggio': arpeggio(\"Em\", note_duration=0.25, repeat=4) " +
-			"- For '8th note arpeggio': arpeggio(\"Em\", note_duration=0.5, repeat=4) " +
-			"- The repeat parameter controls how many times the pattern plays. " +
-			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=16) - 4 beats per chord. " +
-			"**CRITICAL**: Always use chord symbols NOT discrete MIDI notes. " +
-			"**YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
+		Description: "Generate ONE musical call. Choose exactly ONE:\n" +
+			"1. ARPEGGIO (sequential notes): arpeggio(symbol=Em, note_duration=0.25)\n" +
+			"   - note_duration: 0.25=16th, 0.5=8th, 1=quarter note\n" +
+			"2. CHORD (simultaneous notes): chord(symbol=C, length=4)\n" +
+			"3. PROGRESSION (chord sequence): progression(chords=[C, Am, F, G], length=16)\n" +
+			"Examples:\n" +
+			"- 'E minor arpeggio' → arpeggio(symbol=Em, note_duration=0.25)\n" +
+			"- 'C major chord' → chord(symbol=C, length=4)\n" +
+			"- 'I-vi-IV-V in C' → progression(chords=[C, Am, F, G], length=16)",
 		Grammar: llm.GetArrangerDSLGrammar(),
 		Syntax:  "lark",
 	}
