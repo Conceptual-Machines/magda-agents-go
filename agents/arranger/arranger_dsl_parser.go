@@ -72,8 +72,50 @@ func (p *ArrangerDSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 		return nil, fmt.Errorf("no actions found in DSL code")
 	}
 
+	// Post-process: Filter out redundant chord actions when arpeggio exists
+	// LLM sometimes generates both chord() and arpeggio() for same chord symbol
+	// In that case, keep only the arpeggio (which is sequential notes)
+	p.actions = p.filterRedundantChords(p.actions)
+
 	log.Printf("✅ Arranger DSL Parser: Translated %d actions from DSL", len(p.actions))
 	return p.actions, nil
+}
+
+// filterRedundantChords removes chord actions that duplicate arpeggio actions
+// This fixes LLM behavior where it generates chord() + arpeggio() for same chord
+func (p *ArrangerDSLParser) filterRedundantChords(actions []map[string]any) []map[string]any {
+	// Find all arpeggio chord symbols
+	arpeggioChords := make(map[string]bool)
+	hasArpeggio := false
+	for _, action := range actions {
+		if action["type"] == "arpeggio" {
+			hasArpeggio = true
+			if chord, ok := action["chord"].(string); ok {
+				arpeggioChords[chord] = true
+			}
+		}
+	}
+
+	// If no arpeggios, return as-is
+	if !hasArpeggio {
+		return actions
+	}
+
+	// Filter out chord actions that match arpeggio chord symbols
+	filtered := make([]map[string]any, 0, len(actions))
+	for _, action := range actions {
+		if action["type"] == "chord" {
+			if chord, ok := action["chord"].(string); ok {
+				if arpeggioChords[chord] {
+					log.Printf("🔄 Filtering redundant chord action for %s (arpeggio exists)", chord)
+					continue // Skip this chord - arpeggio takes precedence
+				}
+			}
+		}
+		filtered = append(filtered, action)
+	}
+
+	return filtered
 }
 
 // ========== Side-effect methods (ArrangerDSL) ==========
@@ -138,8 +180,8 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 	// If note_duration is set, it overrides the length calculation
 	// note_duration specifies how long each note should be
 
-	// Extract repeat (default: 1)
-	repeat := 1
+	// Extract repeat (default: 0 = auto-fill the bar)
+	repeat := 0
 	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
 		repeat = int(repeatValue.Num)
 	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
@@ -239,8 +281,8 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 		}
 	}
 
-	// Extract repeat (default: 1)
-	repeat := 1
+	// Extract repeat (default: 0 = auto-fill the bar)
+	repeat := 0
 	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
 		repeat = int(repeatValue.Num)
 	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
@@ -364,8 +406,8 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 		length = durationValue.Num
 	}
 
-	// Extract repeat (default: 1)
-	repeat := 1
+	// Extract repeat (default: 0 = auto-fill the bar)
+	repeat := 0
 	if repeatValue, ok := args["repeat"]; ok && repeatValue.Kind == gs.ValueNumber {
 		repeat = int(repeatValue.Num)
 	} else if repetitionsValue, ok := args["repetitions"]; ok && repetitionsValue.Kind == gs.ValueNumber {
