@@ -294,10 +294,17 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 func (a *ArrangerDSL) Progression(args gs.Args) error {
 	p := a.parser
 
+	// DEBUG: Log all args to see what Grammar School passes
+	log.Printf("🎵 Progression called with args: %+v", args)
+	for k, v := range args {
+		log.Printf("🎵   arg[%q] = Kind:%d, Str:%q, Num:%f", k, v.Kind, v.Str, v.Num)
+	}
+
 	// Extract chords array
 	// Grammar School may pass arrays as strings that need parsing
 	chords := []string{}
 	if chordsValue, ok := args["chords"]; ok {
+		log.Printf("🎵 Found 'chords' arg: Kind=%d, Str=%q", chordsValue.Kind, chordsValue.Str)
 		if chordsValue.Kind == gs.ValueString {
 			// Parse string representation like ["C", "Am", "F", "G"] or [C, Am, F, G]
 			chordsStr := strings.TrimSpace(chordsValue.Str)
