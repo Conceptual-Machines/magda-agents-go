@@ -125,11 +125,14 @@ func (a *ArrangerAgent) GenerateActions(
 		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
 			"Generates musical content using chord symbols and arpeggios. " +
 			"Use chord symbols like 'Em' (E minor), 'C' (C major), 'Am7' (A minor 7th), 'Cmaj7' (C major 7th). " +
-			"**CRITICAL - TIMING IS RELATIVE**: Do NOT use start times. Only specify length and repetitions. " +
-			"The DAW agent handles absolute positioning when creating clips. " +
-			"Generate DSL code like: arpeggio(\"Em\", length=4) or chord(\"C\", length=4, repeat=2). " +
-			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=16) - length is TOTAL beats, so 4 chords with 1 bar each = 16 beats. " +
-			"**DEFAULT: 1 bar (4 beats) per chord. For N chords, use length = N * 4.** " +
+			"**CRITICAL - ARPEGGIO vs CHORD**: " +
+			"- arpeggio() = SEQUENTIAL notes, played ONE AFTER ANOTHER (broken chord pattern). " +
+			"- chord() = SIMULTANEOUS notes, all played AT THE SAME TIME. " +
+			"When user asks for 'arpeggio', ONLY use arpeggio(), do NOT also add a chord(). " +
+			"**TIMING IS RELATIVE**: Do NOT use start times. Only specify length and repetitions. " +
+			"Generate DSL: arpeggio(\"Em\", length=4) OR chord(\"C\", length=4, repeat=2) - NOT BOTH for same request. " +
+			"For progressions: progression(chords=[\"C\", \"Am\", \"F\", \"G\"], length=16) - length is TOTAL beats. " +
+			"**DEFAULT: 1 bar (4 beats). For N chords in progression, use length = N * 4.** " +
 			"**CRITICAL**: Always use chord symbols (Em, C, Am7) NOT discrete MIDI notes. " +
 			"**YOU MUST CALL THIS TOOL - DO NOT GENERATE ANY TEXT OUTPUT.**",
 		Grammar: llm.GetArrangerDSLGrammar(),
