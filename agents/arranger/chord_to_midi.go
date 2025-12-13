@@ -95,7 +95,7 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 		return nil, fmt.Errorf("arpeggio missing chord field")
 	}
 
-	length, _ := getFloat(action, "length", 1.0)
+	length, _ := getFloat(action, "length", 4.0) // Default: 1 bar (4 beats)
 	repeat, _ := getInt(action, "repeat", 1)
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
@@ -146,7 +146,7 @@ func convertChordToNoteEvents(action map[string]any, startBeat float64) ([]model
 		return nil, fmt.Errorf("chord missing chord field")
 	}
 
-	length, _ := getFloat(action, "length", 1.0)
+	length, _ := getFloat(action, "length", 4.0) // Default: 1 bar (4 beats)
 	repeat, _ := getInt(action, "repeat", 1)
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
@@ -195,7 +195,7 @@ func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([
 
 	fmt.Printf("🎵 DEBUG convertProgressionToNoteEvents: chords=%v, len=%d\n", chords, len(chords))
 
-	length, _ := getFloat(action, "length", float64(len(chords)))
+	length, _ := getFloat(action, "length", float64(len(chords))*4.0) // Default: 1 bar per chord
 	repeat, _ := getInt(action, "repeat", 1)
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)

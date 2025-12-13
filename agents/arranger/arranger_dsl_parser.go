@@ -113,8 +113,8 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 		}
 	}
 
-	// Extract length (default: 1 beat)
-	length := 1.0
+	// Extract length (default: 4 beats = 1 bar)
+	length := 4.0
 	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
 		length = lengthValue.Num
 	} else if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
@@ -212,8 +212,8 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 		return fmt.Errorf("chord: missing chord symbol")
 	}
 
-	// Extract length (default: 1 beat)
-	length := 1.0
+	// Extract length (default: 4 beats = 1 bar)
+	length := 4.0
 	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
 		length = lengthValue.Num
 	} else if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
@@ -322,8 +322,8 @@ func (a *ArrangerDSL) Progression(args gs.Args) error {
 		return fmt.Errorf("progression: missing chords array")
 	}
 
-	// Extract length (default: number of chords * 1 beat)
-	length := float64(len(chords))
+	// Extract length (default: number of chords * 4 beats = 1 bar per chord)
+	length := float64(len(chords)) * 4.0
 	if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
 		length = lengthValue.Num
 	} else if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
