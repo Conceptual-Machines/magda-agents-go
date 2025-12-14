@@ -1394,7 +1394,7 @@ func getTrackCount(state map[string]any) int {
 // For non-space-separated languages (Japanese, Chinese, etc.), falls back to substring matching
 func containsAny(text string, keywords []string) bool {
 	textLower := strings.ToLower(text)
-	
+
 	// Check if text contains CJK characters (Chinese, Japanese, Korean) or other non-space languages
 	hasNonSpaceLanguage := false
 	for _, r := range text {
@@ -1409,7 +1409,7 @@ func containsAny(text string, keywords []string) bool {
 			break
 		}
 	}
-	
+
 	// For non-space-separated languages, use substring matching (original behavior)
 	if hasNonSpaceLanguage {
 		for _, keyword := range keywords {
@@ -1419,7 +1419,7 @@ func containsAny(text string, keywords []string) bool {
 		}
 		return false
 	}
-	
+
 	// For space-separated languages, use whole-word matching
 	words := splitIntoWords(textLower)
 	for _, keyword := range keywords {
