@@ -160,8 +160,8 @@ func TestMixAnalysisAgent_MultiTrack(t *testing.T) {
 					Analysis: &DSPAnalysisData{
 						FrequencySpectrum: &FrequencyAnalysis{
 							Bands: &FrequencyBands{
-								Sub:    -8.0,  // Competing with kick
-								Bass:   -6.0,  // Competing with kick
+								Sub:    -8.0, // Competing with kick
+								Bass:   -6.0, // Competing with kick
 								LowMid: -10.0,
 							},
 						},
@@ -245,9 +245,9 @@ func TestSyntheticDataGenerator_GeneratesValidData(t *testing.T) {
 	gen := NewSyntheticDataGenerator(123)
 
 	testCases := []struct {
-		name    string
-		preset  TrackPreset
-		issues  []IssueType
+		name   string
+		preset TrackPreset
+		issues []IssueType
 	}{
 		{"clean_kick", PresetKick, nil},
 		{"muddy_bass", PresetBass, []IssueType{IssueMuddy}},

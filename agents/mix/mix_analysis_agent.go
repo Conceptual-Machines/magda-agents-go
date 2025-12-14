@@ -43,12 +43,12 @@ type AnalysisRequest struct {
 // DSPAnalysisData contains the DSP analysis results from REAPER
 type DSPAnalysisData struct {
 	// Single track or master analysis
-	FrequencySpectrum *FrequencyAnalysis  `json:"frequency_spectrum,omitempty"`
-	Resonances        *ResonanceAnalysis  `json:"resonances,omitempty"` // Problematic resonant frequencies
-	Loudness          *LoudnessAnalysis   `json:"loudness,omitempty"`
-	Dynamics          *DynamicsAnalysis   `json:"dynamics,omitempty"`
-	Stereo            *StereoAnalysis     `json:"stereo,omitempty"`
-	Transients        *TransientAnalysis  `json:"transients,omitempty"`
+	FrequencySpectrum *FrequencyAnalysis `json:"frequency_spectrum,omitempty"`
+	Resonances        *ResonanceAnalysis `json:"resonances,omitempty"` // Problematic resonant frequencies
+	Loudness          *LoudnessAnalysis  `json:"loudness,omitempty"`
+	Dynamics          *DynamicsAnalysis  `json:"dynamics,omitempty"`
+	Stereo            *StereoAnalysis    `json:"stereo,omitempty"`
+	Transients        *TransientAnalysis `json:"transients,omitempty"`
 
 	// Multi-track analysis
 	Tracks        []TrackAnalysis       `json:"tracks,omitempty"`
@@ -86,15 +86,15 @@ type EQProfile struct {
 
 // SpectralFeatures contains derived spectral characteristics
 type SpectralFeatures struct {
-	SpectralCentroid  float64 `json:"spectral_centroid"`            // "Center of mass" frequency (Hz) - brightness indicator
-	SpectralRolloff   float64 `json:"spectral_rolloff"`             // Frequency below which 85% of energy exists (Hz)
-	SpectralFlux      float64 `json:"spectral_flux,omitempty"`      // Rate of spectral change over time
-	SpectralFlatness  float64 `json:"spectral_flatness,omitempty"`  // 0=tonal, 1=noise-like
-	SpectralSlope     float64 `json:"spectral_slope"`               // Overall tilt (dB/octave) - negative=dark, positive=bright
-	SpectralContrast  float64 `json:"spectral_contrast,omitempty"`  // Difference between peaks and valleys
-	LowFreqEnergy     float64 `json:"low_freq_energy"`              // % of energy below 250Hz
-	MidFreqEnergy     float64 `json:"mid_freq_energy"`              // % of energy 250Hz-4kHz
-	HighFreqEnergy    float64 `json:"high_freq_energy"`             // % of energy above 4kHz
+	SpectralCentroid float64 `json:"spectral_centroid"`           // "Center of mass" frequency (Hz) - brightness indicator
+	SpectralRolloff  float64 `json:"spectral_rolloff"`            // Frequency below which 85% of energy exists (Hz)
+	SpectralFlux     float64 `json:"spectral_flux,omitempty"`     // Rate of spectral change over time
+	SpectralFlatness float64 `json:"spectral_flatness,omitempty"` // 0=tonal, 1=noise-like
+	SpectralSlope    float64 `json:"spectral_slope"`              // Overall tilt (dB/octave) - negative=dark, positive=bright
+	SpectralContrast float64 `json:"spectral_contrast,omitempty"` // Difference between peaks and valleys
+	LowFreqEnergy    float64 `json:"low_freq_energy"`             // % of energy below 250Hz
+	MidFreqEnergy    float64 `json:"mid_freq_energy"`             // % of energy 250Hz-4kHz
+	HighFreqEnergy   float64 `json:"high_freq_energy"`            // % of energy above 4kHz
 }
 
 // FrequencyBands provides simplified frequency analysis
@@ -110,31 +110,31 @@ type FrequencyBands struct {
 
 // Peak represents a detected frequency peak
 type Peak struct {
-	Frequency float64 `json:"frequency"` // Hz
-	Magnitude float64 `json:"magnitude"` // dB
+	Frequency float64 `json:"frequency"`   // Hz
+	Magnitude float64 `json:"magnitude"`   // dB
 	Q         float64 `json:"q,omitempty"` // Q factor (bandwidth) - higher = narrower/more resonant
 }
 
 // ResonanceAnalysis contains detected problematic resonances
 type ResonanceAnalysis struct {
 	Resonances []Resonance `json:"resonances,omitempty"`
-	RingTime   float64     `json:"ring_time,omitempty"`   // Decay time of resonances (seconds)
-	RoomModes  []RoomMode  `json:"room_modes,omitempty"`  // Detected room mode frequencies
+	RingTime   float64     `json:"ring_time,omitempty"`  // Decay time of resonances (seconds)
+	RoomModes  []RoomMode  `json:"room_modes,omitempty"` // Detected room mode frequencies
 }
 
 // Resonance represents a problematic resonant frequency
 type Resonance struct {
-	Frequency float64 `json:"frequency"`        // Hz
-	Magnitude float64 `json:"magnitude"`        // dB above surrounding frequencies
-	Q         float64 `json:"q"`                // Q factor - higher = sharper/more problematic
-	Severity  string  `json:"severity"`         // "low", "medium", "high"
-	Type      string  `json:"type,omitempty"`   // "ringing", "room_mode", "harmonic", "equipment"
+	Frequency float64 `json:"frequency"`      // Hz
+	Magnitude float64 `json:"magnitude"`      // dB above surrounding frequencies
+	Q         float64 `json:"q"`              // Q factor - higher = sharper/more problematic
+	Severity  string  `json:"severity"`       // "low", "medium", "high"
+	Type      string  `json:"type,omitempty"` // "ringing", "room_mode", "harmonic", "equipment"
 }
 
 // RoomMode represents a detected room resonance
 type RoomMode struct {
-	Frequency float64 `json:"frequency"` // Hz
-	Magnitude float64 `json:"magnitude"` // dB boost
+	Frequency float64 `json:"frequency"`      // Hz
+	Magnitude float64 `json:"magnitude"`      // dB boost
 	Axis      string  `json:"axis,omitempty"` // "length", "width", "height" if detectable
 }
 
@@ -177,18 +177,18 @@ type TrackAnalysis struct {
 
 // FXInfo describes an existing effect on a track with full parameter state
 type FXInfo struct {
-	Name         string        `json:"name"`
-	Index        int           `json:"index"`
-	Enabled      bool          `json:"enabled"`
-	Bypassed     bool          `json:"bypassed,omitempty"`
-	Preset       string        `json:"preset,omitempty"`        // Current preset name if any
-	Manufacturer string        `json:"manufacturer,omitempty"`
-	Format       string        `json:"format,omitempty"`        // "VST2", "VST3", "AU", "JS"
-	Category     string        `json:"category,omitempty"`      // "eq", "compressor", etc.
-	
+	Name         string `json:"name"`
+	Index        int    `json:"index"`
+	Enabled      bool   `json:"enabled"`
+	Bypassed     bool   `json:"bypassed,omitempty"`
+	Preset       string `json:"preset,omitempty"` // Current preset name if any
+	Manufacturer string `json:"manufacturer,omitempty"`
+	Format       string `json:"format,omitempty"`   // "VST2", "VST3", "AU", "JS"
+	Category     string `json:"category,omitempty"` // "eq", "compressor", etc.
+
 	// Full parameter state
 	Parameters []FXParameter `json:"parameters,omitempty"`
-	
+
 	// Common parameter shortcuts for easier LLM processing
 	// These are extracted from Parameters for well-known plugin types
 	CommonParams *CommonFXParams `json:"common_params,omitempty"`
@@ -198,8 +198,8 @@ type FXInfo struct {
 type FXParameter struct {
 	Index        int     `json:"index"`
 	Name         string  `json:"name"`
-	Value        float64 `json:"value"`          // Normalized 0-1
-	DisplayValue string  `json:"display_value"`  // Human-readable (e.g., "-6.0 dB", "4:1")
+	Value        float64 `json:"value"`         // Normalized 0-1
+	DisplayValue string  `json:"display_value"` // Human-readable (e.g., "-6.0 dB", "4:1")
 	MinValue     float64 `json:"min_value,omitempty"`
 	MaxValue     float64 `json:"max_value,omitempty"`
 	DefaultValue float64 `json:"default_value,omitempty"`
@@ -210,47 +210,47 @@ type FXParameter struct {
 type CommonFXParams struct {
 	// EQ parameters
 	EQBands []EQBandParams `json:"eq_bands,omitempty"`
-	
+
 	// Compressor parameters
-	Threshold    *float64 `json:"threshold,omitempty"`     // dB
-	Ratio        *float64 `json:"ratio,omitempty"`         // e.g., 4.0 for 4:1
-	Attack       *float64 `json:"attack,omitempty"`        // ms
-	Release      *float64 `json:"release,omitempty"`       // ms
-	MakeupGain   *float64 `json:"makeup_gain,omitempty"`   // dB
-	Knee         *float64 `json:"knee,omitempty"`          // dB
-	
+	Threshold  *float64 `json:"threshold,omitempty"`   // dB
+	Ratio      *float64 `json:"ratio,omitempty"`       // e.g., 4.0 for 4:1
+	Attack     *float64 `json:"attack,omitempty"`      // ms
+	Release    *float64 `json:"release,omitempty"`     // ms
+	MakeupGain *float64 `json:"makeup_gain,omitempty"` // dB
+	Knee       *float64 `json:"knee,omitempty"`        // dB
+
 	// Limiter parameters
-	Ceiling      *float64 `json:"ceiling,omitempty"`       // dB
-	
+	Ceiling *float64 `json:"ceiling,omitempty"` // dB
+
 	// Reverb parameters
-	PreDelay     *float64 `json:"pre_delay,omitempty"`     // ms
-	DecayTime    *float64 `json:"decay_time,omitempty"`    // seconds
-	DryWet       *float64 `json:"dry_wet,omitempty"`       // 0-100%
-	RoomSize     *float64 `json:"room_size,omitempty"`     // 0-100%
-	
+	PreDelay  *float64 `json:"pre_delay,omitempty"`  // ms
+	DecayTime *float64 `json:"decay_time,omitempty"` // seconds
+	DryWet    *float64 `json:"dry_wet,omitempty"`    // 0-100%
+	RoomSize  *float64 `json:"room_size,omitempty"`  // 0-100%
+
 	// Delay parameters
-	DelayTime    *float64 `json:"delay_time,omitempty"`    // ms
-	Feedback     *float64 `json:"feedback,omitempty"`      // 0-100%
-	
+	DelayTime *float64 `json:"delay_time,omitempty"` // ms
+	Feedback  *float64 `json:"feedback,omitempty"`   // 0-100%
+
 	// Gate parameters
 	GateThreshold *float64 `json:"gate_threshold,omitempty"` // dB
 	GateAttack    *float64 `json:"gate_attack,omitempty"`    // ms
 	GateRelease   *float64 `json:"gate_release,omitempty"`   // ms
-	
+
 	// General
-	InputGain    *float64 `json:"input_gain,omitempty"`    // dB
-	OutputGain   *float64 `json:"output_gain,omitempty"`   // dB
-	Mix          *float64 `json:"mix,omitempty"`           // 0-100% (parallel processing)
+	InputGain  *float64 `json:"input_gain,omitempty"`  // dB
+	OutputGain *float64 `json:"output_gain,omitempty"` // dB
+	Mix        *float64 `json:"mix,omitempty"`         // 0-100% (parallel processing)
 }
 
 // EQBandParams represents a single EQ band
 type EQBandParams struct {
-	BandIndex int      `json:"band_index"`
-	Enabled   bool     `json:"enabled"`
-	Type      string   `json:"type"`       // "lowpass", "highpass", "bell", "shelf_low", "shelf_high", "notch"
-	Frequency float64  `json:"frequency"`  // Hz
-	Gain      float64  `json:"gain"`       // dB
-	Q         float64  `json:"q"`          // Q factor / bandwidth
+	BandIndex int     `json:"band_index"`
+	Enabled   bool    `json:"enabled"`
+	Type      string  `json:"type"`      // "lowpass", "highpass", "bell", "shelf_low", "shelf_high", "notch"
+	Frequency float64 `json:"frequency"` // Hz
+	Gain      float64 `json:"gain"`      // dB
+	Q         float64 `json:"q"`         // Q factor / bandwidth
 }
 
 // RelationshipAnalysis contains cross-track analysis
@@ -293,7 +293,6 @@ type AnalysisContext struct {
 	TimeRange  *Range   `json:"time_range,omitempty"`
 	Target     string   `json:"target,omitempty"` // For mastering: "streaming", "cd", "vinyl"
 	ExistingFX []FXInfo `json:"existing_fx,omitempty"`
-
 }
 
 // Range represents a time range
@@ -318,8 +317,8 @@ type AnalysisSummary struct {
 
 // Issue describes a detected problem
 type Issue struct {
-	Type           string `json:"type"`                      // "frequency", "dynamics", "stereo", etc.
-	Severity       string `json:"severity"`                  // "low", "medium", "high"
+	Type           string `json:"type"`     // "frequency", "dynamics", "stereo", etc.
+	Severity       string `json:"severity"` // "low", "medium", "high"
 	Description    string `json:"description"`
 	FrequencyRange []int  `json:"frequency_range,omitempty"` // [low, high] Hz
 }

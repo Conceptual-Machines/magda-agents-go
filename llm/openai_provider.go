@@ -28,7 +28,7 @@ const (
 	mcpCallType    = "mcp_call"
 
 	// Reasoning effort levels
-	reasoningNone    = "none"  // GPT-5.2 default - lowest latency
+	reasoningNone    = "none" // GPT-5.2 default - lowest latency
 	reasoningMinimal = "minimal"
 	reasoningLow     = "low"
 	reasoningMedium  = "medium"

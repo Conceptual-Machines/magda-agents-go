@@ -154,6 +154,3 @@ func TestExtractBaseName(t *testing.T) {
 		})
 	}
 }
-
-
-

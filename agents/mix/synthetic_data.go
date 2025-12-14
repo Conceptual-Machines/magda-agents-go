@@ -50,18 +50,18 @@ const (
 type IssueType string
 
 const (
-	IssueMuddy       IssueType = "muddy"        // Too much 200-400Hz
-	IssueHarsh       IssueType = "harsh"        // Too much 2-4kHz
-	IssueBoxy        IssueType = "boxy"         // Resonance around 300-500Hz
-	IssueThin        IssueType = "thin"         // Lacking low end
-	IssueDull        IssueType = "dull"         // Lacking high end
-	IssueBoomy       IssueType = "boomy"        // Excessive sub/bass
-	IssueSibilant    IssueType = "sibilant"     // Too much 6-8kHz
-	IssueResonant    IssueType = "resonant"     // Sharp resonant peak
-	IssueOverComp    IssueType = "overcompressed"
-	IssueTooDynamic  IssueType = "too_dynamic"
-	IssuePhaseIssue  IssueType = "phase_issue"
-	IssueStereoWide  IssueType = "too_wide"
+	IssueMuddy        IssueType = "muddy"    // Too much 200-400Hz
+	IssueHarsh        IssueType = "harsh"    // Too much 2-4kHz
+	IssueBoxy         IssueType = "boxy"     // Resonance around 300-500Hz
+	IssueThin         IssueType = "thin"     // Lacking low end
+	IssueDull         IssueType = "dull"     // Lacking high end
+	IssueBoomy        IssueType = "boomy"    // Excessive sub/bass
+	IssueSibilant     IssueType = "sibilant" // Too much 6-8kHz
+	IssueResonant     IssueType = "resonant" // Sharp resonant peak
+	IssueOverComp     IssueType = "overcompressed"
+	IssueTooDynamic   IssueType = "too_dynamic"
+	IssuePhaseIssue   IssueType = "phase_issue"
+	IssueStereoWide   IssueType = "too_wide"
 	IssueStereoNarrow IssueType = "too_narrow"
 )
 
@@ -69,7 +69,7 @@ const (
 func (g *SyntheticDataGenerator) GenerateTrackAnalysis(preset TrackPreset, issues []IssueType) *DSPAnalysisData {
 	freqs := GenerateThirdOctaveFrequencies()
 	mags := g.generateBaseMagnitudes(preset, freqs)
-	
+
 	// Apply issues
 	for _, issue := range issues {
 		mags = g.applyIssue(issue, freqs, mags)
@@ -77,7 +77,7 @@ func (g *SyntheticDataGenerator) GenerateTrackAnalysis(preset TrackPreset, issue
 
 	// Generate frequency bands from the curve
 	bands := g.calculateBands(freqs, mags)
-	
+
 	// Generate spectral features
 	spectral := g.calculateSpectralFeatures(freqs, mags)
 
@@ -92,13 +92,13 @@ func (g *SyntheticDataGenerator) GenerateTrackAnalysis(preset TrackPreset, issue
 
 	// Generate dynamics based on preset and issues
 	dynamics := g.generateDynamics(preset, issues)
-	
+
 	// Generate loudness
 	loudness := g.generateLoudness(preset, issues)
-	
+
 	// Generate stereo info
 	stereo := g.generateStereo(preset, issues)
-	
+
 	// Generate transients
 	transients := g.generateTransients(preset)
 
@@ -124,7 +124,7 @@ func (g *SyntheticDataGenerator) GenerateTrackAnalysis(preset TrackPreset, issue
 
 func (g *SyntheticDataGenerator) generateBaseMagnitudes(preset TrackPreset, freqs []float64) []float64 {
 	mags := make([]float64, len(freqs))
-	
+
 	// Base spectral shapes for different instruments
 	switch preset {
 	case PresetKick:
@@ -223,14 +223,14 @@ func (g *SyntheticDataGenerator) generateBaseMagnitudes(preset TrackPreset, freq
 			mags[i] = -15 - math.Abs(math.Log10(f/1000))*5 + g.noise(3)
 		}
 	}
-	
+
 	return mags
 }
 
 func (g *SyntheticDataGenerator) applyIssue(issue IssueType, freqs, mags []float64) []float64 {
 	result := make([]float64, len(mags))
 	copy(result, mags)
-	
+
 	switch issue {
 	case IssueMuddy:
 		// Boost 200-400Hz
@@ -292,13 +292,13 @@ func (g *SyntheticDataGenerator) applyIssue(issue IssueType, freqs, mags []float
 			}
 		}
 	}
-	
+
 	return result
 }
 
 func (g *SyntheticDataGenerator) calculateBands(freqs, mags []float64) *FrequencyBands {
 	bands := &FrequencyBands{}
-	
+
 	// Average magnitudes in each band
 	for i, f := range freqs {
 		switch {
@@ -318,7 +318,7 @@ func (g *SyntheticDataGenerator) calculateBands(freqs, mags []float64) *Frequenc
 			bands.Brilliance = avgAccumulate(bands.Brilliance, mags[i])
 		}
 	}
-	
+
 	return bands
 }
 
@@ -334,15 +334,15 @@ func (g *SyntheticDataGenerator) calculateSpectralFeatures(freqs, mags []float64
 	linear := make([]float64, len(mags))
 	totalEnergy := 0.0
 	weightedSum := 0.0
-	
+
 	for i, m := range mags {
 		linear[i] = math.Pow(10, m/20)
 		totalEnergy += linear[i] * linear[i]
 		weightedSum += freqs[i] * linear[i] * linear[i]
 	}
-	
+
 	centroid := weightedSum / totalEnergy
-	
+
 	// Calculate energy distribution
 	var lowE, midE, highE float64
 	for i, f := range freqs {
@@ -355,7 +355,7 @@ func (g *SyntheticDataGenerator) calculateSpectralFeatures(freqs, mags []float64
 			highE += e
 		}
 	}
-	
+
 	// Calculate spectral slope (dB/octave)
 	// Simple linear regression on log-frequency vs magnitude
 	n := float64(len(freqs))
@@ -369,7 +369,7 @@ func (g *SyntheticDataGenerator) calculateSpectralFeatures(freqs, mags []float64
 		sumX2 += x * x
 	}
 	slope := (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX)
-	
+
 	// Find rolloff (frequency containing 85% of energy)
 	cumEnergy := 0.0
 	rolloff := freqs[len(freqs)-1]
@@ -380,7 +380,7 @@ func (g *SyntheticDataGenerator) calculateSpectralFeatures(freqs, mags []float64
 			break
 		}
 	}
-	
+
 	return &SpectralFeatures{
 		SpectralCentroid: centroid,
 		SpectralRolloff:  rolloff,
@@ -393,7 +393,7 @@ func (g *SyntheticDataGenerator) calculateSpectralFeatures(freqs, mags []float64
 
 func (g *SyntheticDataGenerator) findPeaks(freqs, mags []float64) []Peak {
 	var peaks []Peak
-	
+
 	for i := 1; i < len(mags)-1; i++ {
 		// Local maximum that stands out
 		if mags[i] > mags[i-1] && mags[i] > mags[i+1] {
@@ -409,13 +409,13 @@ func (g *SyntheticDataGenerator) findPeaks(freqs, mags []float64) []Peak {
 			}
 		}
 	}
-	
+
 	return peaks
 }
 
 func (g *SyntheticDataGenerator) generateResonances(preset TrackPreset, issues []IssueType) *ResonanceAnalysis {
 	var resonances []Resonance
-	
+
 	for _, issue := range issues {
 		switch issue {
 		case IssueResonant:
@@ -436,11 +436,11 @@ func (g *SyntheticDataGenerator) generateResonances(preset TrackPreset, issues [
 			})
 		}
 	}
-	
+
 	if len(resonances) == 0 {
 		return nil
 	}
-	
+
 	return &ResonanceAnalysis{
 		Resonances: resonances,
 		RingTime:   0.1 + g.rng.Float64()*0.2,
@@ -450,7 +450,7 @@ func (g *SyntheticDataGenerator) generateResonances(preset TrackPreset, issues [
 func (g *SyntheticDataGenerator) generateDynamics(preset TrackPreset, issues []IssueType) *DynamicsAnalysis {
 	// Base values by preset
 	var dr, crest float64
-	
+
 	switch preset {
 	case PresetKick, PresetSnare:
 		dr, crest = 10, 12
@@ -465,7 +465,7 @@ func (g *SyntheticDataGenerator) generateDynamics(preset TrackPreset, issues []I
 	default:
 		dr, crest = 12, 10
 	}
-	
+
 	// Apply issues
 	for _, issue := range issues {
 		switch issue {
@@ -477,7 +477,7 @@ func (g *SyntheticDataGenerator) generateDynamics(preset TrackPreset, issues []I
 			crest += 5
 		}
 	}
-	
+
 	return &DynamicsAnalysis{
 		DynamicRange: dr + g.noise(1),
 		CrestFactor:  crest + g.noise(1),
@@ -487,7 +487,7 @@ func (g *SyntheticDataGenerator) generateDynamics(preset TrackPreset, issues []I
 func (g *SyntheticDataGenerator) generateLoudness(preset TrackPreset, issues []IssueType) *LoudnessAnalysis {
 	// Base LUFS by preset
 	var lufs float64
-	
+
 	switch preset {
 	case PresetKick:
 		lufs = -18
@@ -502,10 +502,10 @@ func (g *SyntheticDataGenerator) generateLoudness(preset TrackPreset, issues []I
 	default:
 		lufs = -18
 	}
-	
+
 	// Peak is typically 6-12dB above LUFS
 	peak := lufs + 8 + g.noise(2)
-	
+
 	return &LoudnessAnalysis{
 		RMS:      lufs + 2 + g.noise(1),
 		LUFS:     lufs + g.noise(1),
@@ -517,7 +517,7 @@ func (g *SyntheticDataGenerator) generateLoudness(preset TrackPreset, issues []I
 func (g *SyntheticDataGenerator) generateStereo(preset TrackPreset, issues []IssueType) *StereoAnalysis {
 	// Base values by preset
 	var width, corr, balance float64
-	
+
 	switch preset {
 	case PresetKick, PresetBass:
 		width, corr = 0.1, 0.98 // Mono-ish
@@ -531,7 +531,7 @@ func (g *SyntheticDataGenerator) generateStereo(preset TrackPreset, issues []Iss
 		width, corr = 0.5, 0.90
 	}
 	balance = g.noise(0.1) // Slight random imbalance
-	
+
 	// Apply issues
 	for _, issue := range issues {
 		switch issue {
@@ -545,7 +545,7 @@ func (g *SyntheticDataGenerator) generateStereo(preset TrackPreset, issues []Iss
 			corr = 0.3 + g.rng.Float64()*0.3
 		}
 	}
-	
+
 	return &StereoAnalysis{
 		Width:       width,
 		Correlation: corr,
@@ -555,7 +555,7 @@ func (g *SyntheticDataGenerator) generateStereo(preset TrackPreset, issues []Iss
 
 func (g *SyntheticDataGenerator) generateTransients(preset TrackPreset) *TransientAnalysis {
 	var attack, energy float64
-	
+
 	switch preset {
 	case PresetKick, PresetSnare:
 		attack, energy = 0.002, 0.9
@@ -570,7 +570,7 @@ func (g *SyntheticDataGenerator) generateTransients(preset TrackPreset) *Transie
 	default:
 		attack, energy = 0.02, 0.5
 	}
-	
+
 	return &TransientAnalysis{
 		AttackTime:      attack + g.noise(attack*0.2),
 		TransientEnergy: energy + g.noise(0.1),
@@ -647,5 +647,3 @@ func (g *SyntheticDataGenerator) GenerateOvercompressedMaster() *AnalysisRequest
 		UserRequest: "Check if the master is too squashed",
 	}
 }
-
-

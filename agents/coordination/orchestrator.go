@@ -794,12 +794,12 @@ func (o *Orchestrator) GenerateActionsStream(
 
 	// Track state for dependency resolution
 	var (
-		mu              sync.Mutex
-		pendingNotes    []models.NoteEvent
-		clipCreated     bool
-		targetTrackIdx  int = 0
-		allActions      []map[string]any
-		dawComplete     bool
+		mu               sync.Mutex
+		pendingNotes     []models.NoteEvent
+		clipCreated      bool
+		targetTrackIdx   int = 0
+		allActions       []map[string]any
+		dawComplete      bool
 		arrangerComplete bool
 	)
 
@@ -818,7 +818,7 @@ func (o *Orchestrator) GenerateActionsStream(
 	tryEmitMidi := func() error {
 		mu.Lock()
 		defer mu.Unlock()
-		
+
 		if clipCreated && len(pendingNotes) > 0 && dawComplete && arrangerComplete {
 			// Convert NoteEvents to map format
 			notesArray := make([]map[string]any, len(pendingNotes))
@@ -840,7 +840,7 @@ func (o *Orchestrator) GenerateActionsStream(
 			log.Printf("🎵 [Stream] Emitting add_midi with %d notes to track %d", len(pendingNotes), targetTrackIdx)
 			allActions = append(allActions, midiAction)
 			pendingNotes = nil // Clear buffer
-			
+
 			if callback != nil {
 				// Unlock before callback to avoid deadlock
 				mu.Unlock()
