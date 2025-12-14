@@ -1389,13 +1389,39 @@ func getTrackCount(state map[string]any) int {
 	return 0
 }
 
-// containsAny checks if text contains any of the keywords (case-insensitive)
+// containsAny checks if text contains any of the keywords as whole words (case-insensitive)
 func containsAny(text string, keywords []string) bool {
 	textLower := strings.ToLower(text)
+	// Split text into words (separated by spaces and punctuation)
+	words := splitIntoWords(textLower)
+
 	for _, keyword := range keywords {
-		if strings.Contains(textLower, strings.ToLower(keyword)) {
-			return true
+		keywordLower := strings.ToLower(keyword)
+		// Check if keyword matches any whole word
+		for _, word := range words {
+			if word == keywordLower {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// splitIntoWords splits text into words, removing punctuation
+func splitIntoWords(text string) []string {
+	// Replace punctuation with spaces
+	text = strings.ReplaceAll(text, ",", " ")
+	text = strings.ReplaceAll(text, ".", " ")
+	text = strings.ReplaceAll(text, "!", " ")
+	text = strings.ReplaceAll(text, "?", " ")
+	text = strings.ReplaceAll(text, ":", " ")
+	text = strings.ReplaceAll(text, ";", " ")
+	text = strings.ReplaceAll(text, "(", " ")
+	text = strings.ReplaceAll(text, ")", " ")
+	text = strings.ReplaceAll(text, "[", " ")
+	text = strings.ReplaceAll(text, "]", " ")
+
+	// Split by whitespace and filter empty strings
+	parts := strings.Fields(text)
+	return parts
 }
