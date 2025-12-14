@@ -2243,7 +2243,7 @@ func GetMagdaDSLGrammarForFunctional() string {
 // Syntax: track().new_clip() with method chaining
 // NOTE: add_midi is NOT available - the arranger agent handles MIDI note generation
 
-start: statement+
+start: statement (";"? statement)*
 
 statement: track_call chain*
          | functional_call
