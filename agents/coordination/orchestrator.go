@@ -688,6 +688,16 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 
 	log.Printf("🔍 Agent detection: DAW=%v, Arranger=%v", needsDAW, needsArranger)
 
+	// Step 1.5: Auto-enable DAW if arranger is needed but no tracks exist
+	// This ensures track creation happens before musical content is added
+	if needsArranger && !needsDAW {
+		trackCount := getTrackCount(state)
+		if trackCount == 0 {
+			log.Printf("🔧 Auto-enabling DAW agent: Arranger needs a track but none exist")
+			needsDAW = true
+		}
+	}
+
 	// DetectAgentsNeeded already handles LLM validation when no keywords are found
 	// If it returns an error, the request is out of scope
 	if err != nil {
@@ -773,14 +783,23 @@ func (o *Orchestrator) GenerateActionsStream(
 
 	log.Printf("🔍 [Stream] Agent detection: DAW=%v, Arranger=%v", needsDAW, needsArranger)
 
+	// Step 1.5: Auto-enable DAW if arranger is needed but no tracks exist
+	if needsArranger && !needsDAW {
+		trackCount := getTrackCount(state)
+		if trackCount == 0 {
+			log.Printf("🔧 [Stream] Auto-enabling DAW agent: Arranger needs a track but none exist")
+			needsDAW = true
+		}
+	}
+
 	// Track state for dependency resolution
 	var (
-		mu              sync.Mutex
-		pendingNotes    []models.NoteEvent
-		clipCreated     bool
-		targetTrackIdx  int = 0
-		allActions      []map[string]any
-		dawComplete     bool
+		mu               sync.Mutex
+		pendingNotes     []models.NoteEvent
+		clipCreated      bool
+		targetTrackIdx   int = 0
+		allActions       []map[string]any
+		dawComplete      bool
 		arrangerComplete bool
 	)
 
@@ -799,7 +818,7 @@ func (o *Orchestrator) GenerateActionsStream(
 	tryEmitMidi := func() error {
 		mu.Lock()
 		defer mu.Unlock()
-		
+
 		if clipCreated && len(pendingNotes) > 0 && dawComplete && arrangerComplete {
 			// Convert NoteEvents to map format
 			notesArray := make([]map[string]any, len(pendingNotes))
@@ -821,7 +840,7 @@ func (o *Orchestrator) GenerateActionsStream(
 			log.Printf("🎵 [Stream] Emitting add_midi with %d notes to track %d", len(pendingNotes), targetTrackIdx)
 			allActions = append(allActions, midiAction)
 			pendingNotes = nil // Clear buffer
-			
+
 			if callback != nil {
 				// Unlock before callback to avoid deadlock
 				mu.Unlock()
@@ -1351,6 +1370,23 @@ func getInt(m map[string]any, key string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// getTrackCount extracts the number of tracks from the REAPER state
+func getTrackCount(state map[string]any) int {
+	if state == nil {
+		return 0
+	}
+	if tracks, ok := state["tracks"]; ok {
+		if trackArr, ok := tracks.([]any); ok {
+			return len(trackArr)
+		}
+		// Handle typed slice (e.g., from JSON unmarshaling)
+		if trackArr, ok := tracks.([]map[string]any); ok {
+			return len(trackArr)
+		}
+	}
+	return 0
 }
 
 // containsAny checks if text contains any of the keywords (case-insensitive)
