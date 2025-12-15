@@ -144,7 +144,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 			}
 			tools = append(tools, cfgTool)
 			paramsMap["tools"] = tools
-			paramsMap["parallel_tool_calls"] = false // CFG tools typically don't use parallel calls
+			paramsMap["parallel_tool_calls"] = true // Allow parallel calls so LLM can use MCP + CFG
 
 			// Log the actual tool structure for debugging
 			toolJSON, _ := json.MarshalIndent(cfgTool, "", "  ")
@@ -514,6 +514,7 @@ func truncateString(s string, maxLen int) string {
 }
 
 // extractDSLFromCFGToolCall searches for DSL code in CFG tool call response
+// This is comprehensive - it checks EVERYWHERE for DSL content
 func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) string {
 	log.Printf("🔍 Searching for CFG tool call in %d output items", len(resp.Output))
 
@@ -526,16 +527,19 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 
 		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
 
-		// Check for type field - ALWAYS log it
-		typeVal, typeExists := outputItemMap["type"]
-		if typeExists {
-			log.Printf("🔍 'type' field EXISTS in output item %d: value='%v' (type=%T)", i, typeVal, typeVal)
-		} else {
-			log.Printf("🔍 'type' field DOES NOT EXIST in output item %d", i)
+		// IMMEDIATELY check "code" field - this is where CFG tool results often appear
+		if codeVal, exists := outputItemMap["code"]; exists {
+			log.Printf("🔍 'code' EXISTS! type=%T", codeVal)
+			if codeStr, ok := codeVal.(string); ok && codeStr != "" {
+				log.Printf("🔧 Found CFG code as STRING: %s", truncateString(codeStr, maxPreviewChars))
+				return codeStr
+			}
 		}
 
 		// Check for type field
+		typeVal, typeExists := outputItemMap["type"]
 		if typeExists {
+			log.Printf("🔍 'type' field EXISTS in output item %d: value='%v' (type=%T)", i, typeVal, typeVal)
 
 			// According to Grammar School docs, CFG tool results have type="custom_tool_call"
 			if typeStr, ok := typeVal.(string); ok && typeStr == "custom_tool_call" {
@@ -545,26 +549,72 @@ func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) str
 				if inputVal, exists := outputItemMap["input"]; exists {
 					if inputStr, ok := inputVal.(string); ok && inputStr != "" {
 						log.Printf("🔧 Found CFG tool call in 'input' field (DSL): %s", truncateString(inputStr, maxPreviewChars))
-						log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(inputStr), inputStr)
 						return inputStr
 					}
 				}
 			}
 		}
 
-		// Debug: Check input field explicitly (for debugging)
-		if inputVal, exists := outputItemMap["input"]; exists {
-			log.Printf("🔍 'input' field EXISTS in output item %d: type=%T", i, inputVal)
-			if inputStr, ok := inputVal.(string); ok {
-				log.Printf("🔍 'input' is a string with %d chars: %s", len(inputStr), truncateString(inputStr, 200))
+		// COMPREHENSIVE SEARCH: Check ALL string fields for DSL content
+		// This matches magda-api's approach which searches everywhere
+		log.Printf("🔍 ========== CHECKING ALL STRING FIELDS FOR DSL CONTENT ==========")
+		for key, val := range outputItemMap {
+			if strVal, ok := val.(string); ok && strVal != "" {
+				log.Printf("🔍 Field '%s' (string, %d chars): %s", key, len(strVal), truncateString(strVal, 500))
+				if p.isDSLCode(strVal) {
+					log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", key, truncateString(strVal, maxPreviewChars))
+					return strVal
+				}
 			}
-		} else {
-			log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
 		}
 
-		// Fallback: Check all possible locations for DSL code
-		if dslCode := p.findDSLInOutputItem(outputItemMap); dslCode != "" {
-			return dslCode
+		// Check nested structures: tools, outputs, tool_calls arrays
+		for _, arrayKey := range []string{"tools", "outputs", "tool_calls"} {
+			if arr, ok := outputItemMap[arrayKey].([]any); ok && len(arr) > 0 {
+				log.Printf("🔍 Found '%s' array with %d items", arrayKey, len(arr))
+				for j, item := range arr {
+					if itemMap, ok := item.(map[string]any); ok {
+						log.Printf("🔍 %s[%d] keys: %v", arrayKey, j, getMapKeys(itemMap))
+						for _, field := range []string{"code", "input", "arguments"} {
+							if val, ok := itemMap[field].(string); ok && val != "" {
+								log.Printf("🔍 %s[%d].%s = %s", arrayKey, j, field, truncateString(val, 200))
+								if p.isDSLCode(val) {
+									log.Printf("🔧 Found DSL in %s[%d].%s", arrayKey, j, field)
+									return val
+								}
+							}
+						}
+						// Also check function.arguments pattern (OpenAI tool calls)
+						if function, ok := itemMap["function"].(map[string]any); ok {
+							if args, ok := function["arguments"].(string); ok && args != "" {
+								log.Printf("🔍 %s[%d].function.arguments = %s", arrayKey, j, truncateString(args, 200))
+								if p.isDSLCode(args) {
+									log.Printf("🔧 Found DSL in %s[%d].function.arguments", arrayKey, j)
+									return args
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Check nested tool_call structure
+		if toolCall, ok := outputItemMap["tool_call"].(map[string]any); ok {
+			if input, ok := toolCall["input"].(string); ok && input != "" {
+				log.Printf("🔧 Found CFG tool call input in tool_call (DSL): %s", truncateString(input, maxPreviewChars))
+				return input
+			}
+		}
+
+		// DUMP full structure for first item if we haven't found DSL yet
+		if i == 0 {
+			fullDump, _ := json.MarshalIndent(outputItemMap, "", "  ")
+			dumpLen := len(fullDump)
+			if dumpLen > 5000 {
+				dumpLen = 5000
+			}
+			log.Printf("🔍 FULL OUTPUT ITEM STRUCTURE (first %d chars):\n%s", dumpLen, string(fullDump[:dumpLen]))
 		}
 	}
 
@@ -774,8 +824,16 @@ func (p *OpenAIProvider) extractAndCleanTextOutput(resp *responses.Response) str
 }
 
 // isDSLCode checks if a string looks like DSL code
-// NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
+// Supports both MAGDA DSL (track, new_clip, etc.) and Arranger DSL (arpeggio, chord, progression)
 func (p *OpenAIProvider) isDSLCode(text string) bool {
+	// Arranger DSL patterns (chord-based musical composition)
+	if strings.HasPrefix(text, "arpeggio(") ||
+		strings.HasPrefix(text, "chord(") ||
+		strings.HasPrefix(text, "progression(") {
+		return true
+	}
+
+	// MAGDA DSL patterns (DAW control)
 	return strings.HasPrefix(text, "track(") ||
 		strings.HasPrefix(text, "filter(") ||
 		strings.HasPrefix(text, "map(") ||
