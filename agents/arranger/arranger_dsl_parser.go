@@ -165,6 +165,12 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 		noteDuration = noteDurValue.Num
 	}
 
+	// Extract start time (explicit rhythm timing - optional)
+	startBeat := 0.0
+	if startValue, ok := args["start"]; ok && startValue.Kind == gs.ValueNumber {
+		startBeat = startValue.Num
+	}
+
 	// Extract length (default: 4 beats = 1 bar)
 	// Note: length should be explicit via "length" or "duration" param
 	// Don't treat note_duration as a length fallback
@@ -209,6 +215,11 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 		pattern = patternValue.Str
 	}
 
+	rhythm := ""
+	if rhythmValue, ok := args["rhythm"]; ok && rhythmValue.Kind == gs.ValueString {
+		rhythm = rhythmValue.Str
+	}
+
 	// Create action
 	action := map[string]any{
 		"type":      "arpeggio",
@@ -222,8 +233,14 @@ func (a *ArrangerDSL) Arpeggio(args gs.Args) error {
 	if noteDuration > 0 {
 		action["note_duration"] = noteDuration
 	}
+	if startBeat != 0.0 {
+		action["start"] = startBeat
+	}
 	if pattern != "" {
 		action["pattern"] = pattern
+	}
+	if rhythm != "" {
+		action["rhythm"] = rhythm
 	}
 	if bassNote != "" {
 		action["bass"] = bassNote
@@ -259,6 +276,12 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 
 	if chordSymbol == "" {
 		return fmt.Errorf("chord: missing chord symbol")
+	}
+
+	// Extract start time (explicit rhythm timing - optional)
+	startBeat := 0.0
+	if startValue, ok := args["start"]; ok && startValue.Kind == gs.ValueNumber {
+		startBeat = startValue.Num
 	}
 
 	// Extract length (default: 4 beats = 1 bar)
@@ -300,6 +323,11 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 		inversion = int(inversionValue.Num)
 	}
 
+	rhythm := ""
+	if rhythmValue, ok := args["rhythm"]; ok && rhythmValue.Kind == gs.ValueString {
+		rhythm = rhythmValue.Str
+	}
+
 	// Parse bass note from chord symbol (e.g., "Emin/G" -> bass note is "G")
 	bassNote := ""
 	if strings.Contains(chordSymbol, "/") {
@@ -318,6 +346,12 @@ func (a *ArrangerDSL) Chord(args gs.Args) error {
 		"length":   length,
 		"repeat":   repeat,
 		"velocity": velocity,
+	}
+	if startBeat != 0.0 {
+		action["start"] = startBeat
+	}
+	if rhythm != "" {
+		action["rhythm"] = rhythm
 	}
 	if inversion != 0 {
 		action["inversion"] = inversion

@@ -8,6 +8,163 @@ import (
 	"github.com/Conceptual-Machines/magda-agents-go/models"
 )
 
+// RhythmTemplate defines timing and accent patterns for musical elements
+type RhythmTemplate struct {
+	Name string
+	// Offsets within a bar (in beats, 0-4 for 4/4 time)
+	Offsets []float64
+	// Velocity multipliers for accents (1.0 = normal)
+	Accents []float64
+	// Duration multiplier (affects note length, 0.0-1.0)
+	Articulation float64
+}
+
+// Rhythm template constants
+const (
+	articulationHigh    = 0.9
+	articulationMedium  = 0.8
+	articulationMidHigh = 0.85
+	articulationShort   = 0.4
+	articulationOverlap = 1.1
+)
+
+// Predefined rhythm templates (matching aideas-api)
+var rhythmTemplates = map[string]RhythmTemplate{
+	// Basic subdivisions
+	"whole": {
+		Name:         "whole",
+		Offsets:      []float64{0},
+		Accents:      []float64{1.0},
+		Articulation: 1.0,
+	},
+	"half": {
+		Name:         "half",
+		Offsets:      []float64{0, 2},
+		Accents:      []float64{1.0, 0.9},
+		Articulation: 1.0,
+	},
+	"quarters": {
+		Name:         "quarters",
+		Offsets:      []float64{0, 1, 2, 3},
+		Accents:      []float64{1.0, 0.8, 0.9, 0.8},
+		Articulation: articulationHigh,
+	},
+	"8ths": {
+		Name:         "8ths",
+		Offsets:      []float64{0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5},
+		Accents:      []float64{1.0, 0.7, 0.9, 0.7, 0.95, 0.7, 0.9, 0.7},
+		Articulation: articulationMidHigh,
+	},
+	"16ths": {
+		Name:         "16ths",
+		Offsets:      []float64{0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75},
+		Accents:      []float64{1.0, 0.6, 0.8, 0.6, 0.9, 0.6, 0.8, 0.6, 0.95, 0.6, 0.8, 0.6, 0.9, 0.6, 0.8, 0.6},
+		Articulation: articulationMedium,
+	},
+	// Swing patterns
+	"swing": {
+		Name:         "swing",
+		Offsets:      []float64{0, 0.67, 1, 1.67, 2, 2.67, 3, 3.67}, // Triplet feel
+		Accents:      []float64{1.0, 0.7, 0.9, 0.7, 0.95, 0.7, 0.9, 0.7},
+		Articulation: articulationMidHigh,
+	},
+	"shuffle": {
+		Name:         "shuffle",
+		Offsets:      []float64{0, 0.67, 1, 1.67, 2, 2.67, 3, 3.67},
+		Accents:      []float64{1.0, 0.8, 0.9, 0.8, 1.0, 0.8, 0.9, 0.8},
+		Articulation: articulationHigh,
+	},
+	// Latin patterns
+	"bossa": {
+		Name:         "bossa",
+		Offsets:      []float64{0, 1.5, 3, 4.5, 6, 7.5}, // Characteristic bossa pattern over 2 bars
+		Accents:      []float64{1.0, 0.8, 0.9, 0.8, 1.0, 0.8},
+		Articulation: articulationHigh,
+	},
+	"samba": {
+		Name:         "samba",
+		Offsets:      []float64{0, 0.5, 1.5, 2, 3, 3.5},
+		Accents:      []float64{1.0, 0.7, 0.9, 0.85, 0.95, 0.7},
+		Articulation: articulationMedium,
+	},
+	"tresillo": {
+		Name:         "tresillo",
+		Offsets:      []float64{0, 1.5, 3}, // 3+3+2 pattern
+		Accents:      []float64{1.0, 0.9, 0.95},
+		Articulation: articulationHigh,
+	},
+	// Waltz and compound time
+	"waltz": {
+		Name:         "waltz",
+		Offsets:      []float64{0, 1, 2}, // 3/4 time
+		Accents:      []float64{1.0, 0.7, 0.75},
+		Articulation: articulationHigh,
+	},
+	"6/8": {
+		Name:         "6/8",
+		Offsets:      []float64{0, 0.5, 1, 1.5, 2, 2.5},
+		Accents:      []float64{1.0, 0.6, 0.7, 0.9, 0.6, 0.7},
+		Articulation: articulationMidHigh,
+	},
+	// Syncopated patterns
+	"offbeat": {
+		Name:         "offbeat",
+		Offsets:      []float64{0.5, 1.5, 2.5, 3.5},
+		Accents:      []float64{0.9, 0.85, 0.9, 0.85},
+		Articulation: articulationMidHigh,
+	},
+	"syncopated": {
+		Name:         "syncopated",
+		Offsets:      []float64{0, 0.5, 1.5, 2, 3, 3.5},
+		Accents:      []float64{1.0, 0.8, 0.9, 0.85, 0.95, 0.8},
+		Articulation: articulationMidHigh,
+	},
+	"anticipation": {
+		Name:         "anticipation",
+		Offsets:      []float64{0, 1, 1.75, 3, 3.75}, // Push before beats 2 and 4
+		Accents:      []float64{1.0, 0.8, 0.9, 0.85, 0.9},
+		Articulation: articulationMidHigh,
+	},
+	// Arpeggio patterns
+	"broken": {
+		Name:         "broken",
+		Offsets:      []float64{0, 0.5, 1, 1.5},
+		Accents:      []float64{1.0, 0.8, 0.85, 0.75},
+		Articulation: articulationHigh,
+	},
+	"alberti": {
+		Name:         "alberti",
+		Offsets:      []float64{0, 0.25, 0.5, 0.75}, // Classical alberti bass pattern
+		Accents:      []float64{1.0, 0.7, 0.85, 0.7},
+		Articulation: articulationMidHigh,
+	},
+	"stride": {
+		Name:         "stride",
+		Offsets:      []float64{0, 1, 2, 3}, // Stride piano: bass-chord-bass-chord
+		Accents:      []float64{1.0, 0.8, 0.9, 0.8},
+		Articulation: articulationHigh,
+	},
+	// Special
+	"staccato": {
+		Name:         "staccato",
+		Offsets:      []float64{0, 1, 2, 3},
+		Accents:      []float64{1.0, 0.9, 0.95, 0.9},
+		Articulation: articulationShort, // Short notes
+	},
+	"legato": {
+		Name:         "legato",
+		Offsets:      []float64{0, 1, 2, 3},
+		Accents:      []float64{0.9, 0.85, 0.9, 0.85},
+		Articulation: articulationOverlap, // Slightly overlapping
+	},
+}
+
+// GetRhythmTemplate returns a rhythm template by name
+func GetRhythmTemplate(name string) (RhythmTemplate, bool) {
+	tmpl, ok := rhythmTemplates[name]
+	return tmpl, ok
+}
+
 // ChordToMIDI converts chord symbols to MIDI note numbers
 // Supports: C, Em, Am7, Cmaj7, Emin/G (inversions), etc.
 // Returns slice of MIDI note numbers (0-127) for the chord
@@ -101,24 +258,56 @@ func convertArpeggioToNoteEvents(action map[string]any, startBeat float64) ([]mo
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
 	direction, _ := getString(action, "direction", "up")
+	rhythmTemplate, _ := getString(action, "rhythm", "")
+
+	// Check for rhythm template first (overrides note_duration)
+	if rhythmTemplate != "" {
+		if _, ok := GetRhythmTemplate(rhythmTemplate); ok {
+			// Use rhythm template for arpeggio timing
+			log.Printf("🎵 Using rhythm template: %s", rhythmTemplate)
+		} else {
+			log.Printf("⚠️ Unknown rhythm template: %s, falling back to note_duration", rhythmTemplate)
+			rhythmTemplate = "" // Clear invalid template
+		}
+	}
 
 	// Check for explicit note_duration (e.g., 0.25 for 16th notes)
 	// Default to 16th notes (0.25 beats) if not specified - this fills 1 bar nicely
 	explicitNoteDuration, hasNoteDuration := getFloat(action, "note_duration", 0)
 	var noteDuration float64
-	if hasNoteDuration && explicitNoteDuration > 0 {
-		noteDuration = explicitNoteDuration
-		log.Printf("🎵 Using explicit note_duration: %.4f beats", noteDuration)
-	} else {
-		// Default to 16th notes (0.25 beats) for arpeggios
-		noteDuration = 0.25
-		log.Printf("🎵 Using default note_duration: 0.25 beats (16th notes)")
+	if rhythmTemplate == "" { // Only use note_duration if no rhythm template
+		if hasNoteDuration && explicitNoteDuration > 0 {
+			noteDuration = explicitNoteDuration
+			log.Printf("🎵 Using explicit note_duration: %.4f beats", noteDuration)
+		} else {
+			// Default to 16th notes (0.25 beats) for arpeggios
+			noteDuration = 0.25
+			log.Printf("🎵 Using default note_duration: 0.25 beats (16th notes)")
+		}
 	}
 
 	// Get chord notes
 	chordNotes, err := ChordToMIDI(chordSymbol, octave)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check for rhythm template - if present, use it for timing
+	if rhythmTemplate != "" {
+		if tmpl, ok := GetRhythmTemplate(rhythmTemplate); ok {
+			// Apply direction to create arpeggio sequence
+			arpeggioNotes := chordNotes
+			if direction == "down" {
+				arpeggioNotes = reverseSlice(chordNotes)
+			} else if direction == "updown" {
+				// Create up-down pattern: up then reverse (skip last to avoid duplicate)
+				up := make([]int, len(chordNotes))
+				copy(up, chordNotes)
+				down := reverseSlice(chordNotes[1:]) // Skip first to avoid duplicate
+				arpeggioNotes = append(up, down...)
+			}
+			return applyRhythmTemplateToArpeggio(arpeggioNotes, velocity, startBeat, length, repeat, tmpl), nil
+		}
 	}
 
 	// Apply direction
@@ -188,11 +377,21 @@ func convertChordToNoteEvents(action map[string]any, startBeat float64) ([]model
 	repeat, _ := getInt(action, "repeat", 1)
 	velocity, _ := getInt(action, "velocity", 100)
 	octave, _ := getInt(action, "octave", 4)
+	rhythmTemplate, _ := getString(action, "rhythm", "")
 
 	// Get chord notes
 	chordNotes, err := ChordToMIDI(chordSymbol, octave)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check for rhythm template
+	if rhythmTemplate != "" {
+		if tmpl, ok := GetRhythmTemplate(rhythmTemplate); ok {
+			return applyRhythmTemplateToChord(chordNotes, velocity, startBeat, length, repeat, tmpl), nil
+		} else {
+			log.Printf("⚠️ Unknown rhythm template: %s, using default chord behavior", rhythmTemplate)
+		}
 	}
 
 	var noteEvents []models.NoteEvent
@@ -284,6 +483,122 @@ func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([
 
 	log.Printf("🎵 convertProgressionToNoteEvents: returning %d noteEvents", len(noteEvents))
 	return noteEvents, nil
+}
+
+// applyRhythmTemplateToChord applies a rhythm template to chord notes
+// This creates multiple chord hits at different beats based on the template
+func applyRhythmTemplateToChord(chordNotes []int, velocity int, startBeat, length float64, repeat int, tmpl RhythmTemplate) []models.NoteEvent {
+	var noteEvents []models.NoteEvent
+	
+	for r := 0; r < repeat; r++ {
+		cycleStart := startBeat + (float64(r) * length)
+		
+		// Apply template offsets within each cycle
+		for i, offset := range tmpl.Offsets {
+			// Normalize offset to fit within the length
+			beatPos := cycleStart + (offset * (length / 4.0)) // Assuming 4 beats = template cycle
+			
+			// Skip if beyond the cycle length
+			if beatPos >= cycleStart+length {
+				break
+			}
+			
+			// Apply accent to velocity
+			accent := velocity
+			if i < len(tmpl.Accents) {
+				accent = int(float64(velocity) * tmpl.Accents[i])
+			}
+			
+			// Calculate note duration based on articulation
+			noteDuration := (length / float64(len(tmpl.Offsets))) * tmpl.Articulation
+			// Ensure note doesn't extend beyond next hit or cycle end
+			if i+1 < len(tmpl.Offsets) {
+				nextOffset := tmpl.Offsets[i+1] * (length / 4.0)
+				maxDuration := nextOffset - offset*(length/4.0)
+				if noteDuration > maxDuration {
+					noteDuration = maxDuration
+				}
+			} else {
+				maxDuration := length - (offset * (length / 4.0))
+				if noteDuration > maxDuration {
+					noteDuration = maxDuration
+				}
+			}
+			
+			// Create chord notes at this rhythm position
+			for _, midiNote := range chordNotes {
+				noteEvents = append(noteEvents, models.NoteEvent{
+					MidiNoteNumber: midiNote,
+					Velocity:       accent,
+					StartBeats:     beatPos,
+					DurationBeats:  noteDuration,
+				})
+			}
+		}
+	}
+	
+	return noteEvents
+}
+
+// applyRhythmTemplateToArpeggio applies a rhythm template to arpeggio notes
+// This spaces out arpeggio notes according to the template timing
+func applyRhythmTemplateToArpeggio(arpeggioNotes []int, velocity int, startBeat, length float64, repeat int, tmpl RhythmTemplate) []models.NoteEvent {
+	var noteEvents []models.NoteEvent
+	
+	for r := 0; r < repeat; r++ {
+		cycleStart := startBeat + (float64(r) * length)
+		noteIndex := 0
+		
+		// Apply template offsets within each cycle
+		for i, offset := range tmpl.Offsets {
+			// Normalize offset to fit within the length
+			beatPos := cycleStart + (offset * (length / 4.0)) // Assuming 4 beats = template cycle
+			
+			// Skip if beyond the cycle length
+			if beatPos >= cycleStart+length {
+				break
+			}
+			
+			// Cycle through arpeggio notes
+			if noteIndex >= len(arpeggioNotes) {
+				noteIndex = 0
+			}
+			
+			// Apply accent to velocity
+			accent := velocity
+			if i < len(tmpl.Accents) {
+				accent = int(float64(velocity) * tmpl.Accents[i])
+			}
+			
+			// Calculate note duration based on articulation
+			noteDuration := (length / float64(len(tmpl.Offsets))) * tmpl.Articulation
+			// Ensure note doesn't extend beyond next hit or cycle end
+			if i+1 < len(tmpl.Offsets) {
+				nextOffset := tmpl.Offsets[i+1] * (length / 4.0)
+				maxDuration := nextOffset - offset*(length/4.0)
+				if noteDuration > maxDuration {
+					noteDuration = maxDuration
+				}
+			} else {
+				maxDuration := length - (offset * (length / 4.0))
+				if noteDuration > maxDuration {
+					noteDuration = maxDuration
+				}
+			}
+			
+			// Create note at this rhythm position
+			noteEvents = append(noteEvents, models.NoteEvent{
+				MidiNoteNumber: arpeggioNotes[noteIndex],
+				Velocity:       accent,
+				StartBeats:     beatPos,
+				DurationBeats:  noteDuration,
+			})
+			
+			noteIndex++
+		}
+	}
+	
+	return noteEvents
 }
 
 // Helper functions
