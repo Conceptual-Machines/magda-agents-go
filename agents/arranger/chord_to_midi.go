@@ -489,26 +489,26 @@ func convertProgressionToNoteEvents(action map[string]any, startBeat float64) ([
 // This creates multiple chord hits at different beats based on the template
 func applyRhythmTemplateToChord(chordNotes []int, velocity int, startBeat, length float64, repeat int, tmpl RhythmTemplate) []models.NoteEvent {
 	var noteEvents []models.NoteEvent
-	
+
 	for r := 0; r < repeat; r++ {
 		cycleStart := startBeat + (float64(r) * length)
-		
+
 		// Apply template offsets within each cycle
 		for i, offset := range tmpl.Offsets {
 			// Normalize offset to fit within the length
 			beatPos := cycleStart + (offset * (length / 4.0)) // Assuming 4 beats = template cycle
-			
+
 			// Skip if beyond the cycle length
 			if beatPos >= cycleStart+length {
 				break
 			}
-			
+
 			// Apply accent to velocity
 			accent := velocity
 			if i < len(tmpl.Accents) {
 				accent = int(float64(velocity) * tmpl.Accents[i])
 			}
-			
+
 			// Calculate note duration based on articulation
 			noteDuration := (length / float64(len(tmpl.Offsets))) * tmpl.Articulation
 			// Ensure note doesn't extend beyond next hit or cycle end
@@ -524,7 +524,7 @@ func applyRhythmTemplateToChord(chordNotes []int, velocity int, startBeat, lengt
 					noteDuration = maxDuration
 				}
 			}
-			
+
 			// Create chord notes at this rhythm position
 			for _, midiNote := range chordNotes {
 				noteEvents = append(noteEvents, models.NoteEvent{
@@ -536,7 +536,7 @@ func applyRhythmTemplateToChord(chordNotes []int, velocity int, startBeat, lengt
 			}
 		}
 	}
-	
+
 	return noteEvents
 }
 
@@ -544,32 +544,32 @@ func applyRhythmTemplateToChord(chordNotes []int, velocity int, startBeat, lengt
 // This spaces out arpeggio notes according to the template timing
 func applyRhythmTemplateToArpeggio(arpeggioNotes []int, velocity int, startBeat, length float64, repeat int, tmpl RhythmTemplate) []models.NoteEvent {
 	var noteEvents []models.NoteEvent
-	
+
 	for r := 0; r < repeat; r++ {
 		cycleStart := startBeat + (float64(r) * length)
 		noteIndex := 0
-		
+
 		// Apply template offsets within each cycle
 		for i, offset := range tmpl.Offsets {
 			// Normalize offset to fit within the length
 			beatPos := cycleStart + (offset * (length / 4.0)) // Assuming 4 beats = template cycle
-			
+
 			// Skip if beyond the cycle length
 			if beatPos >= cycleStart+length {
 				break
 			}
-			
+
 			// Cycle through arpeggio notes
 			if noteIndex >= len(arpeggioNotes) {
 				noteIndex = 0
 			}
-			
+
 			// Apply accent to velocity
 			accent := velocity
 			if i < len(tmpl.Accents) {
 				accent = int(float64(velocity) * tmpl.Accents[i])
 			}
-			
+
 			// Calculate note duration based on articulation
 			noteDuration := (length / float64(len(tmpl.Offsets))) * tmpl.Articulation
 			// Ensure note doesn't extend beyond next hit or cycle end
@@ -585,7 +585,7 @@ func applyRhythmTemplateToArpeggio(arpeggioNotes []int, velocity int, startBeat,
 					noteDuration = maxDuration
 				}
 			}
-			
+
 			// Create note at this rhythm position
 			noteEvents = append(noteEvents, models.NoteEvent{
 				MidiNoteNumber: arpeggioNotes[noteIndex],
@@ -593,11 +593,11 @@ func applyRhythmTemplateToArpeggio(arpeggioNotes []int, velocity int, startBeat,
 				StartBeats:     beatPos,
 				DurationBeats:  noteDuration,
 			})
-			
+
 			noteIndex++
 		}
 	}
-	
+
 	return noteEvents
 }
 
