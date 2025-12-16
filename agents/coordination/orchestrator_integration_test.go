@@ -199,13 +199,13 @@ func TestOrchestrator_Integration_KeywordDetection_Timing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
-			needsDAW, needsArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
+			needsDAW, needsArranger, needsDrummer := orchestrator.detectAgentsNeededKeywords(tt.question)
 			detectionTime := time.Since(start)
 
 			t.Logf("📊 Detection timing: %v", detectionTime)
 			t.Logf("   Question: %q", tt.question)
 			t.Logf("   Description: %s", tt.description)
-			t.Logf("   Result: DAW=%v, Arranger=%v", needsDAW, needsArranger)
+			t.Logf("   Result: DAW=%v, Arranger=%v, Drummer=%v", needsDAW, needsArranger, needsDrummer)
 
 			// Verify detection time is fast (< 1ms for keyword matching)
 			assert.Less(t, detectionTime, 10*time.Millisecond,
@@ -274,20 +274,20 @@ func TestOrchestrator_Integration_LLMFallback_Timing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// First check keyword detection
 			keywordStart := time.Now()
-			needsDAW, needsArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
+			needsDAW, needsArranger, needsDrummer := orchestrator.detectAgentsNeededKeywords(tt.question)
 			keywordTime := time.Since(keywordStart)
 
 			t.Logf("📊 Keyword detection: %v", keywordTime)
 			t.Logf("   Question: %q", tt.question)
-			t.Logf("   Result: DAW=%v, Arranger=%v", needsDAW, needsArranger)
+			t.Logf("   Result: DAW=%v, Arranger=%v, Drummer=%v", needsDAW, needsArranger, needsDrummer)
 
 			// If keywords are ambiguous or question looks musical, LLM fallback may be triggered
-			shouldUseLLM := (!needsDAW && !needsArranger) ||
-				(needsDAW && !needsArranger && orchestrator.looksMusical(tt.question))
+			shouldUseLLM := (!needsDAW && !needsArranger && !needsDrummer) ||
+				(needsDAW && !needsArranger && !needsDrummer && orchestrator.looksMusical(tt.question))
 
 			if shouldUseLLM && tt.expectLLMFallback {
 				llmStart := time.Now()
-				llmDAW, llmArranger, err := orchestrator.detectAgentsNeededLLM(ctx, tt.question)
+				llmDAW, llmArranger, _, err := orchestrator.detectAgentsNeededLLM(ctx, tt.question)
 				llmTime := time.Since(llmStart)
 
 				require.NoError(t, err, "LLM detection should not fail")
@@ -357,7 +357,7 @@ func TestOrchestrator_Integration_ExpandedKeywords_Coverage(t *testing.T) {
 	for _, tt := range expandedTests {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
-			needsDAW, needsArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
+			needsDAW, needsArranger, _ := orchestrator.detectAgentsNeededKeywords(tt.question)
 			detectionTime := time.Since(start)
 
 			t.Logf("📊 %s detection: %v", tt.language, detectionTime)
@@ -451,7 +451,7 @@ func TestOrchestrator_Integration_LoadKeywords_Timing(t *testing.T) {
 
 	detectionCount := 0
 	for _, question := range testQuestions {
-		needsDAW, _ := orchestrator.detectAgentsNeededKeywords(question)
+		needsDAW, _, _ := orchestrator.detectAgentsNeededKeywords(question)
 		if needsDAW {
 			detectionCount++
 		}
@@ -586,7 +586,7 @@ func TestOrchestrator_Integration_EdgeCases_Timing(t *testing.T) {
 	for _, tt := range edgeCases {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
-			needsDAW, needsArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
+			needsDAW, needsArranger, _ := orchestrator.detectAgentsNeededKeywords(tt.question)
 			detectionTime := time.Since(start)
 
 			t.Logf("📊 Edge case: %s", tt.name)
@@ -687,10 +687,10 @@ func TestOrchestrator_Integration_LLMValidation(t *testing.T) {
 			t.Logf("Question: %q", tt.question)
 
 			// First verify keywords don't match (so LLM validation is triggered)
-			keywordDAW, keywordArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
-			if keywordDAW || keywordArranger {
-				t.Logf("⚠️ Keywords detected (DAW=%v, Arranger=%v), LLM validation may not be triggered",
-					keywordDAW, keywordArranger)
+			keywordDAW, keywordArranger, keywordDrummer := orchestrator.detectAgentsNeededKeywords(tt.question)
+			if keywordDAW || keywordArranger || keywordDrummer {
+				t.Logf("⚠️ Keywords detected (DAW=%v, Arranger=%v, Drummer=%v), LLM validation may not be triggered",
+					keywordDAW, keywordArranger, keywordDrummer)
 				// If keywords match, skip this test case as LLM won't be called
 				if tt.expectError {
 					// For out-of-scope tests, if keywords match, we can't test LLM validation
@@ -700,7 +700,7 @@ func TestOrchestrator_Integration_LLMValidation(t *testing.T) {
 
 			// Test LLM validation directly
 			start := time.Now()
-			needsDAW, needsArranger, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
+			needsDAW, needsArranger, _, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
 			detectionTime := time.Since(start)
 
 			if tt.expectError {
@@ -768,15 +768,15 @@ func TestOrchestrator_Integration_LLMValidation_Timing(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			// Check if keywords match first
-			keywordDAW, keywordArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
-			if keywordDAW || keywordArranger {
-				t.Logf("⚠️ Keywords detected (DAW=%v, Arranger=%v) for '%s', skipping LLM validation test",
-					keywordDAW, keywordArranger, tt.question)
+			keywordDAW, keywordArranger, keywordDrummer := orchestrator.detectAgentsNeededKeywords(tt.question)
+			if keywordDAW || keywordArranger || keywordDrummer {
+				t.Logf("⚠️ Keywords detected (DAW=%v, Arranger=%v, Drummer=%v) for '%s', skipping LLM validation test",
+					keywordDAW, keywordArranger, keywordDrummer, tt.question)
 				t.Skip("Keywords matched, LLM validation not triggered")
 			}
 
 			start := time.Now()
-			_, _, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
+			_, _, _, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
 			detectionTime := time.Since(start)
 
 			// Out-of-scope requests (cooking, email, weather, math) should return an error
