@@ -1309,19 +1309,28 @@ func (o *Orchestrator) looksMusical(question string) bool {
 // DAW agent is always used (handled by caller), this only classifies Arranger and Drummer
 // Returns needsArranger=false, needsDrummer=false if request is out of scope
 func (o *Orchestrator) detectAgentsNeededLLM(ctx context.Context, question string) (needsDAW, needsArranger, needsDrummer bool, err error) {
-	prompt := fmt.Sprintf(`Classify this music production request. Return JSON:
-{
-  "needsArranger": true/false,  // Melodic/harmonic content: chords, melodies, notes, arpeggios, basslines, progressions
-  "needsDrummer": true/false    // Drum/rhythm patterns: beats, kicks, snares, hi-hats, drum fills, breakbeats, grooves
-}
+	prompt := fmt.Sprintf(`You are a router for a music production AI system. Classify requests to determine which specialized agents are needed.
 
-IMPORTANT:
-- needsArranger=true for: chords, arpeggios, melodies, basslines, chord progressions, notes
-- needsDrummer=true for: drum beats, kick patterns, snare, hi-hat, percussion, breakbeats, grooves
-- Both can be true if request includes both melodic AND drum content
-- Both should be false ONLY if request is completely out of scope (e.g., "bake me a cake")
+THE SYSTEM HAS 3 AGENTS:
+1. DAW AGENT (always runs): Handles REAPER operations - tracks, clips, FX, volume, pan, mute, solo, routing. Does NOT generate musical content.
+2. ARRANGER AGENT: Generates melodic/harmonic MIDI content - chords, arpeggios, melodies, basslines, chord progressions. Creates actual notes with pitches.
+3. DRUMMER AGENT: Generates drum/percussion patterns - kick, snare, hi-hat, toms, cymbals. Creates rhythmic patterns on a grid.
 
-Request: "%s"`, question)
+YOUR TASK: Decide if ARRANGER and/or DRUMMER are needed (DAW always runs).
+
+EXAMPLES:
+- "create a track called Drums" → {"needsArranger": false, "needsDrummer": false} (just naming a track, no content)
+- "add reverb to the bass" → {"needsArranger": false, "needsDrummer": false} (FX operation)
+- "mute track 2" → {"needsArranger": false, "needsDrummer": false} (track control)
+- "add a breakbeat pattern" → {"needsArranger": false, "needsDrummer": true} (generating drums)
+- "create a funk groove with ghost notes" → {"needsArranger": false, "needsDrummer": true} (drum pattern)
+- "add a chord progression in C major" → {"needsArranger": true, "needsDrummer": false} (harmonic content)
+- "create an arpeggio" → {"needsArranger": true, "needsDrummer": false} (melodic content)
+- "create a hip hop beat with kicks and snares" → {"needsArranger": false, "needsDrummer": true} (drum pattern)
+
+REQUEST: "%s"
+
+Return JSON: {"needsArranger": bool, "needsDrummer": bool}`, question)
 
 	// Use a small, fast model for classification
 	request := &llm.GenerationRequest{
