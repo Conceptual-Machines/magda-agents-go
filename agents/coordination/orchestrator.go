@@ -10,6 +10,7 @@ import (
 
 	arranger "github.com/Conceptual-Machines/magda-agents-go/agents/arranger"
 	"github.com/Conceptual-Machines/magda-agents-go/agents/daw"
+	"github.com/Conceptual-Machines/magda-agents-go/agents/drummer"
 	"github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
 	"github.com/Conceptual-Machines/magda-agents-go/models"
@@ -679,7 +680,7 @@ const expandedKeywordsJSON = `{
 type Orchestrator struct {
 	dawAgent          *daw.DawAgent
 	arrangerAgent     ArrangerAgent // Will be set when we integrate
-	drummerAgent      DrummerAgent  // Drummer agent for rhythm patterns
+	drummerAgent      *drummer.DrummerAgent
 	llmProvider       llm.Provider
 	dawKeywords       []string
 	arrangerKeywords  []string
@@ -692,18 +693,6 @@ type Orchestrator struct {
 // Uses the actual arranger agent's ArrangerResult type
 type ArrangerAgent interface {
 	GenerateActions(ctx context.Context, question string) (*arranger.ArrangerResult, error)
-}
-
-// DrummerAgent interface for the drummer agent
-type DrummerAgent interface {
-	Generate(ctx context.Context, model string, inputArray []map[string]any, reasoningMode string) (*DrummerResult, error)
-}
-
-// DrummerResult represents the output from the drummer agent
-type DrummerResult struct {
-	DSL     string           `json:"dsl"`
-	Actions []map[string]any `json:"actions"`
-	Usage   any              `json:"usage"`
 }
 
 // ArrangerResult represents the output from the arranger agent (internal format)
@@ -740,9 +729,13 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	// Initialize arranger agent (basic, no MCP for now)
 	arrangerAgent := arranger.NewBasicArrangerAgent(cfg)
 
+	// Initialize drummer agent
+	drummerAgent := drummer.NewDrummerAgent(cfg)
+
 	o := &Orchestrator{
 		dawAgent:      dawAgent,
 		arrangerAgent: arrangerAgent,
+		drummerAgent:  drummerAgent,
 		llmProvider:   llmProvider,
 	}
 
@@ -757,10 +750,9 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 	// Step 1: Detect which agents are needed
 	needsDAW, needsArranger, needsDrummer, err := o.DetectAgentsNeeded(ctx, question)
 	if err != nil {
-		log.Printf("⚠️ Detection error, defaulting to DAW: %v", err)
-		needsDAW = true
-		needsArranger = false
-		needsDrummer = false
+		// DetectAgentsNeeded already handles LLM validation when no keywords are found
+		// If it returns an error, the request is out of scope
+		return nil, err
 	}
 
 	log.Printf("🔍 Agent detection: DAW=%v, Arranger=%v, Drummer=%v", needsDAW, needsArranger, needsDrummer)
@@ -775,17 +767,12 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 		}
 	}
 
-	// DetectAgentsNeeded already handles LLM validation when no keywords are found
-	// If it returns an error, the request is out of scope
-	if err != nil {
-		return nil, err
-	}
-
 	// Step 2: Launch only needed agents in parallel
 	var wg sync.WaitGroup
 	var dawResult *daw.DawResult
 	var arrangerResult *ArrangerResult
-	var dawErr, arrangerErr error
+	var drummerResult *drummer.DrummerResult
+	var dawErr, arrangerErr, drummerErr error
 
 	if needsDAW {
 		wg.Add(1)
@@ -818,24 +805,61 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 		}()
 	}
 
+	if needsDrummer && o.drummerAgent != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Build input array from question
+			inputArray := []map[string]any{
+				{
+					"role":    "user",
+					"content": question,
+				},
+			}
+			result, err := o.drummerAgent.Generate(ctx, "", inputArray)
+			if err != nil {
+				drummerErr = fmt.Errorf("drummer agent: %w", err)
+				return
+			}
+			drummerResult = result
+		}()
+	}
+
 	// Wait for all active agents to complete
 	wg.Wait()
 
 	// Step 3: Handle errors (partial results OK)
-	if dawErr != nil && arrangerErr != nil {
-		return nil, fmt.Errorf("both agents failed: %v, %v", dawErr, arrangerErr)
+	activeAgentCount := 0
+	failedAgentCount := 0
+	if needsDAW {
+		activeAgentCount++
+		if dawErr != nil {
+			failedAgentCount++
+			log.Printf("⚠️ DAW agent failed: %v", dawErr)
+		}
 	}
-	if dawErr != nil && needsDAW {
-		log.Printf("⚠️ DAW agent failed: %v", dawErr)
-		// Continue with Arranger if available
+	if needsArranger {
+		activeAgentCount++
+		if arrangerErr != nil {
+			failedAgentCount++
+			log.Printf("⚠️ Arranger agent failed: %v", arrangerErr)
+		}
 	}
-	if arrangerErr != nil && needsArranger {
-		log.Printf("⚠️ Arranger agent failed: %v", arrangerErr)
-		// Continue with DAW if available
+	if needsDrummer {
+		activeAgentCount++
+		if drummerErr != nil {
+			failedAgentCount++
+			log.Printf("⚠️ Drummer agent failed: %v", drummerErr)
+		}
+	}
+
+	// Only fail if ALL active agents failed
+	if activeAgentCount > 0 && failedAgentCount == activeAgentCount {
+		return nil, fmt.Errorf("all agents failed: daw=%v, arranger=%v, drummer=%v", dawErr, arrangerErr, drummerErr)
 	}
 
 	// Step 4: Merge results
-	return o.mergeResults(dawResult, arrangerResult)
+	return o.mergeResults(dawResult, arrangerResult, drummerResult)
 }
 
 // StreamActionCallback is called for each action found during streaming
@@ -853,10 +877,9 @@ func (o *Orchestrator) GenerateActionsStream(
 	// Step 1: Detect which agents are needed
 	needsDAW, needsArranger, needsDrummer, err := o.DetectAgentsNeeded(ctx, question)
 	if err != nil {
-		log.Printf("⚠️ Detection error, defaulting to DAW: %v", err)
-		needsDAW = true
-		needsArranger = false
-		needsDrummer = false
+		// DetectAgentsNeeded already handles LLM validation when no keywords are found
+		// If it returns an error, the request is out of scope
+		return nil, err
 	}
 
 	log.Printf("🔍 [Stream] Agent detection: DAW=%v, Arranger=%v, Drummer=%v", needsDAW, needsArranger, needsDrummer)
@@ -870,9 +893,6 @@ func (o *Orchestrator) GenerateActionsStream(
 		}
 	}
 
-	// TODO: Add drummer agent to streaming flow when ready
-	_ = needsDrummer // Suppress unused warning for now
-
 	// Track state for dependency resolution
 	var (
 		mu               sync.Mutex
@@ -882,6 +902,7 @@ func (o *Orchestrator) GenerateActionsStream(
 		allActions       []map[string]any
 		dawComplete      bool
 		arrangerComplete bool
+		drummerComplete  bool
 	)
 
 	// Helper to emit action via callback and track it
@@ -895,12 +916,12 @@ func (o *Orchestrator) GenerateActionsStream(
 		return nil
 	}
 
-	// Helper to check if we can emit add_midi (needs both clip and notes)
+	// Helper to check if we can emit add_midi (needs clip and notes, and all agents done)
 	tryEmitMidi := func() error {
 		mu.Lock()
 		defer mu.Unlock()
 
-		if clipCreated && len(pendingNotes) > 0 && dawComplete && arrangerComplete {
+		if clipCreated && len(pendingNotes) > 0 && dawComplete && arrangerComplete && drummerComplete {
 			// Convert NoteEvents to map format
 			notesArray := make([]map[string]any, len(pendingNotes))
 			for i, note := range pendingNotes {
@@ -935,7 +956,7 @@ func (o *Orchestrator) GenerateActionsStream(
 
 	// Step 2: Launch agents
 	var wg sync.WaitGroup
-	var dawErr, arrangerErr error
+	var dawErr, arrangerErr, drummerErr error
 
 	if needsDAW {
 		wg.Add(1)
@@ -1038,15 +1059,75 @@ func (o *Orchestrator) GenerateActionsStream(
 		mu.Unlock()
 	}
 
+	if needsDrummer && o.drummerAgent != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				mu.Lock()
+				drummerComplete = true
+				mu.Unlock()
+				_ = tryEmitMidi()
+			}()
+
+			// Build input array from question
+			inputArray := []map[string]any{
+				{
+					"role":    "user",
+					"content": question,
+				},
+			}
+			result, err := o.drummerAgent.Generate(ctx, "", inputArray)
+			if err != nil {
+				drummerErr = fmt.Errorf("drummer agent: %w", err)
+				log.Printf("❌ [Stream] Drummer agent error: %v", err)
+				return
+			}
+
+			// Emit drummer actions directly (they're already in action format)
+			for _, action := range result.Actions {
+				log.Printf("🥁 [Stream] Emitting drummer action: %v", action["type"])
+				if emitErr := emitAction(action); emitErr != nil {
+					log.Printf("⚠️ [Stream] Failed to emit drummer action: %v", emitErr)
+				}
+			}
+		}()
+	} else {
+		mu.Lock()
+		drummerComplete = true
+		mu.Unlock()
+	}
+
 	// Wait for all agents
 	wg.Wait()
 
 	// Final check - emit any remaining MIDI
 	_ = tryEmitMidi()
 
-	// Handle errors
-	if dawErr != nil && arrangerErr != nil {
-		return nil, fmt.Errorf("both agents failed: %v, %v", dawErr, arrangerErr)
+	// Handle errors - only fail if ALL active agents failed
+	activeAgentCount := 0
+	failedAgentCount := 0
+	if needsDAW {
+		activeAgentCount++
+		if dawErr != nil {
+			failedAgentCount++
+		}
+	}
+	if needsArranger {
+		activeAgentCount++
+		if arrangerErr != nil {
+			failedAgentCount++
+		}
+	}
+	if needsDrummer {
+		activeAgentCount++
+		if drummerErr != nil {
+			failedAgentCount++
+		}
+	}
+
+	if activeAgentCount > 0 && failedAgentCount == activeAgentCount {
+		return nil, fmt.Errorf("all agents failed: daw=%v, arranger=%v, drummer=%v", dawErr, arrangerErr, drummerErr)
 	}
 
 	// Return all collected actions
@@ -1288,8 +1369,8 @@ Request: "%s"`, question)
 	return result.NeedsDAW, result.NeedsArranger, result.NeedsDrummer, nil
 }
 
-// mergeResults combines DAW and Arranger results
-func (o *Orchestrator) mergeResults(dawResult *daw.DawResult, arrangerResult *ArrangerResult) (*OrchestratorResult, error) {
+// mergeResults combines DAW, Arranger, and Drummer results
+func (o *Orchestrator) mergeResults(dawResult *daw.DawResult, arrangerResult *ArrangerResult, drummerResult *drummer.DrummerResult) (*OrchestratorResult, error) {
 	result := &OrchestratorResult{
 		Actions: []map[string]any{},
 	}
@@ -1440,7 +1521,13 @@ func (o *Orchestrator) mergeResults(dawResult *daw.DawResult, arrangerResult *Ar
 			// No arranger results, just add DAW actions as-is
 			result.Actions = append(result.Actions, dawResult.Actions...)
 		}
-		result.Usage = dawResult.Usage // TODO: merge usage from both agents
+		result.Usage = dawResult.Usage // TODO: merge usage from all agents
+	}
+
+	// Add drummer results (drum patterns)
+	if drummerResult != nil && len(drummerResult.Actions) > 0 {
+		log.Printf("🥁 Adding %d drummer actions", len(drummerResult.Actions))
+		result.Actions = append(result.Actions, drummerResult.Actions...)
 	}
 
 	return result, nil
