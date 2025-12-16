@@ -136,6 +136,10 @@ func (a *DrummerAgent) Generate(
 func buildDrummerSystemPrompt() string {
 	return `You are a professional drummer. Create drum patterns using pattern() calls.
 
+SCOPE: You ONLY handle requests about drums, beats, percussion, and rhythm patterns.
+If a request is not about drums/percussion (e.g., chords, melodies, mixing, or non-music topics),
+return NOTHING - do not generate any output. Only generate patterns for drum-related requests.
+
 SYNTAX: pattern(drum=NAME, grid="GRID")
 
 GRID: 16 chars = 1 bar. "x"=hit, "X"=accent, "o"=ghost, "-"=rest
