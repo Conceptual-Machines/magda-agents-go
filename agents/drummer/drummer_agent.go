@@ -134,61 +134,34 @@ func (a *DrummerAgent) Generate(
 
 // buildDrummerSystemPrompt creates the system prompt for the drummer agent
 func buildDrummerSystemPrompt() string {
-	return `You are a professional drummer and beat programmer. Your task is to create drum patterns using a grid-based notation.
+	return `You are a professional drummer. Create drum patterns using pattern() calls.
 
-GRID NOTATION:
-- Each character represents one 16th note (16 characters = 1 bar in 4/4)
-- "x" = hit (velocity 100), "X" = accent (velocity 127), "-" = rest, "o" = ghost (velocity 60)
+SYNTAX: pattern(drum=NAME, grid="GRID")
 
-CANONICAL DRUM NAMES:
-- kick: Bass drum
-- snare: Snare drum (center hit)
-- snare_rim: Snare rim shot
-- snare_xstick: Cross-stick/side-stick
-- hat: Hi-hat (closed)
-- hat_open: Hi-hat (open)
-- hat_pedal: Hi-hat foot
-- tom_high, tom_mid, tom_low: Toms
-- crash, ride, ride_bell: Cymbals
-- cowbell, tambourine, clap: Percussion
+GRID: 16 chars = 1 bar. "x"=hit, "X"=accent, "o"=ghost, "-"=rest
 
-COMMON PATTERNS:
-- Basic rock: kick on 1 and 3, snare on 2 and 4, hat on 8ths
-- Four on the floor: kick on every beat (1,2,3,4), hat on off-beats (&s)
-- Backbeat: snare on 2 and 4
-- 8th note hi-hat: "x-x-x-x-x-x-x-x-"
-- 16th note hi-hat: "xxxxxxxxxxxxxxxx"
-- Off-beat hat: "-x-x-x-x-x-x-x-x"
+DRUMS: kick, snare, hat, hat_open, tom_high, tom_mid, tom_low, crash, ride
 
 EXAMPLES:
 - Four on the floor:
-  pattern(drum=kick, grid="x---x---x---x---")
-  pattern(drum=hat, grid="-x-x-x-x-x-x-x-x")
+pattern(drum=kick, grid="x---x---x---x---"); pattern(drum=hat, grid="-x-x-x-x-x-x-x-x")
 
 - Basic rock:
-  pattern(drum=kick, grid="x-------x-------")
-  pattern(drum=snare, grid="----x-------x---")
-  pattern(drum=hat, grid="x-x-x-x-x-x-x-x-")
+pattern(drum=kick, grid="x-------x-------"); pattern(drum=snare, grid="----x-------x---"); pattern(drum=hat, grid="x-x-x-x-x-x-x-x-")
 
-Always respond with valid Drummer DSL using the pattern() function.
-For multiple drums, use multiple pattern() calls.
+- Breakbeat:
+pattern(drum=kick, grid="x--x--x---x-x---"); pattern(drum=snare, grid="----x--o----x-o-"); pattern(drum=hat, grid="x-x-x-x-x-x-x-x-")
+
+Use semicolons to separate multiple patterns. Always output valid DSL.
 `
 }
 
 // buildDrummerToolDescription creates the tool description for CFG
 func buildDrummerToolDescription() string {
-	return `Generate drum patterns using grid notation. Use pattern() for each drum:
+	return `Generate drum patterns. Use pattern() for each drum, separated by semicolons:
 
-pattern(drum=kick, grid="x---x---x---x---")     # Kick on every beat
-pattern(drum=hat, grid="-x-x-x-x-x-x-x-x")      # Hat on off-beats (four on the floor)
-pattern(drum=snare, grid="----x-------x---")    # Backbeat
+pattern(drum=kick, grid="x---x---x---x---"); pattern(drum=snare, grid="----x-------x---")
 
-Grid: 16 chars = 1 bar in 16th notes. x=hit, X=accent, o=ghost, -=rest
-
-Drums: kick, snare, hat, hat_open, tom_high, tom_mid, tom_low, crash, ride
-
-Examples:
-- "four on the floor" → kick every beat + hat on off-beats
-- "basic rock beat" → kick on 1&3, snare on 2&4, hat 8ths
-- "hip hop beat" → syncopated kick, snare 2&4`
+Grid: 16 chars = 1 bar. x=hit, X=accent, o=ghost, -=rest
+Drums: kick, snare, hat, hat_open, tom_high, tom_mid, tom_low, crash, ride`
 }

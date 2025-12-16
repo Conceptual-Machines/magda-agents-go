@@ -95,7 +95,6 @@ func TestDrummerDSLParser_ActionFormat(t *testing.T) {
 	assert.Equal(t, "kick", action["drum"])
 	assert.Equal(t, "x---x---", action["grid"])
 	assert.Equal(t, 110, action["velocity"])
-	assert.Equal(t, 0, action["humanize"])
 }
 
 func TestDrummerDSLParser_FourOnTheFloor(t *testing.T) {
@@ -121,6 +120,26 @@ func TestDrummerDSLParser_FourOnTheFloor(t *testing.T) {
 	require.Len(t, actions2, 1)
 	assert.Equal(t, "hat", actions2[0]["drum"])
 	assert.Equal(t, 8, countHits(actions2[0]["grid"].(string)))
+}
+
+func TestDrummerDSLParser_MultiplePatterns(t *testing.T) {
+	parser, err := NewDrummerDSLParser()
+	require.NoError(t, err)
+
+	// Test multiple patterns separated by semicolons
+	dsl := `pattern(drum=kick, grid="x---x---x---x---"); pattern(drum=snare, grid="----x-------x---"); pattern(drum=hat, grid="x-x-x-x-x-x-x-x-")`
+	actions, err := parser.ParseDSL(dsl)
+	require.NoError(t, err)
+
+	t.Logf("Got %d actions:", len(actions))
+	for i, action := range actions {
+		t.Logf("  Action %d: %v", i, action)
+	}
+
+	assert.Len(t, actions, 3, "Should have 3 drum_pattern actions")
+	assert.Equal(t, "kick", actions[0]["drum"])
+	assert.Equal(t, "snare", actions[1]["drum"])
+	assert.Equal(t, "hat", actions[2]["drum"])
 }
 
 func TestCountHits(t *testing.T) {

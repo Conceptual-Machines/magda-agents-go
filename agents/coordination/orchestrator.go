@@ -816,7 +816,7 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 					"content": question,
 				},
 			}
-			result, err := o.drummerAgent.Generate(ctx, "", inputArray)
+			result, err := o.drummerAgent.Generate(ctx, "gpt-5.1", inputArray)
 			if err != nil {
 				drummerErr = fmt.Errorf("drummer agent: %w", err)
 				return
@@ -1077,7 +1077,7 @@ func (o *Orchestrator) GenerateActionsStream(
 					"content": question,
 				},
 			}
-			result, err := o.drummerAgent.Generate(ctx, "", inputArray)
+			result, err := o.drummerAgent.Generate(ctx, "gpt-5.1", inputArray)
 			if err != nil {
 				drummerErr = fmt.Errorf("drummer agent: %w", err)
 				log.Printf("❌ [Stream] Drummer agent error: %v", err)
