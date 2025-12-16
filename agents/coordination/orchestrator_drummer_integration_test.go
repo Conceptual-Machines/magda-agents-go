@@ -412,4 +412,3 @@ func TestOrchestrator_Integration_DrummerWithArranger(t *testing.T) {
 		})
 	}
 }
-
