@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -530,19 +529,10 @@ func TestOrchestrator_Integration_OutOfScope_Requests(t *testing.T) {
 			result, err := orchestrator.GenerateActions(ctx, tt.question, nil)
 
 			if tt.expectError {
-				// Out-of-scope requests should return an error from the orchestrator's LLM validator
-				// This happens when no agents are detected and the validator determines the request is out of scope
+				// Out-of-scope requests should return an error - either from LLM classification
+				// or from DAW agent failing to generate valid DSL for non-music requests
 				require.Error(t, err, "Expected error for out-of-scope request")
 				t.Logf("✅ Got expected error: %v", err)
-
-				if tt.errorContains != "" {
-					assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tt.errorContains),
-						"Error message should contain '%s'", tt.errorContains)
-				}
-
-				// Verify error format - should come from orchestrator validator
-				assert.Contains(t, err.Error(), "out of scope",
-					"Error should indicate request is out of scope")
 
 				// Should not have actions
 				if result != nil {
@@ -614,70 +604,29 @@ func TestOrchestrator_Integration_LLMValidation(t *testing.T) {
 		name           string
 		question       string
 		description    string
-		expectDAW      bool
 		expectArranger bool
-		expectError    bool
-		errorContains  string
+		expectDrummer  bool
 	}{
-		{
-			name:           "out_of_scope_cooking",
-			question:       "bake me a cake",
-			description:    "Cooking request - LLM should return both false, orchestrator should error",
-			expectDAW:      false,
-			expectArranger: false,
-			expectError:    true, // Orchestrator returns error when both are false
-			errorContains:  "out of scope",
-		},
-		{
-			name:           "out_of_scope_email",
-			question:       "send an email to john@example.com",
-			description:    "Email request - LLM should return both false, orchestrator should error",
-			expectDAW:      false,
-			expectArranger: false,
-			expectError:    true,
-			errorContains:  "out of scope",
-		},
-		{
-			name:           "out_of_scope_weather",
-			question:       "what's the weather like?",
-			description:    "Weather query - LLM should return both false, orchestrator should error",
-			expectDAW:      false,
-			expectArranger: false,
-			expectError:    true,
-			errorContains:  "out of scope",
-		},
-		{
-			name:           "out_of_scope_math",
-			question:       "what is 2+2?",
-			description:    "Math question - LLM should return both false, orchestrator should error",
-			expectDAW:      false,
-			expectArranger: false,
-			expectError:    true,
-			errorContains:  "out of scope",
-		},
 		{
 			name:           "valid_arranger_ambiguous",
 			question:       "create a harmonic progression",
 			description:    "Ambiguous Arranger request - LLM should detect Arranger=true",
-			expectDAW:      false,
 			expectArranger: true,
-			expectError:    false,
+			expectDrummer:  false,
 		},
 		{
-			name:           "valid_both_ambiguous",
-			question:       "add some musical elements to improve the track",
-			description:    "Ambiguous both - LLM should detect both true",
-			expectDAW:      true,
-			expectArranger: true,
-			expectError:    false,
-		},
-		{
-			name:           "valid_daw_explicit",
+			name:           "valid_daw_only",
 			question:       "adjust the volume levels",
-			description:    "Explicit DAW request - LLM should detect DAW=true",
-			expectDAW:      true,
+			description:    "Explicit DAW request - should have Arranger=false, Drummer=false",
 			expectArranger: false,
-			expectError:    false,
+			expectDrummer:  false,
+		},
+		{
+			name:           "valid_drummer",
+			question:       "add a breakbeat drum pattern",
+			description:    "Drummer request - LLM should detect Drummer=true",
+			expectArranger: false,
+			expectDrummer:  true,
 		},
 	}
 
@@ -686,55 +635,33 @@ func TestOrchestrator_Integration_LLMValidation(t *testing.T) {
 			t.Logf("Testing: %s", tt.description)
 			t.Logf("Question: %q", tt.question)
 
-			// First verify keywords don't match (so LLM validation is triggered)
-			keywordDAW, keywordArranger, keywordDrummer := orchestrator.detectAgentsNeededKeywords(tt.question)
-			if keywordDAW || keywordArranger || keywordDrummer {
-				t.Logf("⚠️ Keywords detected (DAW=%v, Arranger=%v, Drummer=%v), LLM validation may not be triggered",
-					keywordDAW, keywordArranger, keywordDrummer)
-				// If keywords match, skip this test case as LLM won't be called
-				if tt.expectError {
-					// For out-of-scope tests, if keywords match, we can't test LLM validation
-					t.Skip("Keywords matched, cannot test LLM validation for this case")
-				}
-			}
-
-			// Test LLM validation directly
+			// Test LLM classification directly
 			start := time.Now()
-			needsDAW, needsArranger, _, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
+			needsDAW, needsArranger, needsDrummer, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
 			detectionTime := time.Since(start)
 
-			if tt.expectError {
-				require.Error(t, err, "Expected error")
-				if tt.errorContains != "" {
-					assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tt.errorContains),
-						"Error message should contain '%s'", tt.errorContains)
-				}
-			} else {
-				require.NoError(t, err, "LLM validation should not error")
+			require.NoError(t, err, "LLM classification should not error for valid music requests")
 
-				t.Logf("📊 LLM Validation Results:")
-				t.Logf("   Detection time: %v", detectionTime)
-				t.Logf("   DAW: %v (expected: %v)", needsDAW, tt.expectDAW)
-				t.Logf("   Arranger: %v (expected: %v)", needsArranger, tt.expectArranger)
+			t.Logf("📊 LLM Classification Results:")
+			t.Logf("   Detection time: %v", detectionTime)
+			t.Logf("   DAW: %v (always true)", needsDAW)
+			t.Logf("   Arranger: %v (expected: %v)", needsArranger, tt.expectArranger)
+			t.Logf("   Drummer: %v (expected: %v)", needsDrummer, tt.expectDrummer)
 
-				// For out-of-scope requests, both should be false
-				if !tt.expectDAW && !tt.expectArranger {
-					assert.False(t, needsDAW, "Out-of-scope request should have DAW=false")
-					assert.False(t, needsArranger, "Out-of-scope request should have Arranger=false")
-				} else {
-					// For valid requests, check expectations
-					if tt.expectDAW {
-						assert.True(t, needsDAW, "Expected DAW=true for valid DAW request")
-					}
-					if tt.expectArranger {
-						assert.True(t, needsArranger, "Expected Arranger=true for valid Arranger request")
-					}
-				}
+			// DAW is always true
+			assert.True(t, needsDAW, "DAW should always be true")
 
-				// LLM validation should be reasonably fast (< 3s for gpt-4.1-mini)
-				assert.Less(t, detectionTime, 3*time.Second,
-					"LLM validation should complete within reasonable time")
+			// Check Arranger/Drummer expectations
+			if tt.expectArranger {
+				assert.True(t, needsArranger, "Expected Arranger=true")
 			}
+			if tt.expectDrummer {
+				assert.True(t, needsDrummer, "Expected Drummer=true")
+			}
+
+			// LLM validation should be reasonably fast (< 3s for gpt-4.1-mini)
+			assert.Less(t, detectionTime, 3*time.Second,
+				"LLM classification should complete within reasonable time")
 		})
 	}
 }
@@ -753,12 +680,10 @@ func TestOrchestrator_Integration_LLMValidation_Timing(t *testing.T) {
 		name     string
 		question string
 	}{
-		{"cooking", "bake me a cake"},
-		{"email", "send an email"},
-		{"weather", "what's the weather"},
-		{"math", "what is 2+2"},
-		{"ambiguous_daw", "make it sound better"},
-		{"ambiguous_arranger", "create harmonic content"},
+		{"daw_only", "make it sound better"},
+		{"arranger", "create harmonic content"},
+		{"drummer", "add a breakbeat pattern"},
+		{"daw_volume", "adjust the volume"},
 	}
 
 	var totalTime time.Duration
@@ -767,35 +692,20 @@ func TestOrchestrator_Integration_LLMValidation_Timing(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			// Check if keywords match first
-			keywordDAW, keywordArranger, keywordDrummer := orchestrator.detectAgentsNeededKeywords(tt.question)
-			if keywordDAW || keywordArranger || keywordDrummer {
-				t.Logf("⚠️ Keywords detected (DAW=%v, Arranger=%v, Drummer=%v) for '%s', skipping LLM validation test",
-					keywordDAW, keywordArranger, keywordDrummer, tt.question)
-				t.Skip("Keywords matched, LLM validation not triggered")
-			}
-
 			start := time.Now()
-			_, _, _, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
+			needsDAW, _, _, err := orchestrator.DetectAgentsNeeded(ctx, tt.question)
 			detectionTime := time.Since(start)
 
-			// Out-of-scope requests (cooking, email, weather, math) should return an error
-			// Valid requests (ambiguous_daw, ambiguous_arranger) should not error
-			isOutOfScope := tt.name == "cooking" || tt.name == "email" || tt.name == "weather" || tt.name == "math"
+			// These are all valid music requests, should not error
+			require.NoError(t, err, "Valid request should not error")
 
-			if isOutOfScope {
-				require.Error(t, err, "Out-of-scope request should return error")
-				assert.Contains(t, err.Error(), "out of scope", "Error should indicate out of scope")
-			} else {
-				require.NoError(t, err, "Valid request should not error")
-			}
+			// DAW is always true
+			assert.True(t, needsDAW, "DAW should always be true")
 
-			t.Logf("📊 LLM Validation Timing: %s", tt.name)
+			t.Logf("📊 LLM Classification Timing: %s", tt.name)
 			t.Logf("   Question: %q", tt.question)
 			t.Logf("   Time: %v", detectionTime)
-			t.Logf("   Error: %v", err)
 
-			// Only count timing for successful calls (or all calls for performance tracking)
 			totalTime += detectionTime
 			if first {
 				minTime = detectionTime
@@ -810,14 +720,14 @@ func TestOrchestrator_Integration_LLMValidation_Timing(t *testing.T) {
 				}
 			}
 
-			// Each validation should be reasonably fast (even if it errors)
+			// Each classification should be reasonably fast
 			assert.Less(t, detectionTime, 3*time.Second,
-				"Individual LLM validation should complete within reasonable time")
+				"Individual LLM classification should complete within reasonable time")
 		})
 	}
 
 	avgTime := totalTime / time.Duration(len(testCases))
-	t.Logf("📊 LLM Validation Performance Summary:")
+	t.Logf("📊 LLM Classification Performance Summary:")
 	t.Logf("   Average: %v", avgTime)
 	t.Logf("   Min: %v", minTime)
 	t.Logf("   Max: %v", maxTime)
@@ -825,5 +735,5 @@ func TestOrchestrator_Integration_LLMValidation_Timing(t *testing.T) {
 
 	// Average should be reasonable
 	assert.Less(t, avgTime, 2*time.Second,
-		"Average LLM validation time should be reasonable")
+		"Average LLM classification time should be reasonable")
 }
