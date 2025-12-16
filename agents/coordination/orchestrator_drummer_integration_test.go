@@ -3,7 +3,6 @@ package coordination
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
