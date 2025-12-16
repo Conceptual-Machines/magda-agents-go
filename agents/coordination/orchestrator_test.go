@@ -67,7 +67,7 @@ func TestOrchestrator_DetectAgentsNeeded_Keywords(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			needsDAW, needsArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
+			needsDAW, needsArranger, _ := orchestrator.detectAgentsNeededKeywords(tt.question)
 
 			assert.Equal(t, tt.expectedDAW, needsDAW, "DAW detection mismatch")
 			// Note: Some tests may need LLM fallback for accurate Arranger detection
@@ -184,7 +184,7 @@ func TestOrchestrator_DetectAgentsNeeded_EdgeCases(t *testing.T) {
 
 	for _, tt := range edgeCases {
 		t.Run(tt.name, func(t *testing.T) {
-			needsDAW, needsArranger := orchestrator.detectAgentsNeededKeywords(tt.question)
+			needsDAW, needsArranger, _ := orchestrator.detectAgentsNeededKeywords(tt.question)
 			t.Logf("Question: %q -> DAW=%v, Arranger=%v", tt.question, needsDAW, needsArranger)
 
 			// These edge cases should ideally trigger LLM fallback

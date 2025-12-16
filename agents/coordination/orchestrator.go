@@ -17,6 +17,68 @@ import (
 
 // expandedKeywordsJSON contains the expanded keywords as embedded JSON
 const expandedKeywordsJSON = `{
+  "drummer": [
+    "drum",
+    "drums",
+    "drummer",
+    "beat",
+    "beats",
+    "kick",
+    "snare",
+    "hi-hat",
+    "hihat",
+    "hat",
+    "hi hat",
+    "tom",
+    "toms",
+    "cymbal",
+    "cymbals",
+    "crash",
+    "ride",
+    "percussion",
+    "percussive",
+    "percussionist",
+    "rhythm",
+    "rhythmic",
+    "four on the floor",
+    "four-on-the-floor",
+    "breakbeat",
+    "break beat",
+    "808",
+    "trap beat",
+    "drum pattern",
+    "drum fill",
+    "fill",
+    "roll",
+    "drum roll",
+    "backbeat",
+    "back beat",
+    "downbeat",
+    "offbeat",
+    "swing",
+    "shuffle",
+    "ghost note",
+    "ghost notes",
+    "rimshot",
+    "rim shot",
+    "cross stick",
+    "xstick",
+    "open hat",
+    "closed hat",
+    "pedal hat",
+    "tom fill",
+    "blast beat",
+    "double bass",
+    "double kick",
+    "bateria",
+    "batterie",
+    "schlagzeug",
+    "batteria",
+    "ドラム",
+    "doramu",
+    "打击乐",
+    "tambor"
+  ],
   "daw": [
     "track",
     "clip",
@@ -613,13 +675,15 @@ const expandedKeywordsJSON = `{
   ]
 }`
 
-// Orchestrator coordinates multiple agents (DAW + Arranger) running in parallel
+// Orchestrator coordinates multiple agents (DAW + Arranger + Drummer) running in parallel
 type Orchestrator struct {
 	dawAgent          *daw.DawAgent
 	arrangerAgent     ArrangerAgent // Will be set when we integrate
+	drummerAgent      DrummerAgent  // Drummer agent for rhythm patterns
 	llmProvider       llm.Provider
 	dawKeywords       []string
 	arrangerKeywords  []string
+	drummerKeywords   []string
 	keywordsLoaded    bool
 	keywordsLoadMutex sync.Mutex
 }
@@ -628,6 +692,18 @@ type Orchestrator struct {
 // Uses the actual arranger agent's ArrangerResult type
 type ArrangerAgent interface {
 	GenerateActions(ctx context.Context, question string) (*arranger.ArrangerResult, error)
+}
+
+// DrummerAgent interface for the drummer agent
+type DrummerAgent interface {
+	Generate(ctx context.Context, model string, inputArray []map[string]any, reasoningMode string) (*DrummerResult, error)
+}
+
+// DrummerResult represents the output from the drummer agent
+type DrummerResult struct {
+	DSL     string           `json:"dsl"`
+	Actions []map[string]any `json:"actions"`
+	Usage   any              `json:"usage"`
 }
 
 // ArrangerResult represents the output from the arranger agent (internal format)
@@ -679,21 +755,22 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 // GenerateActions coordinates parallel agent execution and merges results
 func (o *Orchestrator) GenerateActions(ctx context.Context, question string, state map[string]any) (*OrchestratorResult, error) {
 	// Step 1: Detect which agents are needed
-	needsDAW, needsArranger, err := o.DetectAgentsNeeded(ctx, question)
+	needsDAW, needsArranger, needsDrummer, err := o.DetectAgentsNeeded(ctx, question)
 	if err != nil {
 		log.Printf("⚠️ Detection error, defaulting to DAW: %v", err)
 		needsDAW = true
 		needsArranger = false
+		needsDrummer = false
 	}
 
-	log.Printf("🔍 Agent detection: DAW=%v, Arranger=%v", needsDAW, needsArranger)
+	log.Printf("🔍 Agent detection: DAW=%v, Arranger=%v, Drummer=%v", needsDAW, needsArranger, needsDrummer)
 
-	// Step 1.5: Auto-enable DAW if arranger is needed but no tracks exist
+	// Step 1.5: Auto-enable DAW if arranger or drummer is needed but no tracks exist
 	// This ensures track creation happens before musical content is added
-	if needsArranger && !needsDAW {
+	if (needsArranger || needsDrummer) && !needsDAW {
 		trackCount := getTrackCount(state)
 		if trackCount == 0 {
-			log.Printf("🔧 Auto-enabling DAW agent: Arranger needs a track but none exist")
+			log.Printf("🔧 Auto-enabling DAW agent: Musical agent needs a track but none exist")
 			needsDAW = true
 		}
 	}
@@ -774,23 +851,27 @@ func (o *Orchestrator) GenerateActionsStream(
 	callback StreamActionCallback,
 ) (*OrchestratorResult, error) {
 	// Step 1: Detect which agents are needed
-	needsDAW, needsArranger, err := o.DetectAgentsNeeded(ctx, question)
+	needsDAW, needsArranger, needsDrummer, err := o.DetectAgentsNeeded(ctx, question)
 	if err != nil {
 		log.Printf("⚠️ Detection error, defaulting to DAW: %v", err)
 		needsDAW = true
 		needsArranger = false
+		needsDrummer = false
 	}
 
-	log.Printf("🔍 [Stream] Agent detection: DAW=%v, Arranger=%v", needsDAW, needsArranger)
+	log.Printf("🔍 [Stream] Agent detection: DAW=%v, Arranger=%v, Drummer=%v", needsDAW, needsArranger, needsDrummer)
 
-	// Step 1.5: Auto-enable DAW if arranger is needed but no tracks exist
-	if needsArranger && !needsDAW {
+	// Step 1.5: Auto-enable DAW if arranger or drummer is needed but no tracks exist
+	if (needsArranger || needsDrummer) && !needsDAW {
 		trackCount := getTrackCount(state)
 		if trackCount == 0 {
-			log.Printf("🔧 [Stream] Auto-enabling DAW agent: Arranger needs a track but none exist")
+			log.Printf("🔧 [Stream] Auto-enabling DAW agent: Musical agent needs a track but none exist")
 			needsDAW = true
 		}
 	}
+
+	// TODO: Add drummer agent to streaming flow when ready
+	_ = needsDrummer // Suppress unused warning for now
 
 	// Track state for dependency resolution
 	var (
@@ -980,38 +1061,40 @@ func (o *Orchestrator) GenerateActionsStream(
 }
 
 // DetectAgentsNeeded uses hybrid keywords + LLM to detect which agents are needed
-func (o *Orchestrator) DetectAgentsNeeded(ctx context.Context, question string) (needsDAW bool, needsArranger bool, err error) {
+func (o *Orchestrator) DetectAgentsNeeded(ctx context.Context, question string) (needsDAW, needsArranger, needsDrummer bool, err error) {
 	// Fast path: Enhanced keyword matching (<1ms)
-	needsDAW, needsArranger = o.detectAgentsNeededKeywords(question)
+	needsDAW, needsArranger, needsDrummer = o.detectAgentsNeededKeywords(question)
 
 	// If keywords found, return immediately (no validation needed)
-	if needsDAW || needsArranger {
-		// If only one detected but question seems musical, double-check with LLM
-		if (needsDAW && !needsArranger) && o.looksMusical(question) {
-			llmDAW, llmArranger, err := o.detectAgentsNeededLLM(ctx, question)
-			if err == nil {
+	if needsDAW || needsArranger || needsDrummer {
+		// If only DAW detected but question seems musical, double-check with LLM
+		if (needsDAW && !needsArranger && !needsDrummer) && o.looksMusical(question) {
+			llmDAW, llmArranger, llmDrummer, llmErr := o.detectAgentsNeededLLM(ctx, question)
+			if llmErr == nil {
 				needsDAW = llmDAW
 				needsArranger = llmArranger
+				needsDrummer = llmDrummer
 			}
 		}
-		return needsDAW, needsArranger, nil
+		return needsDAW, needsArranger, needsDrummer, nil
 	}
 
 	// If no keywords found, use LLM to validate scope
-	llmDAW, llmArranger, err := o.detectAgentsNeededLLM(ctx, question)
-	if err != nil {
-		return false, false, fmt.Errorf("LLM classification failed: %w", err)
+	llmDAW, llmArranger, llmDrummer, llmErr := o.detectAgentsNeededLLM(ctx, question)
+	if llmErr != nil {
+		return false, false, false, fmt.Errorf("LLM classification failed: %w", llmErr)
 	}
 
 	needsDAW = llmDAW
 	needsArranger = llmArranger
+	needsDrummer = llmDrummer
 
-	// Runtime (orchestrator) checks: if LLM returns both false, the request is out of scope
-	if !needsDAW && !needsArranger {
-		return false, false, fmt.Errorf("request is out of scope: no agents can handle this request")
+	// Runtime (orchestrator) checks: if LLM returns all false, the request is out of scope
+	if !needsDAW && !needsArranger && !needsDrummer {
+		return false, false, false, fmt.Errorf("request is out of scope: no agents can handle this request")
 	}
 
-	return needsDAW, needsArranger, nil
+	return needsDAW, needsArranger, needsDrummer, nil
 }
 
 // loadKeywords loads expanded keywords from embedded JSON (with fallback to hardcoded)
@@ -1026,6 +1109,7 @@ func (o *Orchestrator) loadKeywords() {
 	var keywords struct {
 		DAW      []string `json:"daw"`
 		Arranger []string `json:"arranger"`
+		Drummer  []string `json:"drummer"`
 	}
 
 	if err := json.Unmarshal([]byte(expandedKeywordsJSON), &keywords); err != nil {
@@ -1037,9 +1121,10 @@ func (o *Orchestrator) loadKeywords() {
 
 	o.dawKeywords = keywords.DAW
 	o.arrangerKeywords = keywords.Arranger
+	o.drummerKeywords = keywords.Drummer
 	o.keywordsLoaded = true
-	log.Printf("✅ Loaded %d DAW keywords and %d Arranger keywords from embedded data",
-		len(o.dawKeywords), len(o.arrangerKeywords))
+	log.Printf("✅ Loaded %d DAW, %d Arranger, %d Drummer keywords from embedded data",
+		len(o.dawKeywords), len(o.arrangerKeywords), len(o.drummerKeywords))
 }
 
 // loadDefaultKeywords sets fallback hardcoded keywords
@@ -1065,11 +1150,21 @@ func (o *Orchestrator) loadDefaultKeywords() {
 		"pentatonic", "dorian", "mixolydian",
 		"sus2", "sus4", "add9",
 	}
+
+	o.drummerKeywords = []string{
+		"drum", "drums", "drummer", "beat", "beats",
+		"kick", "snare", "hi-hat", "hihat", "hat", "tom", "toms",
+		"cymbal", "cymbals", "crash", "ride",
+		"percussion", "percussive", "rhythm", "rhythmic",
+		"four on the floor", "breakbeat", "808", "trap beat",
+		"drum pattern", "drum fill", "fill", "roll",
+		"backbeat", "swing", "shuffle", "ghost note",
+	}
 }
 
 // detectAgentsNeededKeywords does keyword matching without defaulting to DAW
 // This allows the orchestrator to validate scope when no keywords are found
-func (o *Orchestrator) detectAgentsNeededKeywords(question string) (needsDAW bool, needsArranger bool) {
+func (o *Orchestrator) detectAgentsNeededKeywords(question string) (needsDAW, needsArranger, needsDrummer bool) {
 	// Ensure keywords are loaded
 	if !o.keywordsLoaded {
 		o.loadKeywords()
@@ -1080,6 +1175,7 @@ func (o *Orchestrator) detectAgentsNeededKeywords(question string) (needsDAW boo
 	// Filter out single-character keywords to avoid false positives (e.g., "a" matching in "bake me a cake")
 	dawKeywordsFiltered := o.filterSingleCharKeywords(o.dawKeywords)
 	arrangerKeywordsFiltered := o.filterSingleCharKeywords(o.arrangerKeywords)
+	drummerKeywordsFiltered := o.filterSingleCharKeywords(o.drummerKeywords)
 
 	// Check for DAW operations (independent check)
 	needsDAW = containsAny(questionLower, dawKeywordsFiltered)
@@ -1087,11 +1183,14 @@ func (o *Orchestrator) detectAgentsNeededKeywords(question string) (needsDAW boo
 	// Check for musical content (independent check - can be true alongside DAW)
 	needsArranger = containsAny(questionLower, arrangerKeywordsFiltered)
 
-	// Both can be true! Example: "add a chord progression to track 1"
-	// - "add", "track" → needsDAW = true
-	// - "chord", "progression" → needsArranger = true
+	// Check for drum patterns (independent check)
+	needsDrummer = containsAny(questionLower, drummerKeywordsFiltered)
 
-	return needsDAW, needsArranger
+	// Multiple can be true! Example: "add a drum beat with kick and snare to track 1"
+	// - "add", "track" → needsDAW = true
+	// - "drum", "beat", "kick", "snare" → needsDrummer = true
+
+	return needsDAW, needsArranger, needsDrummer
 }
 
 // filterSingleCharKeywords removes single-character keywords to avoid false positives
@@ -1118,16 +1217,17 @@ func (o *Orchestrator) looksMusical(question string) bool {
 }
 
 // detectAgentsNeededLLM uses LLM to classify the request (fallback when keywords detect nothing)
-// Returns both false if the request is out of scope (e.g., "bake me a cake")
+// Returns all false if the request is out of scope (e.g., "bake me a cake")
 // Only returns error for LLM failures (API errors, parsing errors), NOT for out-of-scope requests
-func (o *Orchestrator) detectAgentsNeededLLM(ctx context.Context, question string) (needsDAW bool, needsArranger bool, err error) {
+func (o *Orchestrator) detectAgentsNeededLLM(ctx context.Context, question string) (needsDAW, needsArranger, needsDrummer bool, err error) {
 	prompt := fmt.Sprintf(`Classify this music production request. Return JSON:
 {
   "needsDAW": true/false,  // REAPER operations: tracks, clips, FX, volume, pan, mute, solo, etc.
-  "needsArranger": true/false  // Musical content: chords, melodies, notes, arpeggios, basslines, riffs, etc.
+  "needsArranger": true/false,  // Melodic/harmonic content: chords, melodies, notes, arpeggios, basslines, etc.
+  "needsDrummer": true/false  // Drum/rhythm patterns: beats, kicks, snares, hi-hats, drum fills, etc.
 }
 
-If the request is completely out of scope (e.g., "bake me a cake", "send an email", "what's the weather"), return both false.
+If the request is completely out of scope (e.g., "bake me a cake", "send an email", "what's the weather"), return all false.
 
 Request: "%s"`, question)
 
@@ -1149,40 +1249,43 @@ Request: "%s"`, question)
 					"needsArranger": map[string]any{
 						"type": "boolean",
 					},
+					"needsDrummer": map[string]any{
+						"type": "boolean",
+					},
 				},
-				"required": []string{"needsDAW", "needsArranger"},
+				"required": []string{"needsDAW", "needsArranger", "needsDrummer"},
 			},
 		},
 	}
 
-	resp, err := o.llmProvider.Generate(ctx, request)
-	if err != nil {
-		return false, false, fmt.Errorf("LLM classification failed: %w", err)
+	resp, llmErr := o.llmProvider.Generate(ctx, request)
+	if llmErr != nil {
+		return false, false, false, fmt.Errorf("LLM classification failed: %w", llmErr)
 	}
 
 	// Parse response from RawOutput (JSON Schema returns structured JSON)
-	// For now, parse from RawOutput or use a simple heuristic
-	// TODO: Properly parse JSON Schema response
 	result := struct {
 		NeedsDAW      bool `json:"needsDAW"`
 		NeedsArranger bool `json:"needsArranger"`
+		NeedsDrummer  bool `json:"needsDrummer"`
 	}{
 		NeedsDAW:      false, // No default - let LLM decide
 		NeedsArranger: false, // No default - let LLM decide
+		NeedsDrummer:  false, // No default - let LLM decide
 	}
 
 	// Try to parse from RawOutput if available
 	if resp.RawOutput != "" {
 		// Parse JSON from RawOutput
-		if err := json.Unmarshal([]byte(resp.RawOutput), &result); err != nil {
-			log.Printf("⚠️ Failed to parse LLM classification JSON: %v, raw: %s", err, resp.RawOutput)
+		if parseErr := json.Unmarshal([]byte(resp.RawOutput), &result); parseErr != nil {
+			log.Printf("⚠️ Failed to parse LLM classification JSON: %v, raw: %s", parseErr, resp.RawOutput)
 			// If parsing fails, return error (don't fallback to keywords - we're here because keywords found nothing)
-			return false, false, fmt.Errorf("failed to parse LLM classification: %w", err)
+			return false, false, false, fmt.Errorf("failed to parse LLM classification: %w", parseErr)
 		}
 	}
 
-	// Return LLM's decision - if both are false, caller will treat as out of scope
-	return result.NeedsDAW, result.NeedsArranger, nil
+	// Return LLM's decision - if all are false, caller will treat as out of scope
+	return result.NeedsDAW, result.NeedsArranger, result.NeedsDrummer, nil
 }
 
 // mergeResults combines DAW and Arranger results
