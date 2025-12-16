@@ -3,7 +3,9 @@ package llm
 // GetDrummerDSLGrammar returns the Lark grammar definition for Drummer DSL
 // The DSL uses canonical drum names and grid-based pattern notation
 // Grid: Each character = 1 subdivision (default 16th note)
-//   "x" = hit (velocity 100), "X" = accent (velocity 127), "-" = rest, "o" = ghost (velocity 60)
+//
+//	"x" = hit (velocity 100), "X" = accent (velocity 127), "-" = rest, "o" = ghost (velocity 60)
+//
 // Canonical drums: kick, snare, hat, hat_open, tom_high, tom_mid, tom_low, crash, ride, etc.
 func GetDrummerDSLGrammar() string {
 	return `
@@ -77,4 +79,3 @@ STRING: /"[^"]*"/
 NUMBER: /-?\d+(\.\d+)?/
 `
 }
-
