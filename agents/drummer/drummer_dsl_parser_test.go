@@ -8,15 +8,12 @@ import (
 )
 
 func TestDrummerDSLParser_ParsePattern(t *testing.T) {
-	parser, err := NewDrummerDSLParser()
-	require.NoError(t, err)
-
 	tests := []struct {
-		name           string
-		dsl            string
-		expectedDrum   string
-		expectedGrid   string
-		expectedHits   int
+		name         string
+		dsl          string
+		expectedDrum string
+		expectedGrid string
+		expectedHits int
 	}{
 		{
 			name:         "basic kick pattern",
@@ -40,6 +37,13 @@ func TestDrummerDSLParser_ParsePattern(t *testing.T) {
 			expectedHits: 8,
 		},
 		{
+			name:         "off-beat hat (four on floor)",
+			dsl:          `pattern(drum=hat, grid="-x-x-x-x-x-x-x-x")`,
+			expectedDrum: "hat",
+			expectedGrid: "-x-x-x-x-x-x-x-x",
+			expectedHits: 8,
+		},
+		{
 			name:         "accented pattern",
 			dsl:          `pattern(drum=snare, grid="----X-------X---")`,
 			expectedDrum: "snare",
@@ -57,108 +61,66 @@ func TestDrummerDSLParser_ParsePattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			beat, err := parser.ParseDSL(tt.dsl)
+			// Create new parser for each test to reset state
+			p, err := NewDrummerDSLParser()
 			require.NoError(t, err)
-			require.Len(t, beat.Patterns, 1)
 
-			pattern := beat.Patterns[0]
-			assert.Equal(t, tt.expectedDrum, pattern.Drum)
-			assert.Equal(t, tt.expectedGrid, pattern.Grid)
-			assert.Equal(t, tt.expectedHits, countHits(pattern.Grid))
+			actions, err := p.ParseDSL(tt.dsl)
+			require.NoError(t, err)
+			require.Len(t, actions, 1)
+
+			action := actions[0]
+			assert.Equal(t, "drum_pattern", action["type"])
+			assert.Equal(t, tt.expectedDrum, action["drum"])
+			assert.Equal(t, tt.expectedGrid, action["grid"])
+			assert.Equal(t, tt.expectedHits, countHits(action["grid"].(string)))
 		})
 	}
 }
 
-func TestDrummerDSLParser_ConvertToNoteEvents(t *testing.T) {
+func TestDrummerDSLParser_ActionFormat(t *testing.T) {
 	parser, err := NewDrummerDSLParser()
 	require.NoError(t, err)
 
-	// Parse a simple kick pattern
+	// Parse a pattern with velocity
+	dsl := `pattern(drum=kick, grid="x---x---", velocity=110)`
+	actions, err := parser.ParseDSL(dsl)
+	require.NoError(t, err)
+	require.Len(t, actions, 1)
+
+	action := actions[0]
+
+	// Check action has all expected fields
+	assert.Equal(t, "drum_pattern", action["type"])
+	assert.Equal(t, "kick", action["drum"])
+	assert.Equal(t, "x---x---", action["grid"])
+	assert.Equal(t, 110, action["velocity"])
+	assert.Equal(t, 0, action["humanize"])
+}
+
+func TestDrummerDSLParser_FourOnTheFloor(t *testing.T) {
+	// Four on the floor = kick on every beat + hat on off-beats
+	// This tests parsing multiple pattern calls (would need multi-statement support)
+
+	parser, err := NewDrummerDSLParser()
+	require.NoError(t, err)
+
+	// Test kick pattern (every beat)
 	dsl := `pattern(drum=kick, grid="x---x---x---x---")`
-	beat, err := parser.ParseDSL(dsl)
+	actions, err := parser.ParseDSL(dsl)
 	require.NoError(t, err)
+	require.Len(t, actions, 1)
+	assert.Equal(t, "kick", actions[0]["drum"])
+	assert.Equal(t, 4, countHits(actions[0]["grid"].(string)))
 
-	// Convert to MIDI notes
-	notes, err := parser.ConvertToNoteEvents(beat, nil)
+	// Test off-beat hat pattern
+	parser2, _ := NewDrummerDSLParser()
+	dsl2 := `pattern(drum=hat, grid="-x-x-x-x-x-x-x-x")`
+	actions2, err := parser2.ParseDSL(dsl2)
 	require.NoError(t, err)
-
-	// Should have 4 notes (4 hits)
-	assert.Len(t, notes, 4)
-
-	// Check first note
-	assert.Equal(t, 36, notes[0].MidiNoteNumber) // Kick = 36 in GM
-	assert.Equal(t, 100, notes[0].Velocity)
-	assert.Equal(t, 0.0, notes[0].StartBeats)
-
-	// Check timing (16th notes = 0.25 beats apart)
-	assert.Equal(t, 1.0, notes[1].StartBeats) // Beat 2 (4 * 0.25)
-	assert.Equal(t, 2.0, notes[2].StartBeats) // Beat 3
-	assert.Equal(t, 3.0, notes[3].StartBeats) // Beat 4
-}
-
-func TestDrummerDSLParser_VelocityLevels(t *testing.T) {
-	parser, err := NewDrummerDSLParser()
-	require.NoError(t, err)
-
-	// Pattern with different velocity levels
-	dsl := `pattern(drum=snare, grid="xXo-")`
-	beat, err := parser.ParseDSL(dsl)
-	require.NoError(t, err)
-
-	notes, err := parser.ConvertToNoteEvents(beat, nil)
-	require.NoError(t, err)
-
-	assert.Len(t, notes, 3)
-	assert.Equal(t, 100, notes[0].Velocity) // x = normal
-	assert.Equal(t, 127, notes[1].Velocity) // X = accent
-	assert.Equal(t, 60, notes[2].Velocity)  // o = ghost
-}
-
-func TestDrummerDSLParser_CustomMapping(t *testing.T) {
-	parser, err := NewDrummerDSLParser()
-	require.NoError(t, err)
-
-	dsl := `pattern(drum=kick, grid="x---")`
-	beat, err := parser.ParseDSL(dsl)
-	require.NoError(t, err)
-
-	// Use custom mapping (e.g., Addictive Drums)
-	customMapping := map[string]int{
-		"kick": 24, // Different from GM 36
-	}
-
-	notes, err := parser.ConvertToNoteEvents(beat, customMapping)
-	require.NoError(t, err)
-
-	assert.Len(t, notes, 1)
-	assert.Equal(t, 24, notes[0].MidiNoteNumber) // Should use custom mapping
-}
-
-func TestDrummerDSLParser_Swing(t *testing.T) {
-	parser, err := NewDrummerDSLParser()
-	require.NoError(t, err)
-
-	// Create beat with swing manually (since beat() parsing needs more work)
-	beat := &DrumBeat{
-		Patterns: []DrumPattern{
-			{Drum: "hat", Grid: "xxxx"},
-		},
-		Swing:       50,
-		Subdivision: 16,
-	}
-
-	notes, err := parser.ConvertToNoteEvents(beat, nil)
-	require.NoError(t, err)
-
-	assert.Len(t, notes, 4)
-
-	// With 50% swing, odd notes (index 1, 3) should be delayed
-	// Normal timing: 0, 0.25, 0.5, 0.75
-	// With swing: 0, ~0.3125, 0.5, ~0.8125
-	assert.Equal(t, 0.0, notes[0].StartBeats)
-	assert.Greater(t, notes[1].StartBeats, 0.25) // Delayed by swing
-	assert.Equal(t, 0.5, notes[2].StartBeats)
-	assert.Greater(t, notes[3].StartBeats, 0.75) // Delayed by swing
+	require.Len(t, actions2, 1)
+	assert.Equal(t, "hat", actions2[0]["drum"])
+	assert.Equal(t, 8, countHits(actions2[0]["grid"].(string)))
 }
 
 func TestCountHits(t *testing.T) {
@@ -167,6 +129,7 @@ func TestCountHits(t *testing.T) {
 		expected int
 	}{
 		{"x---x---x---x---", 4},
+		{"-x-x-x-x-x-x-x-x", 8},
 		{"xxxxxxxxxxxx", 12},
 		{"----------------", 0},
 		{"xXoX", 4},
@@ -179,4 +142,3 @@ func TestCountHits(t *testing.T) {
 		})
 	}
 }
-
