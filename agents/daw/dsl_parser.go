@@ -119,13 +119,6 @@ func (p *DSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 				return nil, fmt.Errorf("failed to parse clip call: %w", err)
 			}
 			actions = append(actions, clipAction)
-		} else if strings.HasPrefix(part, ".addMidi(") {
-			// Parse .addMidi() call
-			midiAction, err := p.parseMidiCall(part, currentTrackIndex)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse midi call: %w", err)
-			}
-			actions = append(actions, midiAction)
 		} else if strings.HasPrefix(part, ".addFX(") || strings.HasPrefix(part, ".addInstrument(") {
 			// Parse FX/instrument call
 			fxAction, err := p.parseFXCall(part, currentTrackIndex)
@@ -322,23 +315,7 @@ func (p *DSLParser) parseClipCall(call string, trackIndex int) (map[string]any, 
 	return action, nil
 }
 
-// parseMidiCall parses .addMidi(notes=[...])
-func (p *DSLParser) parseMidiCall(_ string, trackIndex int) (map[string]any, error) {
-	if trackIndex < 0 {
-		return nil, fmt.Errorf("no track context for midi call")
-	}
-
-	// For now, return a placeholder - MIDI parsing is complex
-	// The extension will need to handle MIDI data
-	action := map[string]any{
-		"action": "add_midi",
-		"track":  trackIndex,
-		"notes":  []any{}, // Placeholder - will be populated from DSL
-	}
-
-	log.Printf("⚠️  MIDI parsing not yet implemented - returning placeholder")
-	return action, nil
-}
+// NOTE: MIDI parsing removed - add_midi is handled by ARRANGER agent, not DAW agent
 
 // parseFXCall parses .addFX(fxname="ReaEQ") or .addInstrument(instrument="Serum")
 func (p *DSLParser) parseFXCall(call string, trackIndex int) (map[string]any, error) {

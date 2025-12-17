@@ -227,7 +227,7 @@ func ChordToMIDI(chordSymbol string, octave int) ([]int, error) {
 }
 
 // ConvertArrangerActionToNoteEvents converts an arranger action to NoteEvent array
-// Handles: arpeggios, chords, progressions
+// Handles: arpeggios, chords, progressions, single notes
 func ConvertArrangerActionToNoteEvents(action map[string]any, startBeat float64) ([]models.NoteEvent, error) {
 	actionType, ok := action["type"].(string)
 	if !ok {
@@ -241,9 +241,107 @@ func ConvertArrangerActionToNoteEvents(action map[string]any, startBeat float64)
 		return convertChordToNoteEvents(action, startBeat)
 	case "progression":
 		return convertProgressionToNoteEvents(action, startBeat)
+	case "note":
+		return convertSingleNoteToNoteEvents(action, startBeat)
 	default:
 		return nil, fmt.Errorf("unknown action type: %s", actionType)
 	}
+}
+
+// convertSingleNoteToNoteEvents converts a single note action to a NoteEvent
+// Example: note(pitch="E1", duration=4) -> single E1 note for 4 beats
+func convertSingleNoteToNoteEvents(action map[string]any, startBeat float64) ([]models.NoteEvent, error) {
+	pitch, ok := action["pitch"].(string)
+	if !ok {
+		return nil, fmt.Errorf("note missing pitch field")
+	}
+
+	duration, _ := getFloat(action, "duration", 4.0) // Default: 4 beats (1 bar)
+	velocity, _ := getInt(action, "velocity", 100)
+
+	// Check for explicit start time in the action
+	if explicitStart, ok := getFloat(action, "start", 0); ok && explicitStart != 0 {
+		startBeat = explicitStart
+	}
+
+	// Convert note name (e.g., "E1", "C4", "F#3") to MIDI note number
+	midiNote, err := NoteNameToMIDI(pitch)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pitch %q: %w", pitch, err)
+	}
+
+	log.Printf("🎵 Single note: %s -> MIDI %d, duration=%.1f, velocity=%d, start=%.1f",
+		pitch, midiNote, duration, velocity, startBeat)
+
+	return []models.NoteEvent{
+		{
+			MidiNoteNumber: midiNote,
+			Velocity:       velocity,
+			StartBeats:     startBeat,
+			DurationBeats:  duration,
+		},
+	}, nil
+}
+
+// NoteNameToMIDI converts a note name like "E1", "C4", "F#3", "Bb2" to MIDI note number
+// Format: <note><accidental?><octave> where:
+//   - note: A-G (case insensitive)
+//   - accidental: # (sharp) or b (flat), optional
+//   - octave: -1 to 9 (C4 = 60 = middle C)
+func NoteNameToMIDI(noteName string) (int, error) {
+	if len(noteName) < 2 {
+		return 0, fmt.Errorf("note name too short: %s", noteName)
+	}
+
+	// Parse note letter (A-G)
+	noteChar := strings.ToUpper(string(noteName[0]))
+	if noteChar < "A" || noteChar > "G" {
+		return 0, fmt.Errorf("invalid note letter: %s", noteChar)
+	}
+
+	// Note semitone offsets from C
+	noteOffsets := map[string]int{
+		"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11,
+	}
+	semitone := noteOffsets[noteChar]
+
+	// Check for accidental (# or b)
+	idx := 1
+	if idx < len(noteName) {
+		if noteName[idx] == '#' {
+			semitone++
+			idx++
+		} else if noteName[idx] == 'b' {
+			semitone--
+			idx++
+		}
+	}
+
+	// Parse octave (can be negative like -1)
+	if idx >= len(noteName) {
+		return 0, fmt.Errorf("missing octave in note name: %s", noteName)
+	}
+
+	octaveStr := noteName[idx:]
+	var octave int
+	_, err := fmt.Sscanf(octaveStr, "%d", &octave)
+	if err != nil {
+		return 0, fmt.Errorf("invalid octave in note name %s: %w", noteName, err)
+	}
+
+	// MIDI calculation: (octave + 1) * 12 + semitone
+	// This gives C-1 = 0, C0 = 12, C4 = 60
+	midiNote := (octave+1)*12 + semitone
+
+	// Clamp to valid MIDI range
+	if midiNote < 0 {
+		midiNote = 0
+	}
+	if midiNote > 127 {
+		midiNote = 127
+	}
+
+	return midiNote, nil
 }
 
 // convertArpeggioToNoteEvents converts an arpeggio action to sequential NoteEvents

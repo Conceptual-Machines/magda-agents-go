@@ -67,7 +67,9 @@ func (a *DawAgent) getCFGGrammarConfig() *llm.CFGConfig {
 		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
 			"Executes REAPER operations using the MAGDA DSL. " +
 			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4). " +
-			"Your job is to create tracks, clips, and set track properties. Musical content (chords, arpeggios, progressions) is handled by the arranger agent. " +
+			"Your job is to create tracks, clips, and set track properties. " +
+			"**IMPORTANT**: Musical content (notes, chords, arpeggios, progressions) is handled by the ARRANGER agent, NOT you. " +
+			"When user requests musical content like 'add E1 note', 'sustained note', 'chord', 'arpeggio', just create the track/clip structure - the arranger will add the notes. " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"**TRACK CREATION**: To create a new track, use track() or track(name=\"Track Name\") - DO NOT chain .set_track() after track() unless you explicitly need to set a property. For simple track creation, track() or track(name=\"...\") is sufficient. " +
 			"**MULTIPLE TRACK CREATION**: When user requests multiple tracks (e.g., 'create 5 tracks'), generate separate track() calls: track(); track(); track(); track(); track(). For named tracks: track(name=\"Track 1\"); track(name=\"Track 2\"); etc. Each track() call creates ONE track - do NOT chain .set_track() unless explicitly needed. " +

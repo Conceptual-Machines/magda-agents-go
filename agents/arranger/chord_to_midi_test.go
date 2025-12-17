@@ -282,3 +282,154 @@ func TestChordQualities(t *testing.T) {
 		})
 	}
 }
+
+// TestNoteNameToMIDI tests the note name to MIDI conversion
+func TestNoteNameToMIDI(t *testing.T) {
+	tests := []struct {
+		name         string
+		noteName     string
+		expectedMIDI int
+		expectError  bool
+	}{
+		// Standard notes (C4 = middle C = MIDI 60)
+		// Formula: (octave + 1) * 12 + semitone
+		{"C4 (middle C)", "C4", 60, false},
+		{"C0", "C0", 12, false},
+		{"C-1", "C-1", 0, false},
+		{"C5", "C5", 72, false},
+		// E1 (the user's request): (1+1)*12 + 4 = 28
+		{"E1", "E1", 28, false},
+		// Other common notes
+		{"A4 (440Hz)", "A4", 69, false},          // (4+1)*12 + 9 = 69
+		{"G3", "G3", 55, false},                  // (3+1)*12 + 7 = 55
+		{"D2", "D2", 38, false},                  // (2+1)*12 + 2 = 38
+		// Sharp notes
+		{"C#4", "C#4", 61, false},                // 60 + 1 = 61
+		{"F#3", "F#3", 54, false},                // (3+1)*12 + 6 = 54
+		{"G#2", "G#2", 44, false},                // (2+1)*12 + 8 = 44
+		// Flat notes (Bb = A# = 10 semitones)
+		{"Bb2", "Bb2", 46, false},                // (2+1)*12 + 10 = 46
+		{"Eb4", "Eb4", 63, false},                // (4+1)*12 + 3 = 63
+		{"Ab3", "Ab3", 56, false},                // (3+1)*12 + 8 = 56
+		// Edge cases
+		{"B0", "B0", 23, false},                  // (0+1)*12 + 11 = 23
+		{"A0", "A0", 21, false},                  // (0+1)*12 + 9 = 21
+		// Lowercase should work too (case insensitive)
+		{"lowercase e1", "e1", 28, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			midiNote, err := NoteNameToMIDI(tt.noteName)
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NoteNameToMIDI failed: %v", err)
+			}
+
+			if midiNote != tt.expectedMIDI {
+				t.Errorf("NoteNameToMIDI(%s) = %d, want %d", tt.noteName, midiNote, tt.expectedMIDI)
+			}
+		})
+	}
+}
+
+// TestConvertSingleNoteToNoteEvents tests conversion of single note actions
+func TestConvertSingleNoteToNoteEvents(t *testing.T) {
+	tests := []struct {
+		name             string
+		action           map[string]any
+		startBeat        float64
+		expectedMIDI     int
+		expectedDuration float64
+		expectedVelocity int
+		expectedStart    float64
+		expectError      bool
+	}{
+		{
+			name: "sustained E1",
+			action: map[string]any{
+				"type":     "note",
+				"pitch":    "E1",
+				"duration": 4.0,
+				"velocity": 100,
+			},
+			startBeat:        0.0,
+			expectedMIDI:     28, // E1
+			expectedDuration: 4.0,
+			expectedVelocity: 100,
+			expectedStart:    0.0,
+			expectError:      false,
+		},
+		{
+			name: "C4 for 2 bars",
+			action: map[string]any{
+				"type":     "note",
+				"pitch":    "C4",
+				"duration": 8.0,
+				"velocity": 80,
+			},
+			startBeat:        4.0, // starts at beat 4
+			expectedMIDI:     60,  // C4
+			expectedDuration: 8.0,
+			expectedVelocity: 80,
+			expectedStart:    4.0,
+			expectError:      false,
+		},
+		{
+			name: "F#3 with explicit start",
+			action: map[string]any{
+				"type":     "note",
+				"pitch":    "F#3",
+				"duration": 2.0,
+				"velocity": 100,
+				"start":    8.0, // explicit start overrides
+			},
+			startBeat:        0.0, // this gets overridden by action["start"]
+			expectedMIDI:     54,  // F#3 = (3+1)*12 + 6 = 54
+			expectedDuration: 2.0,
+			expectedVelocity: 100,
+			expectedStart:    8.0, // explicit start wins
+			expectError:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			events, err := ConvertArrangerActionToNoteEvents(tt.action, tt.startBeat)
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ConvertArrangerActionToNoteEvents failed: %v", err)
+			}
+
+			if len(events) != 1 {
+				t.Fatalf("Expected 1 event, got %d", len(events))
+			}
+
+			event := events[0]
+			if event.MidiNoteNumber != tt.expectedMIDI {
+				t.Errorf("Expected MIDI %d, got %d", tt.expectedMIDI, event.MidiNoteNumber)
+			}
+			if event.DurationBeats != tt.expectedDuration {
+				t.Errorf("Expected duration %.1f, got %.1f", tt.expectedDuration, event.DurationBeats)
+			}
+			if event.Velocity != tt.expectedVelocity {
+				t.Errorf("Expected velocity %d, got %d", tt.expectedVelocity, event.Velocity)
+			}
+			if event.StartBeats != tt.expectedStart {
+				t.Errorf("Expected start %.1f, got %.1f", tt.expectedStart, event.StartBeats)
+			}
+		})
+	}
+}

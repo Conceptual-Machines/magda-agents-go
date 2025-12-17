@@ -123,15 +123,21 @@ func (a *ArrangerAgent) GenerateActions(
 	request.CFGGrammar = &llm.CFGConfig{
 		ToolName: "arranger_dsl",
 		Description: "Generate ONE musical call. Choose exactly ONE:\n" +
-			"1. ARPEGGIO (sequential notes): arpeggio(symbol=Em, note_duration=0.25, length=8)\n" +
+			"1. NOTE (single sustained note): note(pitch=\"E1\", duration=4)\n" +
+			"   - pitch: Note name like E1, C4, F#3, Bb2 (octave 4 = middle C)\n" +
+			"   - duration: Length in beats (1=quarter, 4=whole note/1 bar)\n" +
+			"   - Use for 'sustained E1', 'add note C4', 'bass note', etc.\n" +
+			"2. ARPEGGIO (sequential notes): arpeggio(symbol=Em, note_duration=0.25, length=8)\n" +
+			"   - symbol: Chord symbol (Em, C, Am7, etc.)\n" +
 			"   - note_duration: 0.25=16th, 0.5=8th, 1=quarter note\n" +
-			"   - length: total beats (1 bar=4 beats, 2 bars=8 beats, 4 bars=16 beats)\n" +
-			"2. CHORD (simultaneous notes): chord(symbol=C, length=4)\n" +
-			"3. PROGRESSION (chord sequence): progression(chords=[C, Am, F, G], length=16)\n" +
-			"**LENGTH CONVERSION**: 1 bar = 4 beats. So '2 bar arpeggio' = length=8, '4 bars' = length=16\n" +
+			"   - length: total beats (1 bar=4 beats, 2 bars=8 beats)\n" +
+			"3. CHORD (simultaneous notes): chord(symbol=C, length=4)\n" +
+			"4. PROGRESSION (chord sequence): progression(chords=[C, Am, F, G], length=16)\n" +
+			"**LENGTH CONVERSION**: 1 bar = 4 beats. So 'sustained' = duration=4, '2 bar' = length=8\n" +
 			"Examples:\n" +
+			"- 'sustained E1' → note(pitch=\"E1\", duration=4)\n" +
+			"- 'add note C4 for 2 bars' → note(pitch=\"C4\", duration=8)\n" +
 			"- 'E minor arpeggio' → arpeggio(symbol=Em, note_duration=0.25, length=4)\n" +
-			"- '2 bar E minor arpeggio' → arpeggio(symbol=Em, note_duration=0.25, length=8)\n" +
 			"- 'C major chord' → chord(symbol=C, length=4)\n" +
 			"- 'I-vi-IV-V in C' → progression(chords=[C, Am, F, G], length=16)",
 		Grammar: llm.GetArrangerDSLGrammar(),

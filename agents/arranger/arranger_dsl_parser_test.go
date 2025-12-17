@@ -248,3 +248,90 @@ func TestArrangerDSLParser_NoteDuration(t *testing.T) {
 		t.Errorf("Expected note_duration 0.25, got %f", noteDuration)
 	}
 }
+
+// TestArrangerDSLParser_Note tests single note parsing
+func TestArrangerDSLParser_Note(t *testing.T) {
+	tests := []struct {
+		name             string
+		dsl              string
+		expectedPitch    string
+		expectedDuration float64
+		expectedVelocity int
+		expectError      bool
+	}{
+		{
+			name:             "sustained E1 note",
+			dsl:              `note(pitch="E1", duration=4)`,
+			expectedPitch:    "E1",
+			expectedDuration: 4.0,
+			expectedVelocity: 100, // default
+			expectError:      false,
+		},
+		{
+			name:             "C4 note with velocity",
+			dsl:              `note(pitch="C4", duration=2, velocity=80)`,
+			expectedPitch:    "C4",
+			expectedDuration: 2.0,
+			expectedVelocity: 80,
+			expectError:      false,
+		},
+		{
+			name:             "sharp note F#3",
+			dsl:              `note(pitch="F#3", duration=1)`,
+			expectedPitch:    "F#3",
+			expectedDuration: 1.0,
+			expectedVelocity: 100,
+			expectError:      false,
+		},
+		{
+			name:             "flat note Bb2",
+			dsl:              `note(pitch="Bb2", duration=8)`,
+			expectedPitch:    "Bb2",
+			expectedDuration: 8.0,
+			expectedVelocity: 100,
+			expectError:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser, err := NewArrangerDSLParser()
+			if err != nil {
+				t.Fatalf("Failed to create parser: %v", err)
+			}
+
+			actions, err := parser.ParseDSL(tt.dsl)
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ParseDSL failed: %v", err)
+			}
+
+			if len(actions) == 0 {
+				t.Fatal("Expected at least one action")
+			}
+
+			action := actions[0]
+			if action["type"] != "note" {
+				t.Errorf("Expected type 'note', got %v", action["type"])
+			}
+
+			if pitch, ok := action["pitch"].(string); !ok || pitch != tt.expectedPitch {
+				t.Errorf("Expected pitch %s, got %v", tt.expectedPitch, action["pitch"])
+			}
+
+			if duration, ok := action["duration"].(float64); !ok || duration != tt.expectedDuration {
+				t.Errorf("Expected duration %f, got %v", tt.expectedDuration, action["duration"])
+			}
+
+			if velocity, ok := action["velocity"].(int); !ok || velocity != tt.expectedVelocity {
+				t.Errorf("Expected velocity %d, got %v", tt.expectedVelocity, action["velocity"])
+			}
+		})
+	}
+}
