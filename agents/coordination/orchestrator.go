@@ -107,7 +107,7 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 	var dawResult *daw.DawResult
 	var arrangerResult *ArrangerResult
 	var drummerResult *drummer.DrummerResult
-	var dawErr, arrangerErr, drummerErr error
+	var dawErr error
 	var dawDuration, arrangerDuration, drummerDuration time.Duration
 
 	if needsDAW {
@@ -136,8 +136,7 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 			result, err := o.arrangerAgent.GenerateActions(ctx, question)
 			arrangerDuration = time.Since(start)
 			if err != nil {
-				arrangerErr = fmt.Errorf("arranger agent: %w", err)
-				log.Printf("⏱️ Arranger agent failed in %v", arrangerDuration)
+				log.Printf("⚠️ Arranger agent failed in %v: %v", arrangerDuration, err)
 				return
 			}
 			log.Printf("⏱️ Arranger agent completed in %v", arrangerDuration)
@@ -164,8 +163,7 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 			result, err := o.drummerAgent.Generate(ctx, "gpt-5.1", inputArray)
 			drummerDuration = time.Since(start)
 			if err != nil {
-				drummerErr = fmt.Errorf("drummer agent: %w", err)
-				log.Printf("⏱️ Drummer agent failed in %v", drummerDuration)
+				log.Printf("⚠️ Drummer agent failed in %v: %v", drummerDuration, err)
 				return
 			}
 			log.Printf("⏱️ Drummer agent completed in %v", drummerDuration)
@@ -179,35 +177,13 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 	// Log timing summary
 	log.Printf("⏱️ Agent timing summary: DAW=%v, Arranger=%v, Drummer=%v", dawDuration, arrangerDuration, drummerDuration)
 
-	// Step 3: Handle errors (partial results OK)
-	activeAgentCount := 0
-	failedAgentCount := 0
-	if needsDAW {
-		activeAgentCount++
-		if dawErr != nil {
-			failedAgentCount++
-			log.Printf("⚠️ DAW agent failed: %v", dawErr)
-		}
+	// Step 3: Handle errors
+	// DAW is the gatekeeper - if it fails, fail the entire request
+	// This prevents garbage results from Arranger/Drummer being returned for out-of-scope requests
+	if dawErr != nil {
+		return nil, fmt.Errorf("DAW agent failed: %w", dawErr)
 	}
-	if needsArranger {
-		activeAgentCount++
-		if arrangerErr != nil {
-			failedAgentCount++
-			log.Printf("⚠️ Arranger agent failed: %v", arrangerErr)
-		}
-	}
-	if needsDrummer {
-		activeAgentCount++
-		if drummerErr != nil {
-			failedAgentCount++
-			log.Printf("⚠️ Drummer agent failed: %v", drummerErr)
-		}
-	}
-
-	// Only fail if ALL active agents failed
-	if activeAgentCount > 0 && failedAgentCount == activeAgentCount {
-		return nil, fmt.Errorf("all agents failed: daw=%v, arranger=%v, drummer=%v", dawErr, arrangerErr, drummerErr)
-	}
+	// For non-DAW agents, partial failures are OK (their results just won't be included)
 
 	// Step 4: Merge results
 	return o.mergeResults(dawResult, arrangerResult, drummerResult)
@@ -310,7 +286,7 @@ func (o *Orchestrator) GenerateActionsStream(
 
 	// Step 2: Launch agents
 	var wg sync.WaitGroup
-	var dawErr, arrangerErr, drummerErr error
+	var dawErr error
 
 	if needsDAW {
 		wg.Add(1)
@@ -381,8 +357,7 @@ func (o *Orchestrator) GenerateActionsStream(
 
 			result, err := o.arrangerAgent.GenerateActions(ctx, question)
 			if err != nil {
-				arrangerErr = fmt.Errorf("arranger agent: %w", err)
-				log.Printf("❌ [Stream] Arranger agent error: %v", err)
+				log.Printf("⚠️ [Stream] Arranger agent error: %v", err)
 				return
 			}
 
@@ -439,8 +414,7 @@ func (o *Orchestrator) GenerateActionsStream(
 			}
 			result, err := o.drummerAgent.Generate(ctx, "gpt-5.1", inputArray)
 			if err != nil {
-				drummerErr = fmt.Errorf("drummer agent: %w", err)
-				log.Printf("❌ [Stream] Drummer agent error: %v", err)
+				log.Printf("⚠️ [Stream] Drummer agent error: %v", err)
 				return
 			}
 
@@ -464,31 +438,13 @@ func (o *Orchestrator) GenerateActionsStream(
 	// Final check - emit any remaining MIDI
 	_ = tryEmitMidi()
 
-	// Handle errors - only fail if ALL active agents failed
-	activeAgentCount := 0
-	failedAgentCount := 0
-	if needsDAW {
-		activeAgentCount++
-		if dawErr != nil {
-			failedAgentCount++
-		}
-	}
-	if needsArranger {
-		activeAgentCount++
-		if arrangerErr != nil {
-			failedAgentCount++
-		}
-	}
-	if needsDrummer {
-		activeAgentCount++
-		if drummerErr != nil {
-			failedAgentCount++
-		}
+	// DAW is the gatekeeper - if it fails, fail the entire request
+	// This prevents garbage results from Arranger/Drummer being returned for out-of-scope requests
+	if dawErr != nil {
+		return nil, fmt.Errorf("DAW agent failed: %w", dawErr)
 	}
 
-	if activeAgentCount > 0 && failedAgentCount == activeAgentCount {
-		return nil, fmt.Errorf("all agents failed: daw=%v, arranger=%v, drummer=%v", dawErr, arrangerErr, drummerErr)
-	}
+	// For non-DAW agents, partial failures are OK (their results just won't be included)
 
 	// Return all collected actions
 	mu.Lock()
