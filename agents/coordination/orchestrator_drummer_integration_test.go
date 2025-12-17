@@ -301,7 +301,7 @@ func TestAgents_OutOfScope_DirectCalls(t *testing.T) {
 
 	// Subtle out-of-scope - related to DAW but not valid music operations
 	subtleOOS := []string{
-		"make it sound better",                     // Too vague, no actionable request
+		"make it sound better",                    // Too vague, no actionable request
 		"create a video track with some video fx", // Video editing, not music production
 		"fix the audio glitches in my recording",  // Debugging/troubleshooting, not an action
 		"why does my plugin crash",                // Support question, not an action
