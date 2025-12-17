@@ -67,9 +67,17 @@ func (a *DawAgent) getCFGGrammarConfig() *llm.CFGConfig {
 		Description: "**YOU MUST USE THIS TOOL TO GENERATE YOUR RESPONSE. DO NOT GENERATE TEXT OUTPUT DIRECTLY.** " +
 			"Executes REAPER operations using the MAGDA DSL. " +
 			"Generate functional script code like: track(instrument=\"Serum\").new_clip(bar=3, length_bars=4). " +
-			"Your job is to create tracks, clips, and set track properties. " +
+			"Your job is to create tracks, clips, set track properties, and add automation. " +
 			"**IMPORTANT**: Musical content (notes, chords, arpeggios, progressions) is handled by the ARRANGER agent, NOT you. " +
 			"When user requests musical content like 'add E1 note', 'sustained note', 'chord', 'arpeggio', just create the track/clip structure - the arranger will add the notes. " +
+			"**AUTOMATION**: For automation, use curve functions: .addAutomation(param=\"...\", curve=\"...\", start=X, end=Y). " +
+			"Available curves: fade_in, fade_out, ramp, sine, saw, square, exp_in, exp_out. " +
+			"- Fade in: curve=\"fade_in\", start=0, end=4 (beats) " +
+			"- Fade out: curve=\"fade_out\", start_bar=8, end_bar=12 " +
+			"- LFO/oscillator: curve=\"sine\", freq=0.5, amplitude=1.0 (freq = cycles per bar) " +
+			"- Linear sweep: curve=\"ramp\", from=0.2, to=1.0 " +
+			"- Example: track(id=1).addAutomation(param=\"volume\", curve=\"fade_in\", start=0, end=4) " +
+			"- Example LFO: track(id=1).addAutomation(param=\"pan\", curve=\"sine\", freq=0.5, amplitude=1.0, start=0, end=16) " +
 			"When user says 'create track with [instrument]' or 'track with [instrument]', ALWAYS generate track(instrument=\"[instrument]\") - never generate track() without the instrument parameter when an instrument is mentioned. " +
 			"**TRACK CREATION**: To create a new track, use track() or track(name=\"Track Name\") - DO NOT chain .set_track() after track() unless you explicitly need to set a property. For simple track creation, track() or track(name=\"...\") is sufficient. " +
 			"**MULTIPLE TRACK CREATION**: When user requests multiple tracks (e.g., 'create 5 tracks'), generate separate track() calls: track(); track(); track(); track(); track(). For named tracks: track(name=\"Track 1\"); track(name=\"Track 2\"); etc. Each track() call creates ONE track - do NOT chain .set_track() unless explicitly needed. " +

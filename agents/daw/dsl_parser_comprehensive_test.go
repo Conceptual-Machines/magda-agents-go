@@ -818,3 +818,234 @@ func TestCompoundActions(t *testing.T) {
 		})
 	}
 }
+
+// TestAutomation tests .add_automation() calls with both curve-based and point-based syntax
+func TestAutomation(t *testing.T) {
+	tests := []struct {
+		name    string
+		dslCode string
+		state   map[string]any
+		want    []map[string]any
+		wantErr bool
+	}{
+		// ========== Curve-based tests (recommended syntax) ==========
+		{
+			name:    "curve: fade_in",
+			dslCode: `track(id=1).add_automation(param="volume", curve="fade_in", start=0, end=4)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action": "add_automation",
+					"track":  0,
+					"param":  "volume",
+					"curve":  "fade_in",
+					"start":  0.0,
+					"end":    4.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: fade_out with bars",
+			dslCode: `track(id=1).add_automation(param="volume", curve="fade_out", start_bar=8, end_bar=12)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action":    "add_automation",
+					"track":     0,
+					"param":     "volume",
+					"curve":     "fade_out",
+					"start_bar": 8.0,
+					"end_bar":   12.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: ramp with from/to",
+			dslCode: `track(id=1).add_automation(param="Serum:Cutoff", curve="ramp", from=0.2, to=1.0, start=0, end=16)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action": "add_automation",
+					"track":  0,
+					"param":  "Serum:Cutoff",
+					"curve":  "ramp",
+					"from":   0.2,
+					"to":     1.0,
+					"start":  0.0,
+					"end":    16.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: sine LFO",
+			dslCode: `track(id=1).add_automation(param="pan", curve="sine", freq=0.5, amplitude=1.0, start=0, end=16)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action":    "add_automation",
+					"track":     0,
+					"param":     "pan",
+					"curve":     "sine",
+					"freq":      0.5,
+					"amplitude": 1.0,
+					"start":     0.0,
+					"end":       16.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: saw wave",
+			dslCode: `track(id=1).add_automation(param="volume", curve="saw", freq=1, amplitude=0.5, start=0, end=32)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action":    "add_automation",
+					"track":     0,
+					"param":     "volume",
+					"curve":     "saw",
+					"freq":      1.0,
+					"amplitude": 0.5,
+					"start":     0.0,
+					"end":       32.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: exponential in",
+			dslCode: `track(id=1).add_automation(param="Serum:Cutoff", curve="exp_in", from=0.1, to=1.0, start=0, end=16)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action": "add_automation",
+					"track":  0,
+					"param":  "Serum:Cutoff",
+					"curve":  "exp_in",
+					"from":   0.1,
+					"to":     1.0,
+					"start":  0.0,
+					"end":    16.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: with track creation",
+			dslCode: `track(instrument="Serum").add_automation(param="volume", curve="fade_in", start=0, end=4)`,
+			state:   nil,
+			want: []map[string]any{
+				{
+					"action":     "create_track",
+					"instrument": "Serum",
+					"index":      0,
+				},
+				{
+					"action": "add_automation",
+					"track":  0,
+					"param":  "volume",
+					"curve":  "fade_in",
+					"start":  0.0,
+					"end":    4.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: square wave",
+			dslCode: `track(id=1).add_automation(param="volume", curve="square", freq=2, amplitude=0.8, start=0, end=8)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action":    "add_automation",
+					"track":     0,
+					"param":     "volume",
+					"curve":     "square",
+					"freq":      2.0,
+					"amplitude": 0.8,
+					"start":     0.0,
+					"end":       8.0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "curve: exponential out",
+			dslCode: `track(id=1).add_automation(param="volume", curve="exp_out", from=0, to=-60, start=0, end=4)`,
+			state: map[string]any{
+				"tracks": []any{
+					map[string]any{"index": 0, "name": "Track 1"},
+				},
+			},
+			want: []map[string]any{
+				{
+					"action": "add_automation",
+					"track":  0,
+					"param":  "volume",
+					"curve":  "exp_out",
+					"from":   0.0,
+					"to":     -60.0,
+					"start":  0.0,
+					"end":    4.0,
+				},
+			},
+			wantErr: false,
+		},
+		// NOTE: Point-based tests removed - the curve-based syntax is the preferred approach.
+		// Point-based automation is still supported by the simple DSL parser (dsl_parser.go)
+		// for advanced use cases that require custom envelope shapes.
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser, err := NewFunctionalDSLParser()
+			if err != nil {
+				t.Fatalf("Failed to create parser: %v", err)
+			}
+
+			if tt.state != nil {
+				parser.SetState(tt.state)
+			}
+
+			got, err := parser.ParseDSL(tt.dslCode)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseDSL() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParseDSL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

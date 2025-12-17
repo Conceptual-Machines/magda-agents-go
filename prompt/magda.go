@@ -258,6 +258,55 @@ Moves a clip to a different time position.
 - Required: ` + "`action: \"set_clip_position\"`" + `, ` + "`track`" + ` (integer), ` + "`position`" + ` (number in seconds)
 - Optional: ` + "`clip`" + ` (integer), ` + "`old_position`" + ` (number in seconds), or ` + "`bar`" + ` (integer)
 - Example: ` + "`filter(clips, clip.length < 1.5).move_clip(position=10.0)`" + ` moves all short clips to position 10.0 seconds
+
+### Automation
+
+**add_automation** / **addAutomation**
+Adds automation envelopes to a track parameter using curve functions or manual points.
+- **PREFERRED**: Use curve-based syntax for common patterns (cleaner and more intuitive)
+- Required: ` + "`param`" + ` (string) - the parameter to automate
+- Parameter names:
+  - ` + "`\"volume\"`" + ` - Track volume envelope (values in dB, e.g., -60 to 12)
+  - ` + "`\"pan\"`" + ` - Track pan envelope (values from -1.0 to 1.0)
+  - ` + "`\"mute\"`" + ` - Track mute envelope (values 0 or 1)
+  - ` + "`\"FXName:ParamName\"`" + ` - FX parameter (e.g., "Serum:Cutoff", values 0.0 to 1.0)
+
+**Curve-Based Syntax (Recommended)**:
+` + "`.addAutomation(param=\"...\", curve=\"curve_type\", start=X, end=Y)`" + `
+
+Available curves:
+| Curve | Description | Extra params |
+|-------|-------------|--------------|
+| ` + "`fade_in`" + ` | Volume: -∞ dB → 0 dB | ` + "`start`" + `, ` + "`end`" + ` |
+| ` + "`fade_out`" + ` | Volume: 0 dB → -∞ dB | ` + "`start`" + `, ` + "`end`" + ` |
+| ` + "`ramp`" + ` | Linear interpolation | ` + "`from`" + `, ` + "`to`" + `, ` + "`start`" + `, ` + "`end`" + ` |
+| ` + "`sine`" + ` | Sinusoidal oscillation | ` + "`freq`" + `, ` + "`amplitude`" + `, ` + "`start`" + `, ` + "`end`" + ` |
+| ` + "`saw`" + ` | Sawtooth wave | ` + "`freq`" + `, ` + "`amplitude`" + `, ` + "`start`" + `, ` + "`end`" + ` |
+| ` + "`square`" + ` | Square wave | ` + "`freq`" + `, ` + "`amplitude`" + `, ` + "`start`" + `, ` + "`end`" + ` |
+| ` + "`exp_in`" + ` | Exponential ease-in | ` + "`from`" + `, ` + "`to`" + `, ` + "`start`" + `, ` + "`end`" + ` |
+| ` + "`exp_out`" + ` | Exponential ease-out | ` + "`from`" + `, ` + "`to`" + `, ` + "`start`" + `, ` + "`end`" + ` |
+
+Curve parameters:
+- ` + "`start`" + ` / ` + "`start_bar`" + ` - Start time in beats or bars
+- ` + "`end`" + ` / ` + "`end_bar`" + ` - End time in beats or bars
+- ` + "`from`" + ` / ` + "`to`" + ` - Value range for ramp/exp curves
+- ` + "`freq`" + ` - Oscillation frequency (cycles per bar) for sine/saw/square
+- ` + "`amplitude`" + ` - Oscillation amplitude (0-1) for oscillators
+- ` + "`phase`" + ` - Phase offset (0-1) for oscillators
+
+**Curve Examples:**
+- Fade in over 4 beats: ` + "`track(id=1).addAutomation(param=\"volume\", curve=\"fade_in\", start=0, end=4)`" + `
+- Fade out bars 8-12: ` + "`track(id=1).addAutomation(param=\"volume\", curve=\"fade_out\", start_bar=8, end_bar=12)`" + `
+- Pan LFO: ` + "`track(id=1).addAutomation(param=\"pan\", curve=\"sine\", freq=0.5, amplitude=1.0, start=0, end=16)`" + `
+- Filter sweep: ` + "`track(id=1).addAutomation(param=\"Serum:Cutoff\", curve=\"ramp\", from=0.2, to=1.0, start=0, end=16)`" + `
+- Sidechain-style pump: ` + "`track(id=1).addAutomation(param=\"volume\", curve=\"saw\", freq=1, amplitude=0.5, start=0, end=32)`" + `
+- Exponential buildup: ` + "`track(id=1).addAutomation(param=\"Serum:Cutoff\", curve=\"exp_in\", from=0.1, to=1.0, start=0, end=16)`" + `
+
+**Point-Based Syntax (Advanced)**:
+For custom shapes, use manual points: ` + "`.addAutomation(param=\"...\", points=[{time=0, value=...}, {time=4, value=...}])`" + `
+- ` + "`time`" + ` or ` + "`bar`" + ` - Position of the point
+- ` + "`value`" + ` - Parameter value at this point
+- Optional ` + "`shape`" + ` (0=linear, 1=square, 2=slow, 3=fast start, 4=fast end, 5=bezier)
 - **CRITICAL - CLIP FILTERING**: When user says "select all clips [condition]", you MUST:
   - Use ` + "`filter(clips, clip.property < value)`" + ` to filter clips by properties like ` + "`length`" + `, ` + "`position`" + `
   - Chain with ` + "`.set_clip(selected=true)`" + ` to select the filtered clips (NOT set_selected - that method doesn't exist!)
