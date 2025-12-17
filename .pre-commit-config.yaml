@@ -24,3 +24,10 @@ repos:
     hooks:
       - id: go-fmt
       # Note: go-vet disabled due to plugin path issues, but go vet ./... still works manually
+
+  # golangci-lint (matches CI version)
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.64.8
+    hooks:
+      - id: golangci-lint
+        args: [--config=golangci.yml]

@@ -1,0 +1,65 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/Conceptual-Machines/magda-agents-go
+  govet:
+    check-shadowing: true
+  gocyclo:
+    min-complexity: 15
+  maligned:
+    suggest-new: true
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  misspell:
+    locale: US
+  lll:
+    line-length: 140
+  unused:
+    check-exported: false
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - gocyclo
+    - dupl
+    - goconst
+    - mnd
+    - lll
+    - whitespace
+    - makezero
+    - nolintlint
+    - thelper
+    - exhaustive
+    - copyloopvar
+    - revive
+  disable:
+    - goimports # Run separately with pinned version
+    - prealloc
+    - misspell # Disable annoying US vs UK spelling differences
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - gomnd
+        - gocyclo
+        - goconst
