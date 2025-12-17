@@ -300,20 +300,20 @@ func TestNoteNameToMIDI(t *testing.T) {
 		// E1 (the user's request): (1+1)*12 + 4 = 28
 		{"E1", "E1", 28, false},
 		// Other common notes
-		{"A4 (440Hz)", "A4", 69, false},          // (4+1)*12 + 9 = 69
-		{"G3", "G3", 55, false},                  // (3+1)*12 + 7 = 55
-		{"D2", "D2", 38, false},                  // (2+1)*12 + 2 = 38
+		{"A4 (440Hz)", "A4", 69, false}, // (4+1)*12 + 9 = 69
+		{"G3", "G3", 55, false},         // (3+1)*12 + 7 = 55
+		{"D2", "D2", 38, false},         // (2+1)*12 + 2 = 38
 		// Sharp notes
-		{"C#4", "C#4", 61, false},                // 60 + 1 = 61
-		{"F#3", "F#3", 54, false},                // (3+1)*12 + 6 = 54
-		{"G#2", "G#2", 44, false},                // (2+1)*12 + 8 = 44
+		{"C#4", "C#4", 61, false}, // 60 + 1 = 61
+		{"F#3", "F#3", 54, false}, // (3+1)*12 + 6 = 54
+		{"G#2", "G#2", 44, false}, // (2+1)*12 + 8 = 44
 		// Flat notes (Bb = A# = 10 semitones)
-		{"Bb2", "Bb2", 46, false},                // (2+1)*12 + 10 = 46
-		{"Eb4", "Eb4", 63, false},                // (4+1)*12 + 3 = 63
-		{"Ab3", "Ab3", 56, false},                // (3+1)*12 + 8 = 56
+		{"Bb2", "Bb2", 46, false}, // (2+1)*12 + 10 = 46
+		{"Eb4", "Eb4", 63, false}, // (4+1)*12 + 3 = 63
+		{"Ab3", "Ab3", 56, false}, // (3+1)*12 + 8 = 56
 		// Edge cases
-		{"B0", "B0", 23, false},                  // (0+1)*12 + 11 = 23
-		{"A0", "A0", 21, false},                  // (0+1)*12 + 9 = 21
+		{"B0", "B0", 23, false}, // (0+1)*12 + 11 = 23
+		{"A0", "A0", 21, false}, // (0+1)*12 + 9 = 21
 		// Lowercase should work too (case insensitive)
 		{"lowercase e1", "e1", 28, false},
 	}

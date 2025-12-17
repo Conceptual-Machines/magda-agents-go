@@ -758,7 +758,7 @@ func TestArrangerIntegration_SingleNoteE1Sustained(t *testing.T) {
 	}
 
 	note := noteEvents[0]
-	
+
 	// E1 = MIDI 28 (using formula: (octave+1)*12 + semitone, E=4 semitones, so (1+1)*12 + 4 = 28)
 	if note.MidiNoteNumber != 28 {
 		t.Errorf("Expected MIDI note 28 (E1), got %d", note.MidiNoteNumber)
@@ -805,7 +805,7 @@ func TestArrangerIntegration_SingleNoteC4MiddleC(t *testing.T) {
 	}
 
 	note := noteEvents[0]
-	
+
 	// C4 = MIDI 60 (middle C)
 	if note.MidiNoteNumber != 60 {
 		t.Errorf("Expected MIDI note 60 (C4), got %d", note.MidiNoteNumber)
@@ -845,7 +845,7 @@ func TestArrangerIntegration_SingleNoteSharp(t *testing.T) {
 	}
 
 	note := noteEvents[0]
-	
+
 	// F#3 = MIDI 54 ((3+1)*12 + 6 = 54)
 	if note.MidiNoteNumber != 54 {
 		t.Errorf("Expected MIDI note 54 (F#3), got %d", note.MidiNoteNumber)
@@ -877,7 +877,7 @@ func TestArrangerIntegration_SingleNoteFlat(t *testing.T) {
 	}
 
 	note := noteEvents[0]
-	
+
 	// Bb2 = MIDI 46 ((2+1)*12 + 10 = 46)
 	if note.MidiNoteNumber != 46 {
 		t.Errorf("Expected MIDI note 46 (Bb2), got %d", note.MidiNoteNumber)
@@ -904,7 +904,7 @@ func TestArrangerIntegration_SingleNoteWithStartOffset(t *testing.T) {
 	}
 
 	action := actions[0]
-	
+
 	// Start offset at beat 4 (second bar)
 	noteEvents, err := ConvertArrangerActionToNoteEvents(action, 4.0)
 	if err != nil {
@@ -912,7 +912,7 @@ func TestArrangerIntegration_SingleNoteWithStartOffset(t *testing.T) {
 	}
 
 	note := noteEvents[0]
-	
+
 	// A4 = MIDI 69 (440 Hz)
 	if note.MidiNoteNumber != 69 {
 		t.Errorf("Expected MIDI note 69 (A4), got %d", note.MidiNoteNumber)
@@ -952,7 +952,7 @@ func TestArrangerIntegration_SingleNoteBassNote(t *testing.T) {
 	}
 
 	note := noteEvents[0]
-	
+
 	// E1 = MIDI 28 (low bass)
 	if note.MidiNoteNumber != 28 {
 		t.Errorf("Expected MIDI note 28 (E1 bass), got %d", note.MidiNoteNumber)
@@ -1072,7 +1072,7 @@ func TestArrangerIntegration_SingleNoteAllOctaves(t *testing.T) {
 func TestArrangerIntegration_SingleNoteFullWorkflow(t *testing.T) {
 	// End-to-end test: simulate what happens when user says "add sustained E1"
 	// This mimics the full workflow: DSL → Parser → Actions → NoteEvents
-	
+
 	parser, err := NewArrangerDSLParser()
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
@@ -1092,7 +1092,7 @@ func TestArrangerIntegration_SingleNoteFullWorkflow(t *testing.T) {
 	}
 
 	action := actions[0]
-	
+
 	// Verify action structure
 	if action["type"] != "note" {
 		t.Errorf("Action type should be 'note', got %v", action["type"])
@@ -1117,7 +1117,7 @@ func TestArrangerIntegration_SingleNoteFullWorkflow(t *testing.T) {
 	}
 
 	note := noteEvents[0]
-	
+
 	// Final verification
 	if note.MidiNoteNumber != 28 {
 		t.Errorf("Final MIDI should be 28 (E1), got %d", note.MidiNoteNumber)
