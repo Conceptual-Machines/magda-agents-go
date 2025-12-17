@@ -161,6 +161,13 @@ func (p *DSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
 				return nil, fmt.Errorf("failed to parse name call: %w", err)
 			}
 			actions = append(actions, nameAction)
+		} else if strings.HasPrefix(part, ".addAutomation(") {
+			// Parse automation call
+			automationAction, err := p.parseAutomationCall(part, currentTrackIndex)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse automation call: %w", err)
+			}
+			actions = append(actions, automationAction)
 		}
 	}
 
@@ -544,6 +551,247 @@ func (p *DSLParser) extractParams(call string) map[string]string {
 	}
 
 	return params
+}
+
+// parseAutomationCall parses automation with either curve-based or point-based syntax
+// Curve-based: .addAutomation(param="volume", curve="fade_in", start=0, end=4)
+// Point-based: .addAutomation(param="volume", points=[{time=0, value=-60}, {time=4, value=0}])
+//
+//nolint:gocyclo // Complex parsing logic is necessary for automation parsing
+func (p *DSLParser) parseAutomationCall(call string, trackIndex int) (map[string]any, error) {
+	if trackIndex < 0 {
+		return nil, fmt.Errorf("no track context for automation call")
+	}
+
+	action := map[string]any{
+		"action": "add_automation",
+		"track":  trackIndex,
+	}
+
+	// Extract the full content between parentheses
+	start := strings.Index(call, "(")
+	end := strings.LastIndex(call, ")")
+	if start < 0 || end < 0 || end <= start {
+		return nil, fmt.Errorf("invalid automation call syntax")
+	}
+	content := call[start+1 : end]
+
+	// Parse param parameter (required)
+	paramMatch := extractStringParam(content, "param")
+	if paramMatch != "" {
+		action["param"] = paramMatch
+	} else {
+		return nil, fmt.Errorf("automation call must specify param")
+	}
+
+	// Check for curve-based syntax (preferred)
+	curveMatch := extractStringParam(content, "curve")
+	if curveMatch != "" {
+		// Curve-based automation
+		action["curve"] = curveMatch
+
+		// Parse timing parameters
+		if startVal := extractNumberParam(content, "start"); startVal >= 0 || strings.Contains(content, "start=0") {
+			action["start"] = startVal
+		}
+		if endVal := extractNumberParam(content, "end"); endVal >= 0 {
+			action["end"] = endVal
+		}
+		if startBar := extractNumberParam(content, "start_bar"); startBar >= 0 {
+			action["start_bar"] = startBar
+		}
+		if endBar := extractNumberParam(content, "end_bar"); endBar >= 0 {
+			action["end_bar"] = endBar
+		}
+
+		// Parse value range (for ramp, exp curves)
+		if fromVal := extractNumberParamStr(content, "from"); fromVal != "" {
+			if f, err := strconv.ParseFloat(fromVal, 64); err == nil {
+				action["from"] = f
+			}
+		}
+		if toVal := extractNumberParamStr(content, "to"); toVal != "" {
+			if f, err := strconv.ParseFloat(toVal, 64); err == nil {
+				action["to"] = f
+			}
+		}
+
+		// Parse oscillator parameters (for sine, saw, square)
+		if freqVal := extractNumberParam(content, "freq"); freqVal >= 0 {
+			action["freq"] = freqVal
+		}
+		if ampVal := extractNumberParamStr(content, "amplitude"); ampVal != "" {
+			if f, err := strconv.ParseFloat(ampVal, 64); err == nil {
+				action["amplitude"] = f
+			}
+		}
+		if phaseVal := extractNumberParamStr(content, "phase"); phaseVal != "" {
+			if f, err := strconv.ParseFloat(phaseVal, 64); err == nil {
+				action["phase"] = f
+			}
+		}
+
+		return action, nil
+	}
+
+	// Fall back to point-based syntax
+	// Parse shape parameter (optional)
+	shapeMatch := extractNumberParam(content, "shape")
+	if shapeMatch >= 0 {
+		action["shape"] = int(shapeMatch)
+	}
+
+	// Parse points array
+	pointsStart := strings.Index(content, "points=[")
+	if pointsStart < 0 {
+		return nil, fmt.Errorf("automation call must specify either 'curve' or 'points'")
+	}
+	pointsStart += len("points=[")
+
+	// Find matching closing bracket
+	depth := 1
+	pointsEnd := pointsStart
+	for i := pointsStart; i < len(content); i++ {
+		if content[i] == '[' {
+			depth++
+		} else if content[i] == ']' {
+			depth--
+			if depth == 0 {
+				pointsEnd = i
+				break
+			}
+		}
+	}
+
+	pointsContent := content[pointsStart:pointsEnd]
+	points, err := p.parseAutomationPoints(pointsContent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse automation points: %w", err)
+	}
+	action["points"] = points
+
+	return action, nil
+}
+
+// parseAutomationPoints parses [{time=0, value=-60}, {time=4, value=0}]
+func (p *DSLParser) parseAutomationPoints(content string) ([]map[string]any, error) {
+	var points []map[string]any
+
+	// Split by }, { pattern - each point is enclosed in {}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, fmt.Errorf("empty points array")
+	}
+
+	// Find each point object
+	depth := 0
+	pointStart := -1
+	for i, char := range content {
+		if char == '{' {
+			if depth == 0 {
+				pointStart = i + 1
+			}
+			depth++
+		} else if char == '}' {
+			depth--
+			if depth == 0 && pointStart >= 0 {
+				pointContent := content[pointStart:i]
+				point, err := p.parseAutomationPoint(pointContent)
+				if err != nil {
+					return nil, err
+				}
+				points = append(points, point)
+				pointStart = -1
+			}
+		}
+	}
+
+	if len(points) == 0 {
+		return nil, fmt.Errorf("no points found in automation array")
+	}
+
+	return points, nil
+}
+
+// parseAutomationPoint parses time=0, value=-60 or bar=1, value=0
+func (p *DSLParser) parseAutomationPoint(content string) (map[string]any, error) {
+	point := make(map[string]any)
+
+	// Parse time or bar
+	timeVal := extractNumberParam(content, "time")
+	barVal := extractNumberParam(content, "bar")
+	if timeVal >= 0 || (timeVal == 0 && strings.Contains(content, "time=")) {
+		point["time"] = timeVal
+	} else if barVal >= 0 || (barVal == 0 && strings.Contains(content, "bar=")) {
+		point["bar"] = barVal
+	} else {
+		return nil, fmt.Errorf("automation point must specify time or bar")
+	}
+
+	// Parse value (required)
+	valueStr := extractNumberParamStr(content, "value")
+	if valueStr == "" {
+		return nil, fmt.Errorf("automation point must specify value")
+	}
+	valueFloat, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid value in automation point: %s", valueStr)
+	}
+	point["value"] = valueFloat
+
+	return point, nil
+}
+
+// extractStringParam extracts a string parameter like param="volume" from content
+func extractStringParam(content, paramName string) string {
+	// Look for param="value"
+	pattern := paramName + "=\""
+	idx := strings.Index(content, pattern)
+	if idx < 0 {
+		return ""
+	}
+	start := idx + len(pattern)
+	end := strings.Index(content[start:], "\"")
+	if end < 0 {
+		return ""
+	}
+	return content[start : start+end]
+}
+
+// extractNumberParam extracts a numeric parameter like shape=5 from content
+func extractNumberParam(content, paramName string) float64 {
+	str := extractNumberParamStr(content, paramName)
+	if str == "" {
+		return -1
+	}
+	val, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return -1
+	}
+	return val
+}
+
+// extractNumberParamStr extracts a numeric parameter as string
+func extractNumberParamStr(content, paramName string) string {
+	// Look for param=value (number, possibly negative)
+	pattern := paramName + "="
+	idx := strings.Index(content, pattern)
+	if idx < 0 {
+		return ""
+	}
+	start := idx + len(pattern)
+
+	// Find end of number (space, comma, or end)
+	end := start
+	for end < len(content) {
+		c := content[end]
+		if c == ',' || c == ' ' || c == '}' || c == ']' {
+			break
+		}
+		end++
+	}
+
+	return strings.TrimSpace(content[start:end])
 }
 
 // getSelectedTrackIndex returns the index of the currently selected track from state

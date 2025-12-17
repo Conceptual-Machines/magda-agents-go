@@ -943,6 +943,212 @@ func (r *ReaperDSL) MoveClip(args gs.Args) error {
 	return nil
 }
 
+// AddAutomation handles .addAutomation() calls with curve-based or point-based syntax.
+// Curve-based (recommended): track(id=1).addAutomation(param="volume", curve="fade_in", start=0, end=4)
+// Point-based: track(id=1).addAutomation(param="volume", points=[{time=0, value=-60}, {time=4, value=0}])
+func (r *ReaperDSL) AddAutomation(args gs.Args) error {
+	p := r.parser
+
+	// Get track index
+	trackIndex := p.currentTrackIndex
+	if trackIndex < 0 {
+		return fmt.Errorf("no track context for addAutomation call")
+	}
+
+	// Get param (required)
+	paramValue, ok := args["param"]
+	if !ok || paramValue.Kind != gs.ValueString {
+		return fmt.Errorf("addAutomation requires param (string)")
+	}
+	param := paramValue.Str
+
+	action := map[string]any{
+		"action": "add_automation",
+		"track":  trackIndex,
+		"param":  param,
+	}
+
+	// Check for curve-based syntax (preferred)
+	if curveValue, ok := args["curve"]; ok && curveValue.Kind == gs.ValueString {
+		action["curve"] = curveValue.Str
+
+		// Parse timing parameters
+		if startValue, ok := args["start"]; ok && startValue.Kind == gs.ValueNumber {
+			action["start"] = startValue.Num
+		}
+		if endValue, ok := args["end"]; ok && endValue.Kind == gs.ValueNumber {
+			action["end"] = endValue.Num
+		}
+		if startBarValue, ok := args["start_bar"]; ok && startBarValue.Kind == gs.ValueNumber {
+			action["start_bar"] = startBarValue.Num
+		}
+		if endBarValue, ok := args["end_bar"]; ok && endBarValue.Kind == gs.ValueNumber {
+			action["end_bar"] = endBarValue.Num
+		}
+
+		// Parse value range (for ramp, exp curves)
+		if fromValue, ok := args["from"]; ok && fromValue.Kind == gs.ValueNumber {
+			action["from"] = fromValue.Num
+		}
+		if toValue, ok := args["to"]; ok && toValue.Kind == gs.ValueNumber {
+			action["to"] = toValue.Num
+		}
+
+		// Parse oscillator parameters (for sine, saw, square)
+		if freqValue, ok := args["freq"]; ok && freqValue.Kind == gs.ValueNumber {
+			action["freq"] = freqValue.Num
+		}
+		if ampValue, ok := args["amplitude"]; ok && ampValue.Kind == gs.ValueNumber {
+			action["amplitude"] = ampValue.Num
+		}
+		if phaseValue, ok := args["phase"]; ok && phaseValue.Kind == gs.ValueNumber {
+			action["phase"] = phaseValue.Num
+		}
+
+		p.actions = append(p.actions, action)
+		log.Printf("✅ AddAutomation (curve): track=%d, param=%s, curve=%s", trackIndex, param, curveValue.Str)
+		return nil
+	}
+
+	// Fall back to point-based syntax
+	var points []map[string]any
+
+	// Check for points as a string (raw DSL representation)
+	if pointsValue, ok := args["points"]; ok {
+		if pointsValue.Kind == gs.ValueString {
+			// Parse points from string representation
+			pointsStr := pointsValue.Str
+			parsed, err := parseAutomationPointsFromString(pointsStr)
+			if err != nil {
+				log.Printf("⚠️ AddAutomation: Failed to parse points string: %v", err)
+			} else {
+				points = parsed
+			}
+		}
+	}
+
+	// If points weren't parsed yet, try to extract from numbered args
+	if len(points) == 0 {
+		// Try to find point arguments like "0", "1", etc.
+		for i := 0; i < 100; i++ {
+			key := strconv.Itoa(i)
+			if pointArg, ok := args[key]; ok {
+				// This arg might be a string representation of the point
+				if pointArg.Kind == gs.ValueString {
+					parsed, err := parseAutomationPointFromString(pointArg.Str)
+					if err == nil && len(parsed) > 0 {
+						points = append(points, parsed)
+					}
+				}
+			} else {
+				break
+			}
+		}
+	}
+
+	if len(points) == 0 {
+		return fmt.Errorf("addAutomation requires either 'curve' or 'points'")
+	}
+
+	action["points"] = points
+
+	// Optional shape parameter
+	if shapeValue, ok := args["shape"]; ok && shapeValue.Kind == gs.ValueNumber {
+		action["shape"] = int(shapeValue.Num)
+	}
+
+	p.actions = append(p.actions, action)
+	log.Printf("✅ AddAutomation (points): track=%d, param=%s, points=%d", trackIndex, param, len(points))
+	return nil
+}
+
+// parseAutomationPointsFromString parses [{time=0, value=-60}, {time=4, value=0}]
+func parseAutomationPointsFromString(content string) ([]map[string]any, error) {
+	var points []map[string]any
+
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, fmt.Errorf("empty points string")
+	}
+
+	// Strip outer brackets if present
+	content = strings.TrimPrefix(content, "[")
+	content = strings.TrimSuffix(content, "]")
+	content = strings.TrimSpace(content)
+
+	// Find each point object
+	depth := 0
+	pointStart := -1
+	for i, char := range content {
+		if char == '{' {
+			if depth == 0 {
+				pointStart = i + 1
+			}
+			depth++
+		} else if char == '}' {
+			depth--
+			if depth == 0 && pointStart >= 0 {
+				pointContent := content[pointStart:i]
+				point, err := parseAutomationPointFromString(pointContent)
+				if err != nil {
+					return nil, err
+				}
+				points = append(points, point)
+				pointStart = -1
+			}
+		}
+	}
+
+	if len(points) == 0 {
+		return nil, fmt.Errorf("no points found in automation array")
+	}
+
+	return points, nil
+}
+
+// parseAutomationPointFromString parses time=0, value=-60 or bar=1, value=0
+func parseAutomationPointFromString(content string) (map[string]any, error) {
+	point := make(map[string]any)
+	content = strings.TrimSpace(content)
+
+	// Split by comma, handling spaces
+	parts := strings.Split(content, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		// Split by =
+		eqIdx := strings.Index(part, "=")
+		if eqIdx < 0 {
+			continue
+		}
+
+		key := strings.TrimSpace(part[:eqIdx])
+		valueStr := strings.TrimSpace(part[eqIdx+1:])
+
+		// Parse value as float
+		if val, err := strconv.ParseFloat(valueStr, 64); err == nil {
+			point[key] = val
+		}
+	}
+
+	// Validate required fields
+	_, hasTime := point["time"]
+	_, hasBar := point["bar"]
+	_, hasValue := point["value"]
+
+	if !hasTime && !hasBar {
+		return nil, fmt.Errorf("automation point must specify time or bar")
+	}
+	if !hasValue {
+		return nil, fmt.Errorf("automation point must specify value")
+	}
+
+	return point, nil
+}
+
 // ========== Functional methods ==========
 
 // Filter filters a collection using a predicate.
@@ -1654,6 +1860,8 @@ func (p *FunctionalDSLParser) executeMethodOnItem(methodName string, methodArgs 
 		return p.reaperDSL.SetClip(methodArgs)
 	case "MoveClip", "SetClipPosition":
 		return p.reaperDSL.MoveClip(methodArgs)
+	case "AddAutomation":
+		return p.reaperDSL.AddAutomation(methodArgs)
 	default:
 		return fmt.Errorf("unknown method: %s (converted from %s)", methodNameCamel, methodName)
 	}
@@ -1713,21 +1921,27 @@ func colorNameToHex(colorName string) string {
 	return ""
 }
 
-// capitalizeMethodName converts snake_case to CamelCase (track -> Track, set_track -> SetTrack)
+// capitalizeMethodName converts snake_case or camelCase to PascalCase
+// Examples: track -> Track, set_track -> SetTrack, addAutomation -> AddAutomation
 func capitalizeMethodName(name string) string {
 	if name == "" {
 		return name
 	}
 
-	parts := strings.Split(name, "_")
-	var result strings.Builder
-	for _, part := range parts {
-		if part != "" {
-			result.WriteString(strings.ToUpper(part[:1]) + strings.ToLower(part[1:]))
+	// If it contains underscores, split by underscore
+	if strings.Contains(name, "_") {
+		parts := strings.Split(name, "_")
+		var result strings.Builder
+		for _, part := range parts {
+			if part != "" {
+				result.WriteString(strings.ToUpper(part[:1]) + part[1:])
+			}
 		}
+		return result.String()
 	}
 
-	return result.String()
+	// Otherwise just capitalize the first letter (preserves camelCase)
+	return strings.ToUpper(name[:1]) + name[1:]
 }
 
 // Store stores a value in data storage.
@@ -2234,7 +2448,7 @@ track_param: "instrument" "=" STRING
            | "id" "=" NUMBER
            | "selected" "=" BOOLEAN
 
-chain: clip_chain | fx_chain | track_properties_chain | delete_chain | delete_clip_chain | clip_properties_chain | clip_move_chain
+chain: clip_chain | fx_chain | track_properties_chain | delete_chain | delete_clip_chain | clip_properties_chain | clip_move_chain | automation_chain
 
 clip_chain: ".new_clip" "(" clip_params? ")"
 clip_params: clip_param ("," SP clip_param)*
@@ -2283,6 +2497,29 @@ move_clip_param: "position" "=" NUMBER
                | "bar" "=" NUMBER
                | "clip" "=" NUMBER
                | "old_position" "=" NUMBER
+
+// Automation operations - supports curve-based and point-based syntax
+automation_chain: ".add_automation" "(" automation_params ")"
+automation_params: automation_param ("," SP automation_param)*
+automation_param: "param" "=" STRING
+                | "curve" "=" STRING
+                | "start" "=" NUMBER
+                | "end" "=" NUMBER
+                | "start_bar" "=" NUMBER
+                | "end_bar" "=" NUMBER
+                | "from" "=" NUMBER
+                | "to" "=" NUMBER
+                | "freq" "=" NUMBER
+                | "amplitude" "=" NUMBER
+                | "phase" "=" NUMBER
+                | "shape" "=" NUMBER
+                | "points" "=" automation_points
+automation_points: "[" automation_point ("," SP automation_point)* "]"
+automation_point: "{" automation_point_fields "}"
+automation_point_fields: automation_point_field ("," SP automation_point_field)*
+automation_point_field: "time" "=" NUMBER
+                      | "bar" "=" NUMBER
+                      | "value" "=" NUMBER
 
 // Functional operations
 functional_call: filter_call chain+
