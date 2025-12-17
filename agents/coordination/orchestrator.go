@@ -494,6 +494,9 @@ EXAMPLES:
 - "create a funk groove with ghost notes" → {"needsArranger": false, "needsDrummer": true} (drum pattern)
 - "add a chord progression in C major" → {"needsArranger": true, "needsDrummer": false} (harmonic content)
 - "create an arpeggio" → {"needsArranger": true, "needsDrummer": false} (melodic content)
+- "add sustained E1" → {"needsArranger": true, "needsDrummer": false} (single note = melodic content)
+- "add note C4" → {"needsArranger": true, "needsDrummer": false} (single note = melodic content)
+- "bass note at bar 2" → {"needsArranger": true, "needsDrummer": false} (single note = melodic content)
 - "create a hip hop beat with kicks and snares" → {"needsArranger": false, "needsDrummer": true} (drum pattern)
 
 REQUEST: "%s"

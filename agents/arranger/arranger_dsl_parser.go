@@ -475,6 +475,67 @@ func (a *ArrangerDSL) AddProgression(args gs.Args) error {
 	return a.Progression(args)
 }
 
+// Note handles note() calls for single notes.
+// Example: note(pitch="E1", duration=4) - sustained E1 note for 4 beats
+func (a *ArrangerDSL) Note(args gs.Args) error {
+	p := a.parser
+
+	// Extract pitch (note name like E1, C4, F#3, Bb2)
+	pitch := ""
+	if pitchValue, ok := args["pitch"]; ok && pitchValue.Kind == gs.ValueString {
+		pitch = pitchValue.Str
+	} else if posValue, ok := args[""]; ok && posValue.Kind == gs.ValueString {
+		pitch = posValue.Str
+	} else {
+		// Find first string value
+		for _, v := range args {
+			if v.Kind == gs.ValueString {
+				pitch = v.Str
+				break
+			}
+		}
+	}
+
+	if pitch == "" {
+		return fmt.Errorf("note: missing pitch")
+	}
+
+	// Extract duration (default: 4 beats = 1 bar)
+	duration := 4.0
+	if durationValue, ok := args["duration"]; ok && durationValue.Kind == gs.ValueNumber {
+		duration = durationValue.Num
+	} else if lengthValue, ok := args["length"]; ok && lengthValue.Kind == gs.ValueNumber {
+		duration = lengthValue.Num
+	}
+
+	// Extract start time (optional, default: 0)
+	startBeat := 0.0
+	if startValue, ok := args["start"]; ok && startValue.Kind == gs.ValueNumber {
+		startBeat = startValue.Num
+	}
+
+	// Extract velocity (default: 100)
+	velocity := 100
+	if velocityValue, ok := args["velocity"]; ok && velocityValue.Kind == gs.ValueNumber {
+		velocity = int(velocityValue.Num)
+	}
+
+	// Create action
+	action := map[string]any{
+		"type":     "note",
+		"pitch":    pitch,
+		"duration": duration,
+		"velocity": velocity,
+	}
+	if startBeat != 0.0 {
+		action["start"] = startBeat
+	}
+
+	p.actions = append(p.actions, action)
+	log.Printf("🎵 Note: pitch=%s, duration=%.1f, velocity=%d", pitch, duration, velocity)
+	return nil
+}
+
 // Choice handles choice() calls (single choice format).
 // Example: choice("E minor arpeggio", [arpeggio("Em", length=2)])
 func (a *ArrangerDSL) Choice(args gs.Args) error {

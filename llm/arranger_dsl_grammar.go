@@ -22,6 +22,20 @@ start: statement
 statement: arpeggio_call
          | chord_call
          | progression_call
+         | note_call
+
+// ---------- Single Note: one note with pitch and duration ----------
+note_call: "note" "(" note_params ")"
+
+note_params: note_named_params
+
+note_named_params: note_named_param ("," SP note_named_param)*
+note_named_param: "pitch" "=" NOTE_NAME  // Note name like E1, C4, F#3, Bb2
+               | "duration" "=" NUMBER   // Duration in beats (1=quarter, 4=whole note)
+               | "velocity" "=" NUMBER   // Velocity 0-127, default 100
+               | "start" "=" NUMBER      // Start time in beats (optional)
+
+NOTE_NAME: /[A-G][#b]?-?[0-9]/  // e.g., E1, C4, F#3, Bb2, A-1
 
 // ---------- Arpeggio: SEQUENTIAL notes ----------
 arpeggio_call: "arpeggio" "(" arpeggio_params ")"

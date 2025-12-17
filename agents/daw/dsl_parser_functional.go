@@ -294,29 +294,7 @@ func (r *ReaperDSL) NewClip(args gs.Args) error {
 	return nil
 }
 
-// AddMidi handles .add_midi() calls.
-func (r *ReaperDSL) AddMidi(args gs.Args) error {
-	p := r.parser
-
-	if p.currentTrackIndex < 0 {
-		return fmt.Errorf("no track context for midi call")
-	}
-
-	action := map[string]any{
-		"action": "add_midi",
-		"track":  p.currentTrackIndex,
-		"notes":  []any{},
-	}
-
-	if _, ok := args["notes"]; ok {
-		// Handle notes array (would need more complex Value type)
-		// For now, placeholder
-		action["notes"] = []any{}
-	}
-
-	p.actions = append(p.actions, action)
-	return nil
-}
+// NOTE: AddMidi removed - add_midi is handled by ARRANGER agent, not DAW agent
 
 // AddFx handles .add_fx() calls.
 // Note: Method name must be AddFx (not AddFX) for grammar-school camelCase conversion
@@ -1665,8 +1643,7 @@ func (p *FunctionalDSLParser) executeMethodOnItem(methodName string, methodArgs 
 		return p.reaperDSL.SetTrack(methodArgs)
 	case "AddFx":
 		return p.reaperDSL.AddFx(methodArgs)
-	case "AddMidi":
-		return p.reaperDSL.AddMidi(methodArgs)
+	// NOTE: AddMidi removed - add_midi is handled by ARRANGER agent, not DAW agent
 	case "NewClip":
 		return p.reaperDSL.NewClip(methodArgs)
 	case "Delete":

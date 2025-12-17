@@ -18,10 +18,8 @@ This document tracks which DSL actions are implemented and which are still missi
   - Tests: `TestDeleteOperations`
 
 ### MIDI Operations
-- ✅ `.add_midi()` - Add MIDI notes to a clip
-  - Parameters: `notes` (array)
-  - Tests: `TestAddMidi`
-  - ⚠️ Note: Notes array parsing is placeholder - needs full implementation
+- ❌ **NOT IMPLEMENTED** - MIDI notes are handled by the **ARRANGER agent**, not the DAW agent
+- The DAW agent creates tracks and clips; the Arranger agent generates notes/chords/arpeggios
 
 ### FX/Instrument Operations
 - ✅ `.add_fx()` - Add FX or instrument to track
@@ -87,11 +85,7 @@ This document tracks which DSL actions are implemented and which are still missi
 
 ### Incomplete Implementations
 
-1. **`.add_midi()` - Notes array parsing**
-   - Currently placeholder - needs to parse MIDI note arrays
-   - Should handle format like: `notes=[{pitch:60, velocity:100, start:0.0, length:1.0}, ...]`
-
-2. **`map()` - Function reference execution**
+1. **`map()` - Function reference execution**
    - Currently just passes through items
    - Needs to actually call the function reference (e.g., `@get_name`)
 
@@ -104,7 +98,6 @@ This document tracks which DSL actions are implemented and which are still missi
 ### Comprehensive Tests Created
 - ✅ `TestTrackCreation` - Track creation and reference
 - ✅ `TestNewClip` - Clip creation with various parameters
-- ✅ `TestAddMidi` - MIDI addition (basic)
 - ✅ `TestAddFX` - FX/instrument addition
 - ✅ `TestTrackProperties` - All property setters
 - ✅ `TestDeleteOperations` - Track and clip deletion
@@ -115,7 +108,6 @@ This document tracks which DSL actions are implemented and which are still missi
 ### Tests Still Needed
 - ❌ `TestForEach` - Once `for_each()` is implemented
 - ❌ `TestMapWithFunctions` - When function reference execution is complete
-- ❌ `TestAddMidiWithNotes` - When notes array parsing is complete
 - ❌ `TestComplexFilterPredicates` - More complex predicate expressions
 - ❌ `TestNestedFunctionalCalls` - e.g., `map(filter(tracks, ...), ...)`
 
@@ -126,7 +118,7 @@ From `GetMagdaDSLGrammarForFunctional()`:
 ### Implemented Grammar Rules
 - ✅ `track_call` - Track creation/reference
 - ✅ `clip_chain` - Clip operations
-- ✅ `midi_chain` - MIDI operations
+- ❌ `midi_chain` - MIDI operations (REMOVED - handled by ARRANGER agent)
 - ✅ `fx_chain` - FX operations
 - ✅ `volume_chain`, `pan_chain`, `mute_chain`, `solo_chain`, `name_chain`, `selected_chain` - Property setters
 - ✅ `delete_chain`, `delete_clip_chain` - Delete operations
@@ -145,11 +137,7 @@ From `GetMagdaDSLGrammarForFunctional()`:
    - Implement function reference execution
    - Return transformed collection
 
-3. **Complete `.add_midi()` notes parsing**
-   - Parse MIDI note arrays from DSL
-   - Convert to proper action format
-
-4. **Add more comprehensive tests**
+3. **Add more comprehensive tests**
    - Test edge cases
    - Test error conditions
    - Test complex nested functional calls

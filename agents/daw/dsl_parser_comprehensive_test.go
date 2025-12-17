@@ -210,52 +210,7 @@ func TestNewClip(t *testing.T) {
 	}
 }
 
-// TestAddMidi tests .add_midi() method
-func TestAddMidi(t *testing.T) {
-	tests := []struct {
-		state   map[string]any
-		name    string
-		dslCode string
-		want    []map[string]any
-		wantErr bool
-	}{
-		{
-			name:    "add midi to track",
-			dslCode: `track(instrument="Serum").add_midi(notes=[])`,
-			want: []map[string]any{
-				{
-					"action":     "create_track",
-					"instrument": "Serum",
-					"index":      0,
-				},
-				{
-					"action": "add_midi",
-					"track":  0,
-					"notes":  []any{},
-				},
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			parser, err := NewFunctionalDSLParser()
-			if err != nil {
-				t.Fatalf("Failed to create parser: %v", err)
-			}
-
-			got, err := parser.ParseDSL(tt.dslCode)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseDSL() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ParseDSL() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+// NOTE: MIDI tests removed - add_midi is handled by ARRANGER agent, not DAW agent
 
 // TestAddFX tests .add_fx() method
 func TestAddFX(t *testing.T) {
@@ -683,7 +638,7 @@ func TestMethodChaining(t *testing.T) {
 	}{
 		{
 			name:    "create track with multiple operations",
-			dslCode: `track(instrument="Serum", name="Lead").new_clip(bar=1, length_bars=4).add_midi(notes=[]).set_track(volume_db=-3.0, pan=0.5)`,
+			dslCode: `track(instrument="Serum", name="Lead").new_clip(bar=1, length_bars=4).set_track(volume_db=-3.0, pan=0.5)`,
 			want: []map[string]any{
 				{
 					"action":     "create_track",
@@ -696,11 +651,6 @@ func TestMethodChaining(t *testing.T) {
 					"track":       0,
 					"bar":         1,
 					"length_bars": 4,
-				},
-				{
-					"action": "add_midi",
-					"track":  0,
-					"notes":  []any{},
 				},
 				{
 					"action":    "set_track",
