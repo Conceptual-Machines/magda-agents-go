@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,677 +16,12 @@ import (
 	"github.com/Conceptual-Machines/magda-agents-go/models"
 )
 
-// expandedKeywordsJSON contains the expanded keywords as embedded JSON
-const expandedKeywordsJSON = `{
-  "drummer": [
-    "drum",
-    "drums",
-    "drummer",
-    "beat",
-    "beats",
-    "kick",
-    "snare",
-    "hi-hat",
-    "hihat",
-    "hat",
-    "hi hat",
-    "tom",
-    "toms",
-    "cymbal",
-    "cymbals",
-    "crash",
-    "ride",
-    "percussion",
-    "percussive",
-    "percussionist",
-    "rhythm",
-    "rhythmic",
-    "four on the floor",
-    "four-on-the-floor",
-    "breakbeat",
-    "break beat",
-    "808",
-    "trap beat",
-    "drum pattern",
-    "drum fill",
-    "fill",
-    "roll",
-    "drum roll",
-    "backbeat",
-    "back beat",
-    "downbeat",
-    "offbeat",
-    "swing",
-    "shuffle",
-    "ghost note",
-    "ghost notes",
-    "rimshot",
-    "rim shot",
-    "cross stick",
-    "xstick",
-    "open hat",
-    "closed hat",
-    "pedal hat",
-    "tom fill",
-    "blast beat",
-    "double bass",
-    "double kick",
-    "bateria",
-    "batterie",
-    "schlagzeug",
-    "batteria",
-    "ドラム",
-    "doramu",
-    "打击乐",
-    "tambor"
-  ],
-  "daw": [
-    "track",
-    "clip",
-    "fx",
-    "volume",
-    "pan",
-    "mute",
-    "solo",
-    "reaper",
-    "daw",
-    "create",
-    "delete",
-    "move",
-    "select",
-    "color",
-    "rename",
-    "add",
-    "remove",
-    "enable",
-    "disable",
-    "instrument",
-    "plugin",
-    "effect",
-    "compressor",
-    "reverb",
-    "eq",
-    "mix",
-    "master",
-    "bus",
-    "return",
-    "layer",
-    "channel",
-    "pista",
-    "piste",
-    "spur",
-    "sp_track",
-    "track layer",
-    "music track",
-    "audio track",
-    "segment",
-    "snippet",
-    "clipa",
-    "extrait",
-    "ausschnitt",
-    "frammento",
-    "clipe",
-    "クリップ",
-    "kurippu",
-    "effects",
-    "processing",
-    "efectos",
-    "effets",
-    "effekte",
-    "effetti",
-    "efeitos",
-    "エフェクト",
-    "efekuto",
-    "loudness",
-    "amplitude",
-    "volumen",
-    "lautstärke",
-    "ボリューム",
-    "borūmu",
-    "panning",
-    "stereo balance",
-    "panoramización",
-    "panoramique",
-    "panorama",
-    "panoramica",
-    "パン",
-    "silence",
-    "cut",
-    "silenciar",
-    "couper",
-    "stumm",
-    "silenziare",
-    "mudo",
-    "ミュート",
-    "myūto",
-    "isolate",
-    "one track",
-    "ソロ",
-    "soro",
-    "digital audio workstation",
-    "リーパー",
-    "rīpā",
-    "production software",
-    "stazione audio digitale",
-    "estação de áudio digital",
-    "デジタルオーディオワークステーション",
-    "dejitaru ōdio wākusuteeshon",
-    "generate",
-    "produce",
-    "crear",
-    "créer",
-    "erstellen",
-    "creare",
-    "criar",
-    "作成する",
-    "sakusei suru",
-    "erase",
-    "eliminar",
-    "supprimer",
-    "löschen",
-    "cancellare",
-    "remover",
-    "削除する",
-    "sakujo suru",
-    "shift",
-    "drag",
-    "mover",
-    "déplacer",
-    "bewegen",
-    "spostare",
-    "動かす",
-    "ugokasu",
-    "choose",
-    "highlight",
-    "seleccionar",
-    "sélectionner",
-    "auswählen",
-    "selezionare",
-    "selecionar",
-    "選択する",
-    "sentaku suru",
-    "hue",
-    "shade",
-    "couleur",
-    "farbe",
-    "colore",
-    "cor",
-    "iro",
-    "relabel",
-    "change name",
-    "renombrar",
-    "renommer",
-    "umbenennen",
-    "rinominare",
-    "renomear",
-    "名前を変更する",
-    "namae o henkō suru",
-    "include",
-    "insert",
-    "agregar",
-    "ajouter",
-    "hinzufügen",
-    "aggiungere",
-    "adicionar",
-    "追加する",
-    "tsuika suru",
-    "extract",
-    "quitar",
-    "retirer",
-    "entfernen",
-    "rimuovere",
-    "取り除く",
-    "torinozoku",
-    "activate",
-    "turn on",
-    "habilitar",
-    "activer",
-    "aktivieren",
-    "abilitare",
-    "ativar",
-    "有効にする",
-    "yūkō ni suru",
-    "deactivate",
-    "turn off",
-    "deshabilitar",
-    "désactiver",
-    "deaktivieren",
-    "disabilitare",
-    "desativar",
-    "無効にする",
-    "mukō ni suru",
-    "tool",
-    "device",
-    "instrumento",
-    "strumento",
-    "楽器",
-    "gakki",
-    "extension",
-    "add-on",
-    "プラグイン",
-    "puraguin",
-    "result",
-    "efecto",
-    "effet",
-    "effekt",
-    "effetto",
-    "efeito",
-    "dynamic range compressor",
-    "compression",
-    "compresor",
-    "compresseur",
-    "kompressor",
-    "compressore",
-    "コンプレッサー",
-    "konpuressā",
-    "reverberation",
-    "echo",
-    "réverbération",
-    "hall",
-    "verb",
-    "riverbero",
-    "reverberação",
-    "リバーブ",
-    "ribābu",
-    "equalization",
-    "tone control",
-    "ecualización",
-    "égalisation",
-    "equalizer",
-    "equalizzazione",
-    "equalização",
-    "イコライザー",
-    "ikoraizā",
-    "blend",
-    "combine",
-    "mezclar",
-    "mélanger",
-    "mischen",
-    "mescolare",
-    "misturar",
-    "ミックス",
-    "mikkusu",
-    "finalize",
-    "masterizar",
-    "masteriser",
-    "mastering",
-    "masterizzare",
-    "マスタリング",
-    "masutaringu",
-    "channel strip",
-    "signal route",
-    "バス",
-    "basu",
-    "route",
-    "forward",
-    "enviar",
-    "envoyer",
-    "senden",
-    "inviare",
-    "送信する",
-    "sōshin suru",
-    "feedback",
-    "retrace",
-    "retorno",
-    "retour",
-    "rückkehr",
-    "ritorno",
-    "リターン",
-    "ritān"
-  ],
-  "arranger": [
-    "chord",
-    "progression",
-    "melody",
-    "note",
-    "notes",
-    "i",
-    "vi",
-    "iv",
-    "v",
-    "ii",
-    "iii",
-    "vii",
-    "roman",
-    "scale",
-    "harmony",
-    "sequence",
-    "pattern",
-    "major",
-    "minor",
-    "diminished",
-    "augmented",
-    "triad",
-    "seventh",
-    "ninth",
-    "arpeggio",
-    "bassline",
-    "riff",
-    "hook",
-    "groove",
-    "lick",
-    "phrase",
-    "motif",
-    "ostinato",
-    "fill",
-    "break",
-    "c",
-    "d",
-    "e",
-    "f",
-    "g",
-    "a",
-    "b",
-    "sharp",
-    "flat",
-    "natural",
-    "pentatonic",
-    "dorian",
-    "mixolydian",
-    "sus2",
-    "sus4",
-    "add9",
-    "voicing",
-    "acorde",
-    "accord",
-    "akkord",
-    "accordo",
-    "コード",
-    "kōdo",
-    "development",
-    "progresión",
-    "progresso",
-    "進行",
-    "shinkō",
-    "tune",
-    "theme",
-    "melodía",
-    "mélodie",
-    "melodie",
-    "melodia",
-    "メロディ",
-    "merodi",
-    "pitch",
-    "tone",
-    "nota",
-    "音符",
-    "onpu",
-    "pitches",
-    "tones",
-    "notas",
-    "noten",
-    "one",
-    "tonic",
-    "six",
-    "submediant",
-    "four",
-    "subdominant",
-    "five",
-    "dominant",
-    "two",
-    "supertonic",
-    "three",
-    "mediant",
-    "seven",
-    "subtonic",
-    "numeral",
-    "notation",
-    "romano",
-    "numéral",
-    "römisch",
-    "ローマ数字",
-    "rōma suūji",
-    "range",
-    "spectrum",
-    "escala",
-    "échelle",
-    "skala",
-    "scala",
-    "スケール",
-    "sukēru",
-    "concord",
-    "unity",
-    "armonía",
-    "harmonie",
-    "armonia",
-    "harmonia",
-    "和声",
-    "wasei",
-    "order",
-    "series",
-    "secuencia",
-    "séquence",
-    "folge",
-    "sequenza",
-    "sequência",
-    "配列",
-    "hairetsu",
-    "design",
-    "arrangement",
-    "patrón",
-    "modèle",
-    "muster",
-    "schema",
-    "padrão",
-    "パターン",
-    "patān",
-    "happy",
-    "bright",
-    "mayor",
-    "majeur",
-    "dur",
-    "maggiore",
-    "maior",
-    "メジャー",
-    "mejā",
-    "sad",
-    "dark",
-    "menor",
-    "mineur",
-    "moll",
-    "minore",
-    "マイナー",
-    "mainā",
-    "reduced",
-    "lowered",
-    "disminuido",
-    "diminué",
-    "vermindert",
-    "diminuito",
-    "diminuído",
-    "減少",
-    "genshō",
-    "increased",
-    "expanded",
-    "aumentado",
-    "augmenté",
-    "erhöht",
-    "aumentato",
-    "増加",
-    "zōka",
-    "three-note chord",
-    "threefold",
-    "triada",
-    "triade",
-    "tríade",
-    "トライアド",
-    "toraiado",
-    "7th chord",
-    "dominant seventh",
-    "séptima",
-    "septième",
-    "siebte",
-    "settima",
-    "sétima",
-    "セブンス",
-    "sebunsu",
-    "9th chord",
-    "ninth interval",
-    "novena",
-    "neuvième",
-    "neunte",
-    "nona",
-    "ナインス",
-    "nainsu",
-    "broken chord",
-    "arpeggiated chord",
-    "arpegio",
-    "arpège",
-    "アルペジオ",
-    "arpejio",
-    "bass part",
-    "low line",
-    "línea de bajo",
-    "ligne de basse",
-    "basslinie",
-    "linea di basso",
-    "linha de baixo",
-    "ベースライン",
-    "bēsura",
-    "repeated phrase",
-    "リフ",
-    "rifu",
-    "catchphrase",
-    "catchy part",
-    "gancho",
-    "crochet",
-    "gancio",
-    "フック",
-    "hukku",
-    "rhythm",
-    "feel",
-    "rythme",
-    "グルーヴ",
-    "gurūvu",
-    "short solo",
-    "リック",
-    "rikku",
-    "segment",
-    "expression",
-    "frase",
-    "フレーズ",
-    "furēzu",
-    "idea",
-    "motivo",
-    "motiv",
-    "モチーフ",
-    "motīfu",
-    "repeated pattern",
-    "loop",
-    "オスティナート",
-    "osutināto",
-    "decoration",
-    "embellishment",
-    "relleno",
-    "remplissage",
-    "füller",
-    "enchimento",
-    "フィル",
-    "firu",
-    "pause",
-    "interruption",
-    "descanso",
-    "interruzione",
-    "quebra",
-    "ブレイク",
-    "bureiku",
-    "c note",
-    "c major",
-    "do",
-    "dó",
-    "d note",
-    "d major",
-    "re",
-    "ré",
-    "e note",
-    "e major",
-    "mi",
-    "f note",
-    "f major",
-    "fa",
-    "ファ",
-    "g note",
-    "g major",
-    "sol",
-    "so",
-    "a note",
-    "a major",
-    "la",
-    "ra",
-    "b note",
-    "b major",
-    "si",
-    "shi",
-    "raised",
-    "crossed",
-    "sostenido",
-    "dièse",
-    "kreuz",
-    "diesis",
-    "sustenido",
-    "シャープ",
-    "shāpu",
-    "bemol",
-    "bémol",
-    "bemolle",
-    "フラット",
-    "furatto",
-    "unmodified",
-    "plain",
-    "naturel",
-    "natürlich",
-    "naturale",
-    "ナチュラル",
-    "nachuraru",
-    "five-note scale",
-    "five tones",
-    "pentatónico",
-    "pentatonique",
-    "pentatonisch",
-    "pentatonico",
-    "pentatônico",
-    "ペンタトニック",
-    "pentatonikku",
-    "mode",
-    "dorian scale",
-    "dórico",
-    "dorien",
-    "dorisch",
-    "dorico",
-    "ドリアン",
-    "mixolydian scale",
-    "mixolidio",
-    "mixolydien",
-    "mixolydisch",
-    "mixolídio",
-    "ミクソリディアン",
-    "mikusoridian",
-    "suspended second",
-    "add2",
-    "サス2",
-    "sasu2",
-    "suspended fourth",
-    "add4",
-    "サス4",
-    "sasu4",
-    "added ninth",
-    "9th added",
-    "アッド9",
-    "addo9"
-  ]
-}`
-
 // Orchestrator coordinates multiple agents (DAW + Arranger + Drummer) running in parallel
 type Orchestrator struct {
-	dawAgent          *daw.DawAgent
-	arrangerAgent     ArrangerAgent // Will be set when we integrate
-	drummerAgent      *drummer.DrummerAgent
-	llmProvider       llm.Provider
-	dawKeywords       []string
-	arrangerKeywords  []string
-	drummerKeywords   []string
-	keywordsLoaded    bool
-	keywordsLoadMutex sync.Mutex
+	dawAgent      *daw.DawAgent
+	arrangerAgent ArrangerAgent // Will be set when we integrate
+	drummerAgent  *drummer.DrummerAgent
+	llmProvider   llm.Provider
 }
 
 // ArrangerAgent interface for the arranger agent
@@ -740,9 +74,6 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 		llmProvider:   llmProvider,
 	}
 
-	// Load expanded keywords (lazy load on first use if file not found)
-	o.loadKeywords()
-
 	return o
 }
 
@@ -776,7 +107,7 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 	var dawResult *daw.DawResult
 	var arrangerResult *ArrangerResult
 	var drummerResult *drummer.DrummerResult
-	var dawErr, arrangerErr, drummerErr error
+	var dawErr error
 	var dawDuration, arrangerDuration, drummerDuration time.Duration
 
 	if needsDAW {
@@ -805,8 +136,7 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 			result, err := o.arrangerAgent.GenerateActions(ctx, question)
 			arrangerDuration = time.Since(start)
 			if err != nil {
-				arrangerErr = fmt.Errorf("arranger agent: %w", err)
-				log.Printf("⏱️ Arranger agent failed in %v", arrangerDuration)
+				log.Printf("⚠️ Arranger agent failed in %v: %v", arrangerDuration, err)
 				return
 			}
 			log.Printf("⏱️ Arranger agent completed in %v", arrangerDuration)
@@ -833,8 +163,7 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 			result, err := o.drummerAgent.Generate(ctx, "gpt-5.1", inputArray)
 			drummerDuration = time.Since(start)
 			if err != nil {
-				drummerErr = fmt.Errorf("drummer agent: %w", err)
-				log.Printf("⏱️ Drummer agent failed in %v", drummerDuration)
+				log.Printf("⚠️ Drummer agent failed in %v: %v", drummerDuration, err)
 				return
 			}
 			log.Printf("⏱️ Drummer agent completed in %v", drummerDuration)
@@ -848,35 +177,13 @@ func (o *Orchestrator) GenerateActions(ctx context.Context, question string, sta
 	// Log timing summary
 	log.Printf("⏱️ Agent timing summary: DAW=%v, Arranger=%v, Drummer=%v", dawDuration, arrangerDuration, drummerDuration)
 
-	// Step 3: Handle errors (partial results OK)
-	activeAgentCount := 0
-	failedAgentCount := 0
-	if needsDAW {
-		activeAgentCount++
-		if dawErr != nil {
-			failedAgentCount++
-			log.Printf("⚠️ DAW agent failed: %v", dawErr)
-		}
+	// Step 3: Handle errors
+	// DAW is the gatekeeper - if it fails, fail the entire request
+	// This prevents garbage results from Arranger/Drummer being returned for out-of-scope requests
+	if dawErr != nil {
+		return nil, fmt.Errorf("DAW agent failed: %w", dawErr)
 	}
-	if needsArranger {
-		activeAgentCount++
-		if arrangerErr != nil {
-			failedAgentCount++
-			log.Printf("⚠️ Arranger agent failed: %v", arrangerErr)
-		}
-	}
-	if needsDrummer {
-		activeAgentCount++
-		if drummerErr != nil {
-			failedAgentCount++
-			log.Printf("⚠️ Drummer agent failed: %v", drummerErr)
-		}
-	}
-
-	// Only fail if ALL active agents failed
-	if activeAgentCount > 0 && failedAgentCount == activeAgentCount {
-		return nil, fmt.Errorf("all agents failed: daw=%v, arranger=%v, drummer=%v", dawErr, arrangerErr, drummerErr)
-	}
+	// For non-DAW agents, partial failures are OK (their results just won't be included)
 
 	// Step 4: Merge results
 	return o.mergeResults(dawResult, arrangerResult, drummerResult)
@@ -979,7 +286,7 @@ func (o *Orchestrator) GenerateActionsStream(
 
 	// Step 2: Launch agents
 	var wg sync.WaitGroup
-	var dawErr, arrangerErr, drummerErr error
+	var dawErr error
 
 	if needsDAW {
 		wg.Add(1)
@@ -1050,8 +357,7 @@ func (o *Orchestrator) GenerateActionsStream(
 
 			result, err := o.arrangerAgent.GenerateActions(ctx, question)
 			if err != nil {
-				arrangerErr = fmt.Errorf("arranger agent: %w", err)
-				log.Printf("❌ [Stream] Arranger agent error: %v", err)
+				log.Printf("⚠️ [Stream] Arranger agent error: %v", err)
 				return
 			}
 
@@ -1108,8 +414,7 @@ func (o *Orchestrator) GenerateActionsStream(
 			}
 			result, err := o.drummerAgent.Generate(ctx, "gpt-5.1", inputArray)
 			if err != nil {
-				drummerErr = fmt.Errorf("drummer agent: %w", err)
-				log.Printf("❌ [Stream] Drummer agent error: %v", err)
+				log.Printf("⚠️ [Stream] Drummer agent error: %v", err)
 				return
 			}
 
@@ -1133,31 +438,13 @@ func (o *Orchestrator) GenerateActionsStream(
 	// Final check - emit any remaining MIDI
 	_ = tryEmitMidi()
 
-	// Handle errors - only fail if ALL active agents failed
-	activeAgentCount := 0
-	failedAgentCount := 0
-	if needsDAW {
-		activeAgentCount++
-		if dawErr != nil {
-			failedAgentCount++
-		}
-	}
-	if needsArranger {
-		activeAgentCount++
-		if arrangerErr != nil {
-			failedAgentCount++
-		}
-	}
-	if needsDrummer {
-		activeAgentCount++
-		if drummerErr != nil {
-			failedAgentCount++
-		}
+	// DAW is the gatekeeper - if it fails, fail the entire request
+	// This prevents garbage results from Arranger/Drummer being returned for out-of-scope requests
+	if dawErr != nil {
+		return nil, fmt.Errorf("DAW agent failed: %w", dawErr)
 	}
 
-	if activeAgentCount > 0 && failedAgentCount == activeAgentCount {
-		return nil, fmt.Errorf("all agents failed: daw=%v, arranger=%v, drummer=%v", dawErr, arrangerErr, drummerErr)
-	}
+	// For non-DAW agents, partial failures are OK (their results just won't be included)
 
 	// Return all collected actions
 	mu.Lock()
@@ -1186,142 +473,32 @@ func (o *Orchestrator) DetectAgentsNeeded(ctx context.Context, question string) 
 	return needsDAW, needsArranger, needsDrummer, nil
 }
 
-// loadKeywords loads expanded keywords from embedded JSON (with fallback to hardcoded)
-func (o *Orchestrator) loadKeywords() {
-	o.keywordsLoadMutex.Lock()
-	defer o.keywordsLoadMutex.Unlock()
-
-	if o.keywordsLoaded {
-		return
-	}
-
-	var keywords struct {
-		DAW      []string `json:"daw"`
-		Arranger []string `json:"arranger"`
-		Drummer  []string `json:"drummer"`
-	}
-
-	if err := json.Unmarshal([]byte(expandedKeywordsJSON), &keywords); err != nil {
-		log.Printf("⚠️ Failed to parse embedded expanded_keywords.json: %v, using hardcoded keywords", err)
-		o.loadDefaultKeywords()
-		o.keywordsLoaded = true
-		return
-	}
-
-	o.dawKeywords = keywords.DAW
-	o.arrangerKeywords = keywords.Arranger
-	o.drummerKeywords = keywords.Drummer
-	o.keywordsLoaded = true
-	log.Printf("✅ Loaded %d DAW, %d Arranger, %d Drummer keywords from embedded data",
-		len(o.dawKeywords), len(o.arrangerKeywords), len(o.drummerKeywords))
-}
-
-// loadDefaultKeywords sets fallback hardcoded keywords
-func (o *Orchestrator) loadDefaultKeywords() {
-	o.dawKeywords = []string{
-		"track", "clip", "fx", "volume", "pan", "mute", "solo",
-		"reaper", "daw", "instrument", "plugin", "effect",
-		"compressor", "reverb", "eq", "mix", "master", "bus", "return",
-		"create", "delete", "move", "select", "color", "rename",
-		"add", "remove", "enable", "disable", "set",
-	}
-
-	o.arrangerKeywords = []string{
-		"chord", "progression", "melody", "note", "notes",
-		"I", "VI", "IV", "V", "ii", "iii", "vii",
-		"roman", "scale", "harmony", "sequence", "pattern",
-		"major", "minor", "diminished", "augmented",
-		"triad", "seventh", "ninth",
-		"arpeggio", "bassline", "riff", "hook", "groove", "lick",
-		"phrase", "motif", "ostinato", "fill", "break",
-		"C", "D", "E", "F", "G", "A", "B",
-		"sharp", "flat", "natural",
-		"pentatonic", "dorian", "mixolydian",
-		"sus2", "sus4", "add9",
-	}
-
-	o.drummerKeywords = []string{
-		"drum", "drums", "drummer", "beat", "beats",
-		"kick", "snare", "hi-hat", "hihat", "hat", "tom", "toms",
-		"cymbal", "cymbals", "crash", "ride",
-		"percussion", "percussive", "rhythm", "rhythmic",
-		"four on the floor", "breakbeat", "808", "trap beat",
-		"drum pattern", "drum fill", "fill", "roll",
-		"backbeat", "swing", "shuffle", "ghost note",
-	}
-}
-
-// detectAgentsNeededKeywords does keyword matching without defaulting to DAW
-// This allows the orchestrator to validate scope when no keywords are found
-func (o *Orchestrator) detectAgentsNeededKeywords(question string) (needsDAW, needsArranger, needsDrummer bool) {
-	// Ensure keywords are loaded
-	if !o.keywordsLoaded {
-		o.loadKeywords()
-	}
-
-	questionLower := strings.ToLower(question)
-
-	// Filter out single-character keywords to avoid false positives (e.g., "a" matching in "bake me a cake")
-	dawKeywordsFiltered := o.filterSingleCharKeywords(o.dawKeywords)
-	arrangerKeywordsFiltered := o.filterSingleCharKeywords(o.arrangerKeywords)
-	drummerKeywordsFiltered := o.filterSingleCharKeywords(o.drummerKeywords)
-
-	// Check for DAW operations (independent check)
-	needsDAW = containsAny(questionLower, dawKeywordsFiltered)
-
-	// Check for musical content (independent check - can be true alongside DAW)
-	needsArranger = containsAny(questionLower, arrangerKeywordsFiltered)
-
-	// Check for drum patterns (independent check)
-	needsDrummer = containsAny(questionLower, drummerKeywordsFiltered)
-
-	// Multiple can be true! Example: "add a drum beat with kick and snare to track 1"
-	// - "add", "track" → needsDAW = true
-	// - "drum", "beat", "kick", "snare" → needsDrummer = true
-
-	return needsDAW, needsArranger, needsDrummer
-}
-
-// filterSingleCharKeywords removes single-character keywords to avoid false positives
-func (o *Orchestrator) filterSingleCharKeywords(keywords []string) []string {
-	filtered := make([]string, 0, len(keywords))
-	for _, kw := range keywords {
-		// Only include keywords with 2+ characters
-		if len(strings.TrimSpace(kw)) > 1 {
-			filtered = append(filtered, kw)
-		}
-	}
-	return filtered
-}
-
-// looksMusical checks if question contains musical terms that might not be in keywords
-func (o *Orchestrator) looksMusical(question string) bool {
-	musicalTerms := []string{
-		"arpeggio", "bassline", "riff", "hook", "groove", "lick",
-		"phrase", "motif", "vibe", "groovy", "punchy", "warm",
-		"musical", "composition", "arrangement",
-	}
-	questionLower := strings.ToLower(question)
-	return containsAny(questionLower, musicalTerms)
-}
-
 // detectAgentsNeededLLM uses LLM to classify which musical agents are needed
 // DAW agent is always used (handled by caller), this only classifies Arranger and Drummer
 // Returns needsArranger=false, needsDrummer=false if request is out of scope
 func (o *Orchestrator) detectAgentsNeededLLM(ctx context.Context, question string) (needsDAW, needsArranger, needsDrummer bool, err error) {
-	prompt := fmt.Sprintf(`Classify this music production request. Return JSON:
-{
-  "needsArranger": true/false,  // Melodic/harmonic content: chords, melodies, notes, arpeggios, basslines, progressions
-  "needsDrummer": true/false    // Drum/rhythm patterns: beats, kicks, snares, hi-hats, drum fills, breakbeats, grooves
-}
+	prompt := fmt.Sprintf(`You are a router for a music production AI system. Classify requests to determine which specialized agents are needed.
 
-IMPORTANT:
-- needsArranger=true for: chords, arpeggios, melodies, basslines, chord progressions, notes
-- needsDrummer=true for: drum beats, kick patterns, snare, hi-hat, percussion, breakbeats, grooves
-- Both can be true if request includes both melodic AND drum content
-- Both should be false ONLY if request is completely out of scope (e.g., "bake me a cake")
+THE SYSTEM HAS 3 AGENTS:
+1. DAW AGENT (always runs): Handles REAPER operations - tracks, clips, FX, volume, pan, mute, solo, routing. Does NOT generate musical content.
+2. ARRANGER AGENT: Generates melodic/harmonic MIDI content - chords, arpeggios, melodies, basslines, chord progressions. Creates actual notes with pitches.
+3. DRUMMER AGENT: Generates drum/percussion patterns - kick, snare, hi-hat, toms, cymbals. Creates rhythmic patterns on a grid.
 
-Request: "%s"`, question)
+YOUR TASK: Decide if ARRANGER and/or DRUMMER are needed (DAW always runs).
+
+EXAMPLES:
+- "create a track called Drums" → {"needsArranger": false, "needsDrummer": false} (just naming a track, no content)
+- "add reverb to the bass" → {"needsArranger": false, "needsDrummer": false} (FX operation)
+- "mute track 2" → {"needsArranger": false, "needsDrummer": false} (track control)
+- "add a breakbeat pattern" → {"needsArranger": false, "needsDrummer": true} (generating drums)
+- "create a funk groove with ghost notes" → {"needsArranger": false, "needsDrummer": true} (drum pattern)
+- "add a chord progression in C major" → {"needsArranger": true, "needsDrummer": false} (harmonic content)
+- "create an arpeggio" → {"needsArranger": true, "needsDrummer": false} (melodic content)
+- "create a hip hop beat with kicks and snares" → {"needsArranger": false, "needsDrummer": true} (drum pattern)
+
+REQUEST: "%s"
+
+Return JSON: {"needsArranger": bool, "needsDrummer": bool}`, question)
 
 	// Use a small, fast model for classification
 	request := &llm.GenerationRequest{
@@ -1581,68 +758,4 @@ func getTrackCount(state map[string]any) int {
 		}
 	}
 	return 0
-}
-
-// containsAny checks if text contains any of the keywords as whole words (case-insensitive)
-// For space-separated languages (English, Spanish, etc.), uses whole-word matching
-// For non-space-separated languages (Japanese, Chinese, etc.), falls back to substring matching
-func containsAny(text string, keywords []string) bool {
-	textLower := strings.ToLower(text)
-
-	// Check if text contains CJK characters (Chinese, Japanese, Korean) or other non-space languages
-	hasNonSpaceLanguage := false
-	for _, r := range text {
-		// CJK Unified Ideographs: 0x4E00-0x9FFF
-		// Hiragana: 0x3040-0x309F, Katakana: 0x30A0-0x30FF
-		// Hangul: 0xAC00-0xD7AF
-		if (r >= 0x4E00 && r <= 0x9FFF) || // CJK
-			(r >= 0x3040 && r <= 0x309F) || // Hiragana
-			(r >= 0x30A0 && r <= 0x30FF) || // Katakana
-			(r >= 0xAC00 && r <= 0xD7AF) { // Hangul
-			hasNonSpaceLanguage = true
-			break
-		}
-	}
-
-	// For non-space-separated languages, use substring matching (original behavior)
-	if hasNonSpaceLanguage {
-		for _, keyword := range keywords {
-			if strings.Contains(textLower, strings.ToLower(keyword)) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// For space-separated languages, use whole-word matching
-	words := splitIntoWords(textLower)
-	for _, keyword := range keywords {
-		keywordLower := strings.ToLower(keyword)
-		// Check if keyword matches any whole word
-		for _, word := range words {
-			if word == keywordLower {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// splitIntoWords splits text into words, removing punctuation
-func splitIntoWords(text string) []string {
-	// Replace punctuation with spaces
-	text = strings.ReplaceAll(text, ",", " ")
-	text = strings.ReplaceAll(text, ".", " ")
-	text = strings.ReplaceAll(text, "!", " ")
-	text = strings.ReplaceAll(text, "?", " ")
-	text = strings.ReplaceAll(text, ":", " ")
-	text = strings.ReplaceAll(text, ";", " ")
-	text = strings.ReplaceAll(text, "(", " ")
-	text = strings.ReplaceAll(text, ")", " ")
-	text = strings.ReplaceAll(text, "[", " ")
-	text = strings.ReplaceAll(text, "]", " ")
-
-	// Split by whitespace and filter empty strings
-	parts := strings.Fields(text)
-	return parts
 }

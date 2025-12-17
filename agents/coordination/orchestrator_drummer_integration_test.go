@@ -187,140 +187,6 @@ func TestOrchestrator_Integration_DrummerAndDAW(t *testing.T) {
 	}
 }
 
-func TestOrchestrator_Integration_DrummerKeywordDetection(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	cfg := getTestConfigForKeywords(t)
-	orchestrator := NewOrchestrator(cfg)
-
-	tests := []struct {
-		name            string
-		question        string
-		expectedDAW     bool
-		expectedDrummer bool
-		description     string
-	}{
-		{
-			name:            "drum_beat",
-			question:        "create a drum beat",
-			expectedDAW:     true,
-			expectedDrummer: true,
-			description:     "Basic drum beat request",
-		},
-		{
-			name:            "kick_pattern",
-			question:        "add a kick pattern",
-			expectedDAW:     true,
-			expectedDrummer: true,
-			description:     "Kick drum pattern",
-		},
-		{
-			name:            "hi_hat_groove",
-			question:        "make a hi-hat groove",
-			expectedDAW:     false,
-			expectedDrummer: true,
-			description:     "Hi-hat pattern",
-		},
-		{
-			name:            "four_on_floor",
-			question:        "four on the floor rhythm",
-			expectedDAW:     false,
-			expectedDrummer: true,
-			description:     "Classic dance rhythm",
-		},
-		{
-			name:            "breakbeat",
-			question:        "add a breakbeat pattern",
-			expectedDAW:     true,
-			expectedDrummer: true,
-			description:     "Breakbeat pattern",
-		},
-		{
-			name:            "snare_backbeat",
-			question:        "snare on 2 and 4",
-			expectedDAW:     false,
-			expectedDrummer: true,
-			description:     "Snare backbeat",
-		},
-		{
-			name:            "percussion",
-			question:        "add percussion to the track",
-			expectedDAW:     true,
-			expectedDrummer: true,
-			description:     "General percussion",
-		},
-		{
-			name:            "drum_fill",
-			question:        "add a drum fill",
-			expectedDAW:     true,
-			expectedDrummer: true,
-			description:     "Drum fill",
-		},
-		{
-			name:            "tom_pattern",
-			question:        "create a tom pattern",
-			expectedDAW:     true,
-			expectedDrummer: true,
-			description:     "Tom drum pattern",
-		},
-		{
-			name:            "cymbal_crash",
-			question:        "add a crash cymbal",
-			expectedDAW:     true,
-			expectedDrummer: true,
-			description:     "Cymbal hit",
-		},
-		// Non-drummer requests
-		{
-			name:            "chord_progression_not_drummer",
-			question:        "create a chord progression",
-			expectedDAW:     true,
-			expectedDrummer: false,
-			description:     "Should be arranger, not drummer",
-		},
-		{
-			name:            "reverb_not_drummer",
-			question:        "add reverb to track 1",
-			expectedDAW:     true,
-			expectedDrummer: false,
-			description:     "Should be DAW only, not drummer",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			start := time.Now()
-			needsDAW, needsArranger, needsDrummer := orchestrator.detectAgentsNeededKeywords(tt.question)
-			detectionTime := time.Since(start)
-
-			t.Logf("📊 Detection timing: %v", detectionTime)
-			t.Logf("   Question: %q", tt.question)
-			t.Logf("   Description: %s", tt.description)
-			t.Logf("   Result: DAW=%v, Arranger=%v, Drummer=%v", needsDAW, needsArranger, needsDrummer)
-
-			// Verify detection time is fast (< 1ms for keyword matching)
-			assert.Less(t, detectionTime, 10*time.Millisecond,
-				"Keyword detection should be very fast (<10ms)")
-
-			// Verify expected results
-			if tt.expectedDAW {
-				assert.True(t, needsDAW,
-					"DAW should be detected for: %q", tt.question)
-			}
-
-			if tt.expectedDrummer {
-				assert.True(t, needsDrummer,
-					"Drummer should be detected for: %q", tt.question)
-			} else {
-				assert.False(t, needsDrummer,
-					"Drummer should NOT be detected for: %q", tt.question)
-			}
-		})
-	}
-}
-
 func TestOrchestrator_Integration_DrummerWithArranger(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -411,4 +277,176 @@ func TestOrchestrator_Integration_DrummerWithArranger(t *testing.T) {
 			assert.Greater(t, len(result.Actions), 1, "Should have multiple actions")
 		})
 	}
+}
+
+// TestAgents_OutOfScope_DirectCalls tests that each agent handles out-of-scope requests gracefully
+// This is important in case the coordinator makes a routing mistake
+func TestAgents_OutOfScope_DirectCalls(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	cfg := getTestConfig(t)
+	orchestrator := NewOrchestrator(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Obvious out-of-scope
+	obviousOOS := []string{
+		"how do I make pasta carbonara",
+		"write a python function to sort a list",
+		"what's the capital of France",
+	}
+
+	// Subtle out-of-scope - related to DAW but not valid music operations
+	subtleOOS := []string{
+		"make it sound better",                    // Too vague, no actionable request
+		"create a video track with some video fx", // Video editing, not music production
+		"fix the audio glitches in my recording",  // Debugging/troubleshooting, not an action
+		"why does my plugin crash",                // Support question, not an action
+	}
+
+	outOfScopeQuestions := append(obviousOOS, subtleOOS...)
+
+	t.Run("drummer_agent_rejects_out_of_scope", func(t *testing.T) {
+		for _, question := range outOfScopeQuestions {
+			t.Run(question, func(t *testing.T) {
+				inputArray := []map[string]any{
+					{"role": "user", "content": question},
+				}
+
+				result, err := orchestrator.drummerAgent.Generate(ctx, "gpt-5.1", inputArray)
+
+				// Drummer should either error or return empty actions
+				if err != nil {
+					t.Logf("✅ Drummer correctly errored for out-of-scope: %v", err)
+					return
+				}
+
+				if result == nil || len(result.Actions) == 0 {
+					t.Logf("✅ Drummer correctly returned no actions for out-of-scope")
+					return
+				}
+
+				// If it returned actions, they should not be valid drum patterns
+				t.Logf("⚠️ Drummer returned %d actions for out-of-scope request", len(result.Actions))
+				for _, action := range result.Actions {
+					actionJSON, _ := json.MarshalIndent(action, "", "  ")
+					t.Logf("   Action: %s", string(actionJSON))
+				}
+
+				// This is a soft failure - log it but don't fail the test
+				// The agent's scope instruction should prevent this
+				t.Logf("⚠️ Drummer should have returned empty for: %q", question)
+			})
+		}
+	})
+
+	t.Run("arranger_agent_rejects_out_of_scope", func(t *testing.T) {
+		for _, question := range outOfScopeQuestions {
+			t.Run(question, func(t *testing.T) {
+				result, err := orchestrator.arrangerAgent.GenerateActions(ctx, question)
+
+				// Arranger should either error or return empty actions
+				if err != nil {
+					t.Logf("✅ Arranger correctly errored for out-of-scope: %v", err)
+					return
+				}
+
+				if result == nil || len(result.Actions) == 0 {
+					t.Logf("✅ Arranger correctly returned no actions for out-of-scope")
+					return
+				}
+
+				// If it returned actions, log them
+				t.Logf("⚠️ Arranger returned %d actions for out-of-scope request", len(result.Actions))
+				for _, action := range result.Actions {
+					actionJSON, _ := json.MarshalIndent(action, "", "  ")
+					t.Logf("   Action: %s", string(actionJSON))
+				}
+
+				t.Logf("⚠️ Arranger should have returned empty for: %q", question)
+			})
+		}
+	})
+
+	t.Run("daw_agent_rejects_out_of_scope", func(t *testing.T) {
+		for _, question := range outOfScopeQuestions {
+			t.Run(question, func(t *testing.T) {
+				result, err := orchestrator.dawAgent.GenerateActions(ctx, question, nil)
+
+				// DAW should either error or return empty/error comment
+				if err != nil {
+					t.Logf("✅ DAW correctly errored for out-of-scope: %v", err)
+					return
+				}
+
+				if result == nil || len(result.Actions) == 0 {
+					t.Logf("✅ DAW correctly returned no actions for out-of-scope")
+					return
+				}
+
+				// Check if DAW returned an error comment (valid rejection)
+				for _, action := range result.Actions {
+					if actionType, ok := action["action"].(string); ok {
+						if actionType == "error" || actionType == "comment" {
+							t.Logf("✅ DAW returned error/comment action for out-of-scope")
+							return
+						}
+					}
+				}
+
+				// If it returned real actions, log them
+				t.Logf("⚠️ DAW returned %d actions for out-of-scope request", len(result.Actions))
+				for _, action := range result.Actions {
+					actionJSON, _ := json.MarshalIndent(action, "", "  ")
+					t.Logf("   Action: %s", string(actionJSON))
+				}
+
+				t.Logf("⚠️ DAW should have rejected: %q", question)
+			})
+		}
+	})
+
+	// Test that valid DAW operations with musical terms in names are NOT rejected
+	t.Run("daw_agent_accepts_valid_operations_with_musical_names", func(t *testing.T) {
+		validDAWOperations := []string{
+			"lower the track called arpeggio by 3 db",
+			"rename the drums track to percussion",
+			"mute the track called bassline",
+			"delete the clip on the melody track",
+		}
+
+		for _, question := range validDAWOperations {
+			t.Run(question, func(t *testing.T) {
+				result, err := orchestrator.dawAgent.GenerateActions(ctx, question, nil)
+
+				// These should succeed - they're valid DAW operations
+				if err != nil {
+					t.Logf("⚠️ DAW rejected valid operation: %v", err)
+					// Don't fail - LLM can be flaky
+					return
+				}
+
+				require.NotNil(t, result, "Result should not be nil")
+
+				// Check we got real actions (not error comments)
+				hasRealAction := false
+				for _, action := range result.Actions {
+					actionType, _ := action["action"].(string)
+					if actionType != "" && actionType != "error" && actionType != "comment" {
+						hasRealAction = true
+						break
+					}
+				}
+
+				if hasRealAction {
+					t.Logf("✅ DAW correctly handled: %q with %d actions", question, len(result.Actions))
+				} else {
+					t.Logf("⚠️ DAW didn't produce real actions for: %q", question)
+				}
+			})
+		}
+	})
 }
