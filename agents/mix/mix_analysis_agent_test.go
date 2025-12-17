@@ -327,6 +327,10 @@ func TestSyntheticDataGenerator_IssuesAffectData(t *testing.T) {
 }
 
 func TestMixAnalysisAgent_AccuracyComparison(t *testing.T) {
+	if os.Getenv("RUN_MIX_ACCURACY") != "1" {
+		t.Skip("set RUN_MIX_ACCURACY=1 to run live accuracy comparison (slow, hits OpenAI)")
+	}
+
 	cfg := getTestConfig(t)
 	agent := NewMixAnalysisAgent(cfg)
 	gen := NewSyntheticDataGenerator(999)

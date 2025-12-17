@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Conceptual-Machines/magda-agents-go/config"
@@ -486,7 +487,7 @@ Only recommend these REAPER built-in plugins:
 
 ## Frequency Ranges Reference
 - Sub bass: 20-60 Hz
-- Bass: 60-250 Hz  
+- Bass: 60-250 Hz
 - Low mids: 250-500 Hz (often muddy)
 - Mids: 500-2000 Hz (body, warmth)
 - High mids: 2000-4000 Hz (presence, clarity)
@@ -574,6 +575,8 @@ func (a *MixAnalysisAgent) Analyze(ctx context.Context, request *AnalysisRequest
 }
 
 func (a *MixAnalysisAgent) buildAnalysisPrompt(request *AnalysisRequest) (string, error) {
+	existingFXSections := a.buildExistingFXSections(request)
+
 	// Serialize analysis data for the prompt
 	analysisJSON, err := json.MarshalIndent(request.AnalysisData, "", "  ")
 	if err != nil {
@@ -592,10 +595,10 @@ func (a *MixAnalysisAgent) buildAnalysisPrompt(request *AnalysisRequest) (string
 ### Context
 %s
 
-### DSP Analysis Data
+%s### DSP Analysis Data
 %s
 
-`, request.Mode, string(contextJSON), string(analysisJSON))
+`, request.Mode, string(contextJSON), existingFXSections, string(analysisJSON))
 
 	if request.UserRequest != "" {
 		prompt += fmt.Sprintf(`### User Request
@@ -612,6 +615,36 @@ func (a *MixAnalysisAgent) buildAnalysisPrompt(request *AnalysisRequest) (string
 Focus on the most impactful changes first.`
 
 	return prompt, nil
+}
+
+// buildExistingFXSections ensures the LLM receives full plugin parameter context for modification
+func (a *MixAnalysisAgent) buildExistingFXSections(request *AnalysisRequest) string {
+	var b strings.Builder
+
+	// Context-level FX (single track or master)
+	if request != nil && request.Context != nil && len(request.Context.ExistingFX) > 0 {
+		if data, err := json.MarshalIndent(request.Context.ExistingFX, "", "  "); err == nil {
+			b.WriteString("### Existing FX (Context)\n")
+			b.Write(data)
+			b.WriteString("\n\n")
+		}
+	}
+
+	// Track-level FX (multi-track analysis or when provided)
+	if request != nil && request.AnalysisData != nil {
+		for _, track := range request.AnalysisData.Tracks {
+			if len(track.ExistingFX) == 0 {
+				continue
+			}
+			if data, err := json.MarshalIndent(track.ExistingFX, "", "  "); err == nil {
+				b.WriteString(fmt.Sprintf("### Existing FX - Track %d (%s)\n", track.TrackIndex, track.TrackName))
+				b.Write(data)
+				b.WriteString("\n\n")
+			}
+		}
+	}
+
+	return b.String()
 }
 
 func (a *MixAnalysisAgent) parseResponse(resp *llm.GenerationResponse) (*AnalysisResult, error) {
