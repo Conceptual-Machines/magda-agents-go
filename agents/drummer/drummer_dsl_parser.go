@@ -90,7 +90,7 @@ func (d *DrummerDSL) Pattern(args gs.Args) error {
 	}
 
 	action := map[string]any{
-		"type":     "drum_pattern",
+		"action":   "drum_pattern",
 		"drum":     drumName,
 		"grid":     grid,
 		"velocity": velocity,

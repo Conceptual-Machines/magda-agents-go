@@ -70,7 +70,7 @@ func TestDrummerDSLParser_ParsePattern(t *testing.T) {
 			require.Len(t, actions, 1)
 
 			action := actions[0]
-			assert.Equal(t, "drum_pattern", action["type"])
+			assert.Equal(t, "drum_pattern", action["action"])
 			assert.Equal(t, tt.expectedDrum, action["drum"])
 			assert.Equal(t, tt.expectedGrid, action["grid"])
 			assert.Equal(t, tt.expectedHits, countHits(action["grid"].(string)))
@@ -91,7 +91,7 @@ func TestDrummerDSLParser_ActionFormat(t *testing.T) {
 	action := actions[0]
 
 	// Check action has all expected fields
-	assert.Equal(t, "drum_pattern", action["type"])
+	assert.Equal(t, "drum_pattern", action["action"])
 	assert.Equal(t, "kick", action["drum"])
 	assert.Equal(t, "x---x---", action["grid"])
 	assert.Equal(t, 110, action["velocity"])
