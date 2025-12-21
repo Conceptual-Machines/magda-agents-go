@@ -53,6 +53,46 @@ func TestJSFXAgent_SimpleGain(t *testing.T) {
 	assert.True(t, strings.Contains(result.JSFXCode, "@sample") || strings.Contains(result.JSFXCode, "spl0"), "Should have sample processing")
 }
 
+// TestJSFXAgent_WithDescription tests generating JSFX with a separate description call
+func TestJSFXAgent_WithDescription(t *testing.T) {
+	cfg := getTestConfig()
+	skipIfNoAPIKey(t, cfg)
+
+	agent := NewJSFXAgent(cfg)
+	ctx := context.Background()
+
+	inputArray := []map[string]any{
+		{
+			"role":    "user",
+			"content": "Create a stereo compressor with threshold, ratio, attack, and release controls",
+		},
+	}
+
+	// Use GenerateWithDescription to get both code and description
+	result, err := agent.GenerateWithDescription(ctx, "gpt-5.2", inputArray)
+	require.NoError(t, err, "Failed to generate JSFX with description")
+	require.NotNil(t, result)
+
+	t.Logf("📝 Description: %s", result.Description)
+	t.Logf("📄 Generated JSFX Code:\n%s", result.JSFXCode)
+
+	// Verify code is valid
+	assert.NotEmpty(t, result.JSFXCode, "JSFX code should not be empty")
+	assert.True(t, strings.Contains(result.JSFXCode, "desc:"), "Should have desc:")
+
+	// Verify description is present and meaningful
+	assert.NotEmpty(t, result.Description, "Should have a description")
+	t.Logf("✅ Description length: %d chars", len(result.Description))
+
+	// Description should mention relevant terms
+	descLower := strings.ToLower(result.Description)
+	hasRelevantTerm := strings.Contains(descLower, "compressor") ||
+		strings.Contains(descLower, "dynamics") ||
+		strings.Contains(descLower, "threshold") ||
+		strings.Contains(descLower, "audio")
+	assert.True(t, hasRelevantTerm, "Description should mention relevant audio terms")
+}
+
 // TestJSFXAgent_Compressor tests generating a compressor effect
 func TestJSFXAgent_Compressor(t *testing.T) {
 	cfg := getTestConfig()
@@ -251,6 +291,49 @@ func TestJSFXAgent_ConversationalFlow(t *testing.T) {
 
 	// Verify the second result has additional processing
 	assert.NotEqual(t, result1.JSFXCode, result2.JSFXCode, "Second result should be different")
+}
+
+// TestJSFXAgent_Streaming tests real-time streaming generation
+func TestJSFXAgent_Streaming(t *testing.T) {
+	cfg := getTestConfig()
+	skipIfNoAPIKey(t, cfg)
+
+	agent := NewJSFXAgent(cfg)
+	ctx := context.Background()
+
+	inputArray := []map[string]any{
+		{
+			"role":    "user",
+			"content": "Create a simple stereo gain plugin with a gain slider",
+		},
+	}
+
+	// Track streaming events
+	var chunks []string
+	var totalChars int
+	callbackCount := 0
+
+	callback := func(chunk string) error {
+		callbackCount++
+		chunks = append(chunks, chunk)
+		totalChars += len(chunk)
+		if callbackCount <= 5 {
+			t.Logf("📥 Stream chunk #%d: %d chars", callbackCount, len(chunk))
+		}
+		return nil
+	}
+
+	result, err := agent.GenerateStream(ctx, "gpt-5.2", inputArray, callback)
+	require.NoError(t, err, "Failed to stream generate JSFX")
+	require.NotNil(t, result)
+
+	t.Logf("📊 Streaming stats: %d callbacks, %d total chars streamed", callbackCount, totalChars)
+	t.Logf("📄 Final JSFX Code:\n%s", result.JSFXCode)
+
+	// Verify streaming worked
+	assert.Greater(t, callbackCount, 0, "Should have received at least one streaming callback")
+	assert.NotEmpty(t, result.JSFXCode, "JSFX code should not be empty")
+	assert.True(t, strings.Contains(result.JSFXCode, "desc:"), "Should have desc:")
 }
 
 // TestJSFXAgent_OutputValidity tests that generated JSFX has valid syntax structure

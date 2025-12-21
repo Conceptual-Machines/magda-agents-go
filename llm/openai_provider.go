@@ -313,9 +313,15 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 		return result, nil
 	}
 
-	// This should never happen for MAGDA, but handle it gracefully
-	transaction.SetTag("success", "false")
-	return nil, fmt.Errorf("CFG grammar or OutputSchema is required")
+	// Handle plain text output (no CFG or schema - just return raw text)
+	// This is useful for simple tasks like generating descriptions
+	result, err := p.processResponsePlainText(resp, startTime, transaction)
+	if err != nil {
+		return nil, err
+	}
+	transaction.SetTag("success", "true")
+	transaction.SetTag("output_type", "plain_text")
+	return result, nil
 }
 
 // buildRequestParams converts GenerationRequest to OpenAI-specific ResponseNewParams
@@ -882,6 +888,37 @@ func (p *OpenAIProvider) processResponseWithJSONSchema(
 	}, nil
 }
 
+// processResponsePlainText extracts plain text output from OpenAI response (no schema/grammar)
+// This is useful for simple tasks like generating descriptions
+func (p *OpenAIProvider) processResponsePlainText(
+	resp *responses.Response,
+	startTime time.Time,
+	transaction *sentry.Span,
+) (*GenerationResponse, error) {
+	span := transaction.StartChild("process_response_plaintext")
+	defer span.Finish()
+
+	// Extract text output
+	textOutput := p.extractAndCleanTextOutput(resp)
+	log.Printf("📥 OPENAI PLAIN TEXT RESPONSE: output_length=%d, tokens=%d",
+		len(textOutput), resp.Usage.TotalTokens)
+
+	if textOutput == "" {
+		return nil, fmt.Errorf("openai response did not include any output text")
+	}
+
+	// Log usage stats
+	p.logUsageStats(resp.Usage)
+
+	duration := time.Since(startTime)
+	log.Printf("✅ OPENAI PLAIN TEXT COMPLETED in %v", duration)
+
+	return &GenerationResponse{
+		RawOutput: textOutput,
+		Usage:     resp.Usage,
+	}, nil
+}
+
 // analyzeMCPUsage checks if MCP was used and returns usage details
 func (p *OpenAIProvider) analyzeMCPUsage(resp *responses.Response) (bool, int, []string) {
 	mcpUsed := false
@@ -985,4 +1022,184 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// GenerateStream implements streaming generation using OpenAI's Responses API
+// It streams text chunks as they arrive from the LLM and calls the callback for each chunk
+func (p *OpenAIProvider) GenerateStream(
+	ctx context.Context,
+	request *GenerationRequest,
+	callback StreamCallback,
+) (*GenerationResponse, error) {
+	startTime := time.Now()
+	log.Printf("🎵 OPENAI STREAMING GENERATION REQUEST STARTED (Model: %s)", request.Model)
+
+	// Start Sentry transaction
+	transaction := sentry.StartTransaction(ctx, "openai.generate_stream")
+	defer transaction.Finish()
+
+	transaction.SetTag("model", request.Model)
+	transaction.SetTag("provider", "openai")
+	transaction.SetTag("streaming", "true")
+
+	// Build OpenAI-specific request parameters
+	params := p.buildRequestParams(request)
+
+	// Send initial event
+	if callback != nil {
+		_ = callback(StreamEvent{Type: "started", Message: "Starting generation..."})
+	}
+
+	log.Printf("🚀 OPENAI STREAMING REQUEST: model=%s", request.Model)
+
+	// Call OpenAI streaming API
+	span := transaction.StartChild("openai.api_stream")
+	stream := p.client.Responses.NewStreaming(ctx, params)
+	defer stream.Close()
+
+	// Accumulate text and track usage
+	var accumulatedText string
+	var finalResponse *responses.Response
+	eventCount := 0
+
+	// Process stream events
+	for stream.Next() {
+		event := stream.Current()
+		eventCount++
+
+		// Log event type for debugging (first few events only)
+		if eventCount <= maxLogEventCountOpenAI {
+			log.Printf("📥 Stream event #%d: type=%s", eventCount, event.Type)
+		}
+
+		// Handle different event types
+		switch event.Type {
+		case "response.output_text.delta":
+			// Text delta - this is what we want to stream
+			// Use AsResponseOutputTextDelta() to get the properly typed event
+			textDelta := event.AsResponseOutputTextDelta()
+			delta := textDelta.Delta
+			if delta != "" {
+				accumulatedText += delta
+				if callback != nil {
+					_ = callback(StreamEvent{
+						Type:    "text_delta",
+						Message: delta,
+						Data: map[string]interface{}{
+							"accumulated_length": len(accumulatedText),
+						},
+					})
+				}
+			}
+
+		case "response.output_text.done":
+			// Text output complete
+			log.Printf("✅ Text output complete: %d chars accumulated", len(accumulatedText))
+
+		case "response.completed":
+			// Response complete - extract final response
+			completedEvent := event.AsResponseCompleted()
+			finalResponse = &completedEvent.Response
+			log.Printf("✅ Response completed")
+
+		case "response.failed":
+			// Handle failure
+			failedEvent := event.AsResponseFailed()
+			log.Printf("❌ Stream failed: %s", failedEvent.Response.Error.Message)
+			span.Finish()
+			transaction.SetTag("success", "false")
+			return nil, fmt.Errorf("streaming failed: %s", failedEvent.Response.Error.Message)
+
+		case "error":
+			// Handle error event
+			errorEvent := event.AsError()
+			log.Printf("❌ Stream error: %s", errorEvent.Message)
+			span.Finish()
+			transaction.SetTag("success", "false")
+			return nil, fmt.Errorf("stream error: %s", errorEvent.Message)
+
+		case "response.function_call_arguments.delta":
+			// CFG tool call arguments streaming (for DSL output)
+			delta := event.Arguments
+			if delta != "" {
+				accumulatedText += delta
+				if callback != nil {
+					_ = callback(StreamEvent{
+						Type:    "text_delta",
+						Message: delta,
+						Data: map[string]interface{}{
+							"accumulated_length": len(accumulatedText),
+							"is_tool_call":       true,
+						},
+					})
+				}
+			}
+
+		case "response.function_call_arguments.done":
+			// Tool call arguments complete
+			log.Printf("✅ Tool call arguments complete: %d chars", len(accumulatedText))
+
+		default:
+			// Log other event types for debugging
+			if eventCount <= maxLogEventCountOpenAI {
+				log.Printf("📋 Other event type: %s", event.Type)
+			}
+		}
+
+		// Send periodic heartbeat
+		if eventCount%50 == 0 {
+			elapsed := time.Since(startTime)
+			if callback != nil {
+				_ = callback(StreamEvent{
+					Type:    "heartbeat",
+					Message: "Processing...",
+					Data: map[string]interface{}{
+						"events_received": eventCount,
+						"elapsed_seconds": int(elapsed.Seconds()),
+					},
+				})
+			}
+		}
+	}
+
+	span.Finish()
+
+	// Check for stream error
+	if err := stream.Err(); err != nil {
+		log.Printf("❌ Stream error: %v", err)
+		transaction.SetTag("success", "false")
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Log completion
+	duration := time.Since(startTime)
+	log.Printf("✅ OPENAI STREAMING COMPLETE: %d events, %d chars, %v duration",
+		eventCount, len(accumulatedText), duration)
+
+	// Send completion event
+	if callback != nil {
+		_ = callback(StreamEvent{
+			Type:    "completed",
+			Message: "Generation complete",
+			Data: map[string]interface{}{
+				"total_length": len(accumulatedText),
+				"event_count":  eventCount,
+			},
+		})
+	}
+
+	// Build response
+	response := &GenerationResponse{
+		RawOutput: accumulatedText,
+	}
+
+	// Extract usage from final response if available
+	if finalResponse != nil {
+		response.Usage = finalResponse.Usage
+		p.logUsageStats(finalResponse.Usage)
+	}
+
+	transaction.SetTag("success", "true")
+	return response, nil
 }

@@ -17,6 +17,16 @@ type Provider interface {
 	Name() string
 }
 
+// StreamingProvider extends Provider with streaming capabilities
+type StreamingProvider interface {
+	Provider
+
+	// GenerateStream creates a streaming generation request
+	// The callback is called for each chunk of text as it arrives from the LLM
+	// Returns the final response once streaming is complete
+	GenerateStream(ctx context.Context, request *GenerationRequest, callback StreamCallback) (*GenerationResponse, error)
+}
+
 // GenerationRequest contains all parameters needed for generation
 type GenerationRequest struct {
 	Model         string
