@@ -22,9 +22,10 @@ type JSFXAgent struct {
 
 // JSFXResult contains the generated JSFX effect
 type JSFXResult struct {
-	DSL      string `json:"dsl"`       // Raw DSL code from LLM
-	JSFXCode string `json:"jsfx_code"` // Complete JSFX file content
-	Usage    any    `json:"usage"`
+	DSL        string `json:"dsl"`                  // Raw DSL code from LLM
+	JSFXCode   string `json:"jsfx_code"`            // Complete JSFX file content
+	ParseError string `json:"parse_error,omitempty"` // Parser error if any (for human-in-the-loop)
+	Usage      any    `json:"usage"`
 }
 
 // NewJSFXAgent creates a new JSFX agent
@@ -102,16 +103,30 @@ func (a *JSFXAgent) Generate(
 	log.Printf("🔧 DSL Output: %s", dslCode)
 
 	// Parse DSL and generate JSFX code directly (using Grammar School for validation)
+	// On parse errors, return the DSL + error for human-in-the-loop feedback
 	parser, err := NewJSFXDSLParser()
 	if err != nil {
 		transaction.SetTag("success", "false")
-		return nil, fmt.Errorf("failed to create DSL parser: %w", err)
+		log.Printf("⚠️ JSFX Parser creation failed: %v", err)
+		return &JSFXResult{
+			DSL:        dslCode,
+			JSFXCode:   "",
+			ParseError: fmt.Sprintf("Parser initialization failed: %v", err),
+			Usage:      resp.Usage,
+		}, nil // Return result with error, not a fatal error
 	}
 
 	jsfxCode, err := parser.ParseDSL(dslCode)
 	if err != nil {
-		transaction.SetTag("success", "false")
-		return nil, fmt.Errorf("failed to parse DSL: %w", err)
+		transaction.SetTag("success", "partial")
+		log.Printf("⚠️ JSFX DSL parse failed: %v", err)
+		// Return DSL + error so user can provide feedback
+		return &JSFXResult{
+			DSL:        dslCode,
+			JSFXCode:   "",
+			ParseError: fmt.Sprintf("DSL parsing failed: %v", err),
+			Usage:      resp.Usage,
+		}, nil // Return result with error, not a fatal error
 	}
 
 	result := &JSFXResult{
