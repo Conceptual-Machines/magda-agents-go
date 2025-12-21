@@ -44,14 +44,10 @@ func TestJSFXAgent_SimpleGain(t *testing.T) {
 	require.NoError(t, err, "Failed to generate JSFX")
 	require.NotNil(t, result)
 
-	t.Logf("📝 DSL Output:\n%s", result.DSL)
 	t.Logf("📄 Generated JSFX Code:\n%s", result.JSFXCode)
 
-	// Verify structure
-	assert.NotEmpty(t, result.DSL, "DSL should not be empty")
-	assert.NotEmpty(t, result.JSFXCode, "JSFX code should not be empty")
-
 	// Verify JSFX contains expected elements
+	assert.NotEmpty(t, result.JSFXCode, "JSFX code should not be empty")
 	assert.True(t, strings.Contains(result.JSFXCode, "desc:"), "Should have desc:")
 	assert.True(t, strings.Contains(result.JSFXCode, "slider"), "Should have slider")
 	assert.True(t, strings.Contains(result.JSFXCode, "@sample") || strings.Contains(result.JSFXCode, "spl0"), "Should have sample processing")
@@ -76,7 +72,6 @@ func TestJSFXAgent_Compressor(t *testing.T) {
 	require.NoError(t, err, "Failed to generate JSFX")
 	require.NotNil(t, result)
 
-	t.Logf("📝 DSL Output:\n%s", result.DSL)
 	t.Logf("📄 Generated JSFX Code:\n%s", result.JSFXCode)
 
 	// Verify structure
@@ -109,7 +104,6 @@ func TestJSFXAgent_LowpassFilter(t *testing.T) {
 	require.NoError(t, err, "Failed to generate JSFX")
 	require.NotNil(t, result)
 
-	t.Logf("📝 DSL Output:\n%s", result.DSL)
 	t.Logf("📄 Generated JSFX Code:\n%s", result.JSFXCode)
 
 	// Verify structure
@@ -140,7 +134,6 @@ func TestJSFXAgent_Delay(t *testing.T) {
 	require.NoError(t, err, "Failed to generate JSFX")
 	require.NotNil(t, result)
 
-	t.Logf("📝 DSL Output:\n%s", result.DSL)
 	t.Logf("📄 Generated JSFX Code:\n%s", result.JSFXCode)
 
 	// Verify structure
@@ -173,7 +166,6 @@ func TestJSFXAgent_MIDITranspose(t *testing.T) {
 	require.NoError(t, err, "Failed to generate JSFX")
 	require.NotNil(t, result)
 
-	t.Logf("📝 DSL Output:\n%s", result.DSL)
 	t.Logf("📄 Generated JSFX Code:\n%s", result.JSFXCode)
 
 	// Verify structure
@@ -204,7 +196,6 @@ func TestJSFXAgent_Saturator(t *testing.T) {
 	require.NoError(t, err, "Failed to generate JSFX")
 	require.NotNil(t, result)
 
-	t.Logf("📝 DSL Output:\n%s", result.DSL)
 	t.Logf("📄 Generated JSFX Code:\n%s", result.JSFXCode)
 
 	// Verify structure
@@ -235,7 +226,7 @@ func TestJSFXAgent_ConversationalFlow(t *testing.T) {
 	result1, err := agent.Generate(ctx, "gpt-5.2", inputArray)
 	require.NoError(t, err, "Failed to generate first JSFX")
 
-	t.Logf("📝 Turn 1 - Basic Gain:\n%s", result1.JSFXCode)
+	t.Logf("📄 Turn 1 - Basic Gain:\n%s", result1.JSFXCode)
 
 	// Second turn: add feature (simulated by adding to conversation)
 	inputArray2 := []map[string]any{
@@ -244,9 +235,8 @@ func TestJSFXAgent_ConversationalFlow(t *testing.T) {
 			"content": "Create a simple gain plugin",
 		},
 		{
-			"role":      "assistant",
-			"content":   result1.DSL,
-			"tool_call": true,
+			"role":    "assistant",
+			"content": result1.JSFXCode,
 		},
 		{
 			"role":    "user",
@@ -257,7 +247,7 @@ func TestJSFXAgent_ConversationalFlow(t *testing.T) {
 	result2, err := agent.Generate(ctx, "gpt-5.2", inputArray2)
 	require.NoError(t, err, "Failed to generate second JSFX")
 
-	t.Logf("📝 Turn 2 - Gain + Soft Clipper:\n%s", result2.JSFXCode)
+	t.Logf("📄 Turn 2 - Gain + Soft Clipper:\n%s", result2.JSFXCode)
 
 	// Verify the second result has additional processing
 	assert.NotEqual(t, result1.JSFXCode, result2.JSFXCode, "Second result should be different")

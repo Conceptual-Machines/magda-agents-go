@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Conceptual-Machines/magda-agents-go/config"
@@ -12,7 +13,7 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-// JSFXAgent generates JSFX audio effects using LLM + CFG grammar
+// JSFXAgent generates JSFX audio effects using LLM with direct EEL2 output
 // Based on REAPER JSFX: https://www.reaper.fm/sdk/js/js.php
 type JSFXAgent struct {
 	provider     llm.Provider
@@ -22,10 +23,9 @@ type JSFXAgent struct {
 
 // JSFXResult contains the generated JSFX effect
 type JSFXResult struct {
-	DSL        string `json:"dsl"`                   // Raw DSL code from LLM
-	JSFXCode   string `json:"jsfx_code"`             // Complete JSFX file content
-	ParseError string `json:"parse_error,omitempty"` // Parser error if any (for human-in-the-loop)
-	Usage      any    `json:"usage"`
+	JSFXCode     string `json:"jsfx_code"`               // Complete JSFX file content (direct from LLM)
+	CompileError string `json:"compile_error,omitempty"` // EEL2 compile error if validation enabled
+	Usage        any    `json:"usage"`
 }
 
 // NewJSFXAgent creates a new JSFX agent
@@ -40,7 +40,7 @@ func NewJSFXAgentWithProvider(cfg *config.Config, provider llm.Provider) *JSFXAg
 		provider = llm.NewOpenAIProvider(cfg.OpenAIAPIKey)
 	}
 
-	systemPrompt := llm.GetJSFXSystemPrompt()
+	systemPrompt := llm.GetJSFXDirectSystemPrompt()
 
 	agent := &JSFXAgent{
 		provider:     provider,
@@ -48,7 +48,7 @@ func NewJSFXAgentWithProvider(cfg *config.Config, provider llm.Provider) *JSFXAg
 		metrics:      metrics.NewSentryMetrics(),
 	}
 
-	log.Printf("🔧 JSFX AGENT INITIALIZED:")
+	log.Printf("🔧 JSFX AGENT INITIALIZED (Direct EEL2 mode):")
 	log.Printf("   Provider: %s", provider.Name())
 
 	return agent
@@ -69,15 +69,15 @@ func (a *JSFXAgent) Generate(
 
 	transaction.SetTag("model", model)
 
-	// Build provider request with CFG grammar
+	// Build provider request with CFG grammar for structure validation
 	request := &llm.GenerationRequest{
 		Model:        model,
 		InputArray:   inputArray,
 		SystemPrompt: a.systemPrompt,
 		CFGGrammar: &llm.CFGConfig{
-			ToolName:    "jsfx_dsl",
+			ToolName:    "jsfx_generator",
 			Description: buildJSFXToolDescription(),
-			Grammar:     llm.GetJSFXDSLGrammar(),
+			Grammar:     llm.GetJSFXGrammar(),
 			Syntax:      "lark",
 		},
 	}
@@ -93,44 +93,22 @@ func (a *JSFXAgent) Generate(
 		return nil, fmt.Errorf("provider request failed: %w", err)
 	}
 
-	// Extract DSL from response
-	dslCode := resp.RawOutput
-	if dslCode == "" {
+	// Extract JSFX code directly from response
+	jsfxCode := resp.RawOutput
+	if jsfxCode == "" {
 		transaction.SetTag("success", "false")
-		return nil, fmt.Errorf("no DSL output in response")
+		return nil, fmt.Errorf("no JSFX output in response")
 	}
 
-	log.Printf("🔧 DSL Output: %s", dslCode)
+	// Clean up the output (remove any markdown code fences if present)
+	jsfxCode = cleanJSFXOutput(jsfxCode)
 
-	// Parse DSL and generate JSFX code directly (using Grammar School for validation)
-	// On parse errors, return the DSL + error for human-in-the-loop feedback
-	parser, err := NewJSFXDSLParser()
-	if err != nil {
-		transaction.SetTag("success", "false")
-		log.Printf("⚠️ JSFX Parser creation failed: %v", err)
-		return &JSFXResult{
-			DSL:        dslCode,
-			JSFXCode:   "",
-			ParseError: fmt.Sprintf("Parser initialization failed: %v", err),
-			Usage:      resp.Usage,
-		}, nil // Return result with error, not a fatal error
-	}
+	log.Printf("🔧 JSFX Output (%d bytes):\n%s", len(jsfxCode), truncateForLog(jsfxCode, 500))
 
-	jsfxCode, err := parser.ParseDSL(dslCode)
-	if err != nil {
-		transaction.SetTag("success", "partial")
-		log.Printf("⚠️ JSFX DSL parse failed: %v", err)
-		// Return DSL + error so user can provide feedback
-		return &JSFXResult{
-			DSL:        dslCode,
-			JSFXCode:   "",
-			ParseError: fmt.Sprintf("DSL parsing failed: %v", err),
-			Usage:      resp.Usage,
-		}, nil // Return result with error, not a fatal error
-	}
+	// TODO: Add EEL2 compilation validation here
+	// compileErr := validateEEL2(jsfxCode)
 
 	result := &JSFXResult{
-		DSL:      dslCode,
 		JSFXCode: jsfxCode,
 		Usage:    resp.Usage,
 	}
@@ -141,22 +119,57 @@ func (a *JSFXAgent) Generate(
 	duration := time.Since(startTime)
 	a.metrics.RecordGenerationDuration(ctx, duration, true)
 
-	log.Printf("✅ JSFX COMPLETE: %d bytes of DSL, %d bytes of JSFX code", len(dslCode), len(jsfxCode))
+	log.Printf("✅ JSFX COMPLETE: %d bytes of JSFX code", len(jsfxCode))
 
 	return result, nil
 }
 
+// cleanJSFXOutput removes markdown code fences and trims whitespace
+func cleanJSFXOutput(code string) string {
+	code = strings.TrimSpace(code)
+
+	// Remove markdown code fences if present
+	if strings.HasPrefix(code, "```") {
+		lines := strings.Split(code, "\n")
+		if len(lines) > 2 {
+			// Remove first line (```jsfx or ```)
+			lines = lines[1:]
+			// Remove last line if it's just ```
+			if strings.TrimSpace(lines[len(lines)-1]) == "```" {
+				lines = lines[:len(lines)-1]
+			}
+			code = strings.Join(lines, "\n")
+		}
+	}
+
+	return strings.TrimSpace(code)
+}
+
+// truncateForLog truncates a string for logging
+func truncateForLog(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
 // buildJSFXToolDescription creates the tool description for CFG
 func buildJSFXToolDescription() string {
-	return `Generate JSFX audio effects for REAPER. Define the effect structure using DSL:
+	return `Generate complete JSFX audio effects for REAPER.
+Output raw JSFX/EEL2 code that can be saved directly as a .jsfx file.
 
-effect(name="Effect Name", tags="category");
-slider(id=1, default=0, min=-60, max=0, step=0.1, name="Gain (dB)");
-init_code(code="gain = 1;");
-slider_code(code="gain = 10^(slider1/20);");
-sample_code(code="spl0 *= gain; spl1 *= gain;")
+Structure:
+desc:Effect Name
+tags:category
+in_pin:Left / in_pin:Right
+out_pin:Left / out_pin:Right
+slider1:var=default<min,max,step>Label
+@init (initialization)
+@slider (parameter changes)
+@sample (per-sample processing)
+@gfx (optional graphics)
 
-Effect types: compressor, limiter, eq, filter, distortion, delay, reverb, chorus, flanger, phaser, gate
+Effect types: filter, compressor, limiter, eq, distortion, delay, reverb, chorus, modulation, utility
 Audio vars: spl0-spl63, srate, samplesblock
-Math: sin, cos, log, exp, pow, sqrt, abs, min, max`
+Math: sin, cos, log, exp, pow, sqrt, abs, min, max, $pi`
 }
