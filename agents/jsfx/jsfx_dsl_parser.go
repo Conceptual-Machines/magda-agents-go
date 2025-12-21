@@ -243,3 +243,112 @@ func (d *JSFXDSL) GfxCode(args gs.Args) error {
 	return nil
 }
 
+// Pin handles pin() calls - defines audio input/output pins
+func (d *JSFXDSL) Pin(args gs.Args) error {
+	p := d.parser
+
+	action := map[string]any{
+		"action": "pin",
+	}
+
+	if typeValue, ok := args["type"]; ok && typeValue.Kind == gs.ValueString {
+		action["type"] = strings.Trim(typeValue.Str, "\"")
+	}
+
+	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
+		action["name"] = strings.Trim(nameValue.Str, "\"")
+	}
+
+	if channelValue, ok := args["channel"]; ok && channelValue.Kind == gs.ValueNumber {
+		action["channel"] = channelValue.Num
+	}
+
+	p.actions = append(p.actions, action)
+	log.Printf("📍 Pin: type=%v, name=%v, channel=%v", action["type"], action["name"], action["channel"])
+
+	return nil
+}
+
+// Import handles import() calls - includes other JSFX files
+func (d *JSFXDSL) Import(args gs.Args) error {
+	p := d.parser
+
+	action := map[string]any{
+		"action": "import",
+	}
+
+	if fileValue, ok := args["file"]; ok && fileValue.Kind == gs.ValueString {
+		action["file"] = strings.Trim(fileValue.Str, "\"")
+	}
+
+	p.actions = append(p.actions, action)
+	log.Printf("📦 Import: file=%v", action["file"])
+
+	return nil
+}
+
+// Option handles option() calls - sets JSFX options
+func (d *JSFXDSL) Option(args gs.Args) error {
+	p := d.parser
+
+	action := map[string]any{
+		"action": "option",
+	}
+
+	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
+		action["name"] = strings.Trim(nameValue.Str, "\"")
+	}
+
+	if valueValue, ok := args["value"]; ok && valueValue.Kind == gs.ValueString {
+		action["value"] = strings.Trim(valueValue.Str, "\"")
+	}
+
+	p.actions = append(p.actions, action)
+	log.Printf("⚙️ Option: name=%v, value=%v", action["name"], action["value"])
+
+	return nil
+}
+
+// Filename handles filename() calls - references external files
+func (d *JSFXDSL) Filename(args gs.Args) error {
+	p := d.parser
+
+	action := map[string]any{
+		"action": "filename",
+	}
+
+	if idValue, ok := args["id"]; ok && idValue.Kind == gs.ValueNumber {
+		action["id"] = idValue.Num
+	}
+
+	if pathValue, ok := args["path"]; ok && pathValue.Kind == gs.ValueString {
+		action["path"] = strings.Trim(pathValue.Str, "\"")
+	}
+
+	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
+		action["name"] = strings.Trim(nameValue.Str, "\"")
+	}
+
+	p.actions = append(p.actions, action)
+	log.Printf("📁 Filename: id=%v, path=%v", action["id"], action["path"])
+
+	return nil
+}
+
+// SerializeCode handles serialize_code() calls - @serialize section
+func (d *JSFXDSL) SerializeCode(args gs.Args) error {
+	p := d.parser
+
+	action := map[string]any{
+		"action": "serialize_code",
+	}
+
+	if codeValue, ok := args["code"]; ok && codeValue.Kind == gs.ValueString {
+		action["code"] = codeValue.Str
+	}
+
+	p.actions = append(p.actions, action)
+	log.Printf("💾 Serialize code: %d chars", len(action["code"].(string)))
+
+	return nil
+}

@@ -183,3 +183,93 @@ sample_code(code="y0l = a0*spl0 + a1*x1l + a2*x2l - b1*y1l - b2*y2l; x2l=x1l; x1
 	}
 }
 
+func TestJSFXDSLParser_FullFeaturedEffect(t *testing.T) {
+	parser, err := NewJSFXDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	// Test with pins, imports, options, and all code sections
+	dsl := `effect(name="Stereo Processor", tags="utility stereo");
+pin(type=in, name="Left In", channel=0);
+pin(type=in, name="Right In", channel=1);
+pin(type=out, name="Left Out", channel=0);
+pin(type=out, name="Right Out", channel=1);
+slider(id=1, default=0, min=-12, max=12, step=0.1, name="Gain (dB)");
+slider(id=2, default=100, min=0, max=200, step=1, name="Width (%)");
+init_code(code="gain = 1; width = 1;");
+slider_code(code="gain = 10^(slider1/20); width = slider2/100;");
+sample_code(code="mid = (spl0+spl1)*0.5; side = (spl0-spl1)*0.5*width; spl0 = (mid+side)*gain; spl1 = (mid-side)*gain;");
+gfx_code(code="gfx_set(1,1,1); gfx_drawstr(\"Stereo Processor\");", width=300, height=100)`
+
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("Failed to parse DSL: %v", err)
+	}
+
+	// 1 effect + 4 pins + 2 sliders + 3 code sections + 1 gfx = 11 actions
+	if len(actions) != 11 {
+		t.Errorf("Expected 11 actions, got %d", len(actions))
+	}
+
+	jsfxCode := generateJSFXCode(actions)
+
+	// Verify all sections
+	if !strings.Contains(jsfxCode, "desc:Stereo Processor") {
+		t.Errorf("Missing effect desc")
+	}
+	if !strings.Contains(jsfxCode, "in_pin:Left In") {
+		t.Errorf("Missing input pin")
+	}
+	if !strings.Contains(jsfxCode, "out_pin:Left Out") {
+		t.Errorf("Missing output pin")
+	}
+	if !strings.Contains(jsfxCode, "slider1:") {
+		t.Errorf("Missing slider definition")
+	}
+	if !strings.Contains(jsfxCode, "@init") {
+		t.Errorf("Missing @init section")
+	}
+	if !strings.Contains(jsfxCode, "@sample") {
+		t.Errorf("Missing @sample section")
+	}
+	if !strings.Contains(jsfxCode, "@gfx 300 100") {
+		t.Errorf("Missing @gfx section with dimensions")
+	}
+	if !strings.Contains(jsfxCode, "mid+side") {
+		t.Errorf("Missing M/S processing code")
+	}
+}
+
+func TestJSFXDSLParser_MIDIEffect(t *testing.T) {
+	parser, err := NewJSFXDSLParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	dsl := `effect(name="MIDI Transpose", tags="midi utility", type=midi);
+slider(id=1, default=0, min=-24, max=24, step=1, name="Semitones");
+block_code(code="while (midirecv(offset, msg1, msg2, msg3)) ( status = msg1 & 0xF0; status == 0x90 || status == 0x80 ? ( msg2 = max(0, min(127, msg2 + slider1)); ); midisend(offset, msg1, msg2, msg3); );")`
+
+	actions, err := parser.ParseDSL(dsl)
+	if err != nil {
+		t.Fatalf("Failed to parse DSL: %v", err)
+	}
+
+	// 1 effect + 1 slider + 1 block_code = 3 actions
+	if len(actions) != 3 {
+		t.Errorf("Expected 3 actions, got %d", len(actions))
+	}
+
+	jsfxCode := generateJSFXCode(actions)
+	if !strings.Contains(jsfxCode, "MIDI Transpose") {
+		t.Errorf("Missing effect name")
+	}
+	if !strings.Contains(jsfxCode, "@block") {
+		t.Errorf("Missing @block section")
+	}
+	if !strings.Contains(jsfxCode, "midirecv") {
+		t.Errorf("Missing MIDI code")
+	}
+}
+

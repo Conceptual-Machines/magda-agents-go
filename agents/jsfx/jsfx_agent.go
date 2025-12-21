@@ -145,10 +145,16 @@ func generateJSFXCode(actions []map[string]any) string {
 	effectName := "AI Generated Effect"
 	effectTags := "utility"
 	var sliders []map[string]any
+	var inPins []map[string]any
+	var outPins []map[string]any
+	var imports []string
+	var options []map[string]any
+	var filenames []map[string]any
 	initCode := ""
 	sliderCode := ""
 	sampleCode := ""
 	blockCode := ""
+	serializeCode := ""
 	gfxCode := ""
 	gfxWidth := 0
 	gfxHeight := 0
@@ -165,6 +171,21 @@ func generateJSFXCode(actions []map[string]any) string {
 			}
 		case "slider":
 			sliders = append(sliders, action)
+		case "pin":
+			pinType, _ := action["type"].(string)
+			if pinType == "in" {
+				inPins = append(inPins, action)
+			} else if pinType == "out" {
+				outPins = append(outPins, action)
+			}
+		case "import":
+			if file, ok := action["file"].(string); ok {
+				imports = append(imports, file)
+			}
+		case "option":
+			options = append(options, action)
+		case "filename":
+			filenames = append(filenames, action)
 		case "init_code":
 			if code, ok := action["code"].(string); ok {
 				initCode = code
@@ -181,6 +202,10 @@ func generateJSFXCode(actions []map[string]any) string {
 			if code, ok := action["code"].(string); ok {
 				blockCode = code
 			}
+		case "serialize_code":
+			if code, ok := action["code"].(string); ok {
+				serializeCode = code
+			}
 		case "gfx_code":
 			if code, ok := action["code"].(string); ok {
 				gfxCode = code
@@ -194,9 +219,44 @@ func generateJSFXCode(actions []map[string]any) string {
 		}
 	}
 
-	// Build JSFX file
+	// Build JSFX file - Header section
 	sb.WriteString(fmt.Sprintf("desc:%s\n", effectName))
 	sb.WriteString(fmt.Sprintf("tags:%s\n", effectTags))
+
+	// Imports
+	for _, imp := range imports {
+		sb.WriteString(fmt.Sprintf("import %s\n", imp))
+	}
+
+	// Options
+	for _, opt := range options {
+		name, _ := opt["name"].(string)
+		if value, ok := opt["value"].(string); ok && value != "" {
+			sb.WriteString(fmt.Sprintf("options:%s=%s\n", name, value))
+		} else {
+			sb.WriteString(fmt.Sprintf("options:%s\n", name))
+		}
+	}
+
+	// Filenames
+	for _, fn := range filenames {
+		id := int(fn["id"].(float64))
+		path, _ := fn["path"].(string)
+		sb.WriteString(fmt.Sprintf("filename:%d,%s\n", id, path))
+	}
+
+	// Input pins
+	for _, pin := range inPins {
+		name, _ := pin["name"].(string)
+		sb.WriteString(fmt.Sprintf("in_pin:%s\n", name))
+	}
+
+	// Output pins
+	for _, pin := range outPins {
+		name, _ := pin["name"].(string)
+		sb.WriteString(fmt.Sprintf("out_pin:%s\n", name))
+	}
+
 	sb.WriteString("\n")
 
 	// Sliders
@@ -251,6 +311,13 @@ func generateJSFXCode(actions []map[string]any) string {
 	if sampleCode != "" {
 		sb.WriteString("\n@sample\n")
 		sb.WriteString(unescapeCode(sampleCode))
+		sb.WriteString("\n")
+	}
+
+	// @serialize section
+	if serializeCode != "" {
+		sb.WriteString("\n@serialize\n")
+		sb.WriteString(unescapeCode(serializeCode))
 		sb.WriteString("\n")
 	}
 
