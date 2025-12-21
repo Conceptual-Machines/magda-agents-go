@@ -23,7 +23,6 @@ repos:
     rev: v0.5.1
     hooks:
       - id: go-fmt
-      - id: go-vet
 
   # golangci-lint
   - repo: https://github.com/golangci/golangci-lint

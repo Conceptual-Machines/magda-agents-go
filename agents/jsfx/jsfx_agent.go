@@ -22,8 +22,8 @@ type JSFXAgent struct {
 
 // JSFXResult contains the generated JSFX effect
 type JSFXResult struct {
-	DSL        string `json:"dsl"`                  // Raw DSL code from LLM
-	JSFXCode   string `json:"jsfx_code"`            // Complete JSFX file content
+	DSL        string `json:"dsl"`                   // Raw DSL code from LLM
+	JSFXCode   string `json:"jsfx_code"`             // Complete JSFX file content
 	ParseError string `json:"parse_error,omitempty"` // Parser error if any (for human-in-the-loop)
 	Usage      any    `json:"usage"`
 }
