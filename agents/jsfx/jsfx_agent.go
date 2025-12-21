@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/Conceptual-Machines/magda-agents-go/config"
@@ -23,10 +22,9 @@ type JSFXAgent struct {
 
 // JSFXResult contains the generated JSFX effect
 type JSFXResult struct {
-	DSL      string           `json:"dsl"`       // Raw DSL code from LLM
-	Actions  []map[string]any `json:"actions"`   // Parsed actions from Grammar School
-	JSFXCode string           `json:"jsfx_code"` // Complete JSFX file content
-	Usage    any              `json:"usage"`
+	DSL      string `json:"dsl"`       // Raw DSL code from LLM
+	JSFXCode string `json:"jsfx_code"` // Complete JSFX file content
+	Usage    any    `json:"usage"`
 }
 
 // NewJSFXAgent creates a new JSFX agent
@@ -103,247 +101,34 @@ func (a *JSFXAgent) Generate(
 
 	log.Printf("🔧 DSL Output: %s", dslCode)
 
-	// Parse DSL using Grammar School to get actions
+	// Parse DSL and generate JSFX code directly (using Grammar School for validation)
 	parser, err := NewJSFXDSLParser()
 	if err != nil {
 		transaction.SetTag("success", "false")
 		return nil, fmt.Errorf("failed to create DSL parser: %w", err)
 	}
 
-	actions, err := parser.ParseDSL(dslCode)
+	jsfxCode, err := parser.ParseDSL(dslCode)
 	if err != nil {
 		transaction.SetTag("success", "false")
 		return nil, fmt.Errorf("failed to parse DSL: %w", err)
 	}
 
-	// Generate complete JSFX code from actions
-	jsfxCode := generateJSFXCode(actions)
-
 	result := &JSFXResult{
 		DSL:      dslCode,
-		Actions:  actions,
 		JSFXCode: jsfxCode,
 		Usage:    resp.Usage,
 	}
 
 	// Record metrics
 	transaction.SetTag("success", "true")
-	transaction.SetTag("action_count", fmt.Sprintf("%d", len(actions)))
 
 	duration := time.Since(startTime)
 	a.metrics.RecordGenerationDuration(ctx, duration, true)
 
-	log.Printf("✅ JSFX COMPLETE: %d actions, %d bytes of code", len(actions), len(jsfxCode))
+	log.Printf("✅ JSFX COMPLETE: %d bytes of DSL, %d bytes of JSFX code", len(dslCode), len(jsfxCode))
 
 	return result, nil
-}
-
-// generateJSFXCode converts parsed actions into a complete JSFX file
-func generateJSFXCode(actions []map[string]any) string {
-	var sb strings.Builder
-
-	effectName := "AI Generated Effect"
-	effectTags := "utility"
-	var sliders []map[string]any
-	var inPins []map[string]any
-	var outPins []map[string]any
-	var imports []string
-	var options []map[string]any
-	var filenames []map[string]any
-	initCode := ""
-	sliderCode := ""
-	sampleCode := ""
-	blockCode := ""
-	serializeCode := ""
-	gfxCode := ""
-	gfxWidth := 0
-	gfxHeight := 0
-
-	// Process actions
-	for _, action := range actions {
-		switch action["action"] {
-		case "effect":
-			if name, ok := action["name"].(string); ok {
-				effectName = name
-			}
-			if tags, ok := action["tags"].(string); ok {
-				effectTags = tags
-			}
-		case "slider":
-			sliders = append(sliders, action)
-		case "pin":
-			pinType, _ := action["type"].(string)
-			if pinType == "in" {
-				inPins = append(inPins, action)
-			} else if pinType == "out" {
-				outPins = append(outPins, action)
-			}
-		case "import":
-			if file, ok := action["file"].(string); ok {
-				imports = append(imports, file)
-			}
-		case "option":
-			options = append(options, action)
-		case "filename":
-			filenames = append(filenames, action)
-		case "init_code":
-			if code, ok := action["code"].(string); ok {
-				initCode = code
-			}
-		case "slider_code":
-			if code, ok := action["code"].(string); ok {
-				sliderCode = code
-			}
-		case "sample_code":
-			if code, ok := action["code"].(string); ok {
-				sampleCode = code
-			}
-		case "block_code":
-			if code, ok := action["code"].(string); ok {
-				blockCode = code
-			}
-		case "serialize_code":
-			if code, ok := action["code"].(string); ok {
-				serializeCode = code
-			}
-		case "gfx_code":
-			if code, ok := action["code"].(string); ok {
-				gfxCode = code
-			}
-			if w, ok := action["width"].(float64); ok {
-				gfxWidth = int(w)
-			}
-			if h, ok := action["height"].(float64); ok {
-				gfxHeight = int(h)
-			}
-		}
-	}
-
-	// Build JSFX file - Header section
-	sb.WriteString(fmt.Sprintf("desc:%s\n", effectName))
-	sb.WriteString(fmt.Sprintf("tags:%s\n", effectTags))
-
-	// Imports
-	for _, imp := range imports {
-		sb.WriteString(fmt.Sprintf("import %s\n", imp))
-	}
-
-	// Options
-	for _, opt := range options {
-		name, _ := opt["name"].(string)
-		if value, ok := opt["value"].(string); ok && value != "" {
-			sb.WriteString(fmt.Sprintf("options:%s=%s\n", name, value))
-		} else {
-			sb.WriteString(fmt.Sprintf("options:%s\n", name))
-		}
-	}
-
-	// Filenames
-	for _, fn := range filenames {
-		id := int(fn["id"].(float64))
-		path, _ := fn["path"].(string)
-		sb.WriteString(fmt.Sprintf("filename:%d,%s\n", id, path))
-	}
-
-	// Input pins
-	for _, pin := range inPins {
-		name, _ := pin["name"].(string)
-		sb.WriteString(fmt.Sprintf("in_pin:%s\n", name))
-	}
-
-	// Output pins
-	for _, pin := range outPins {
-		name, _ := pin["name"].(string)
-		sb.WriteString(fmt.Sprintf("out_pin:%s\n", name))
-	}
-
-	sb.WriteString("\n")
-
-	// Sliders
-	for _, slider := range sliders {
-		id := int(slider["id"].(float64))
-		defaultVal := slider["default"].(float64)
-		minVal := slider["min"].(float64)
-		maxVal := slider["max"].(float64)
-		step := 1.0
-		if s, ok := slider["step"].(float64); ok {
-			step = s
-		}
-		name := "Parameter"
-		if n, ok := slider["name"].(string); ok {
-			name = n
-		}
-		hidden := ""
-		if h, ok := slider["hidden"].(bool); ok && h {
-			hidden = "-"
-		}
-		varName := ""
-		if v, ok := slider["var"].(string); ok {
-			varName = v + "="
-		}
-
-		sb.WriteString(fmt.Sprintf("slider%d:%s%.2f<%.2f,%.2f,%.4f>%s%s\n",
-			id, varName, defaultVal, minVal, maxVal, step, hidden, name))
-	}
-
-	// @init section
-	if initCode != "" {
-		sb.WriteString("\n@init\n")
-		sb.WriteString(unescapeCode(initCode))
-		sb.WriteString("\n")
-	}
-
-	// @slider section
-	if sliderCode != "" {
-		sb.WriteString("\n@slider\n")
-		sb.WriteString(unescapeCode(sliderCode))
-		sb.WriteString("\n")
-	}
-
-	// @block section
-	if blockCode != "" {
-		sb.WriteString("\n@block\n")
-		sb.WriteString(unescapeCode(blockCode))
-		sb.WriteString("\n")
-	}
-
-	// @sample section
-	if sampleCode != "" {
-		sb.WriteString("\n@sample\n")
-		sb.WriteString(unescapeCode(sampleCode))
-		sb.WriteString("\n")
-	}
-
-	// @serialize section
-	if serializeCode != "" {
-		sb.WriteString("\n@serialize\n")
-		sb.WriteString(unescapeCode(serializeCode))
-		sb.WriteString("\n")
-	}
-
-	// @gfx section
-	if gfxCode != "" {
-		if gfxWidth > 0 && gfxHeight > 0 {
-			sb.WriteString(fmt.Sprintf("\n@gfx %d %d\n", gfxWidth, gfxHeight))
-		} else {
-			sb.WriteString("\n@gfx\n")
-		}
-		sb.WriteString(unescapeCode(gfxCode))
-		sb.WriteString("\n")
-	}
-
-	return sb.String()
-}
-
-// unescapeCode converts escaped strings back to normal code
-func unescapeCode(code string) string {
-	// Remove surrounding quotes if present
-	code = strings.Trim(code, "\"")
-	// Unescape common escapes
-	code = strings.ReplaceAll(code, "\\n", "\n")
-	code = strings.ReplaceAll(code, "\\t", "\t")
-	code = strings.ReplaceAll(code, "\\\"", "\"")
-	return code
 }
 
 // buildJSFXToolDescription creates the tool description for CFG

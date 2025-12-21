@@ -10,31 +10,62 @@ import (
 	"github.com/Conceptual-Machines/magda-agents-go/llm"
 )
 
-// JSFXDSLParser parses JSFX DSL code using Grammar School
+// JSFXDSLParser parses JSFX DSL code using Grammar School and builds JSFX directly
 type JSFXDSLParser struct {
 	engine  *gs.Engine
 	jsfxDSL *JSFXDSL
-	actions []map[string]any
 }
 
-// JSFXDSL implements the DSL side-effect methods
+// JSFXDSL builds JSFX code directly as DSL methods are called
 type JSFXDSL struct {
-	parser *JSFXDSLParser
+	// Header
+	effectName string
+	effectTags string
+
+	// Pins
+	inPins  []string
+	outPins []string
+
+	// Imports and options
+	imports   []string
+	options   []string // "name" or "name=value"
+	filenames []string // "id,path"
+
+	// Sliders
+	sliders []string // formatted slider lines
+
+	// Code sections
+	initCode      string
+	sliderCode    string
+	blockCode     string
+	sampleCode    string
+	serializeCode string
+	gfxCode       string
+	gfxWidth      int
+	gfxHeight     int
 }
 
 // NewJSFXDSLParser creates a new JSFX DSL parser
 func NewJSFXDSLParser() (*JSFXDSLParser, error) {
-	parser := &JSFXDSLParser{
-		jsfxDSL: &JSFXDSL{},
-		actions: make([]map[string]any, 0),
+	jsfxDSL := &JSFXDSL{
+		effectName: "AI Generated Effect",
+		effectTags: "utility",
+		inPins:     make([]string, 0),
+		outPins:    make([]string, 0),
+		imports:    make([]string, 0),
+		options:    make([]string, 0),
+		filenames:  make([]string, 0),
+		sliders:    make([]string, 0),
 	}
 
-	parser.jsfxDSL.parser = parser
+	parser := &JSFXDSLParser{
+		jsfxDSL: jsfxDSL,
+	}
 
 	grammar := llm.GetJSFXDSLGrammar()
 	larkParser := gs.NewLarkParser()
 
-	engine, err := gs.NewEngine(grammar, parser.jsfxDSL, larkParser)
+	engine, err := gs.NewEngine(grammar, jsfxDSL, larkParser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -43,312 +74,348 @@ func NewJSFXDSLParser() (*JSFXDSLParser, error) {
 	return parser, nil
 }
 
-// ParseDSL parses DSL code and returns actions
-func (p *JSFXDSLParser) ParseDSL(dslCode string) ([]map[string]any, error) {
+// ParseDSL parses DSL code and returns the generated JSFX code
+func (p *JSFXDSLParser) ParseDSL(dslCode string) (string, error) {
 	if dslCode == "" {
-		return nil, fmt.Errorf("empty DSL code")
+		return "", fmt.Errorf("empty DSL code")
 	}
 
-	p.actions = make([]map[string]any, 0)
+	// Reset state for new parse
+	p.jsfxDSL.reset()
 
 	ctx := context.Background()
 	if err := p.engine.Execute(ctx, dslCode); err != nil {
-		return nil, fmt.Errorf("failed to execute DSL: %w", err)
+		return "", fmt.Errorf("failed to execute DSL: %w", err)
 	}
 
-	if len(p.actions) == 0 {
-		return nil, fmt.Errorf("no actions found in DSL code")
-	}
+	// Build and return JSFX code
+	jsfxCode := p.jsfxDSL.buildJSFX()
+	log.Printf("✅ JSFX DSL Parser: Generated %d bytes of JSFX code", len(jsfxCode))
 
-	log.Printf("✅ JSFX DSL Parser: Translated %d actions from DSL", len(p.actions))
-	return p.actions, nil
+	return jsfxCode, nil
 }
+
+// reset clears the state for a new parse
+func (d *JSFXDSL) reset() {
+	d.effectName = "AI Generated Effect"
+	d.effectTags = "utility"
+	d.inPins = make([]string, 0)
+	d.outPins = make([]string, 0)
+	d.imports = make([]string, 0)
+	d.options = make([]string, 0)
+	d.filenames = make([]string, 0)
+	d.sliders = make([]string, 0)
+	d.initCode = ""
+	d.sliderCode = ""
+	d.blockCode = ""
+	d.sampleCode = ""
+	d.serializeCode = ""
+	d.gfxCode = ""
+	d.gfxWidth = 0
+	d.gfxHeight = 0
+}
+
+// buildJSFX assembles the final JSFX code from collected components
+func (d *JSFXDSL) buildJSFX() string {
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString(fmt.Sprintf("desc:%s\n", d.effectName))
+	sb.WriteString(fmt.Sprintf("tags:%s\n", d.effectTags))
+
+	// Imports
+	for _, imp := range d.imports {
+		sb.WriteString(fmt.Sprintf("import %s\n", imp))
+	}
+
+	// Options
+	for _, opt := range d.options {
+		sb.WriteString(fmt.Sprintf("options:%s\n", opt))
+	}
+
+	// Filenames
+	for _, fn := range d.filenames {
+		sb.WriteString(fmt.Sprintf("filename:%s\n", fn))
+	}
+
+	// Input pins
+	for _, pin := range d.inPins {
+		sb.WriteString(fmt.Sprintf("in_pin:%s\n", pin))
+	}
+
+	// Output pins
+	for _, pin := range d.outPins {
+		sb.WriteString(fmt.Sprintf("out_pin:%s\n", pin))
+	}
+
+	sb.WriteString("\n")
+
+	// Sliders
+	for _, slider := range d.sliders {
+		sb.WriteString(slider + "\n")
+	}
+
+	// @init section
+	if d.initCode != "" {
+		sb.WriteString("\n@init\n")
+		sb.WriteString(unescapeCode(d.initCode))
+		sb.WriteString("\n")
+	}
+
+	// @slider section
+	if d.sliderCode != "" {
+		sb.WriteString("\n@slider\n")
+		sb.WriteString(unescapeCode(d.sliderCode))
+		sb.WriteString("\n")
+	}
+
+	// @block section
+	if d.blockCode != "" {
+		sb.WriteString("\n@block\n")
+		sb.WriteString(unescapeCode(d.blockCode))
+		sb.WriteString("\n")
+	}
+
+	// @sample section
+	if d.sampleCode != "" {
+		sb.WriteString("\n@sample\n")
+		sb.WriteString(unescapeCode(d.sampleCode))
+		sb.WriteString("\n")
+	}
+
+	// @serialize section
+	if d.serializeCode != "" {
+		sb.WriteString("\n@serialize\n")
+		sb.WriteString(unescapeCode(d.serializeCode))
+		sb.WriteString("\n")
+	}
+
+	// @gfx section
+	if d.gfxCode != "" {
+		if d.gfxWidth > 0 && d.gfxHeight > 0 {
+			sb.WriteString(fmt.Sprintf("\n@gfx %d %d\n", d.gfxWidth, d.gfxHeight))
+		} else {
+			sb.WriteString("\n@gfx\n")
+		}
+		sb.WriteString(unescapeCode(d.gfxCode))
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// unescapeCode converts escaped strings back to normal code
+func unescapeCode(code string) string {
+	code = strings.Trim(code, "\"")
+	code = strings.ReplaceAll(code, "\\n", "\n")
+	code = strings.ReplaceAll(code, "\\t", "\t")
+	code = strings.ReplaceAll(code, "\\\"", "\"")
+	return code
+}
+
+// trimQuotes removes surrounding quotes from a string
+func trimQuotes(s string) string {
+	return strings.Trim(s, "\"")
+}
+
+// === Grammar School DSL Methods ===
+// These are called by Grammar School as it parses the DSL
 
 // Effect handles effect() calls - defines effect metadata
 func (d *JSFXDSL) Effect(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "effect",
-	}
-
 	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
-		action["name"] = strings.Trim(nameValue.Str, "\"")
+		d.effectName = trimQuotes(nameValue.Str)
 	}
-
 	if descValue, ok := args["desc"]; ok && descValue.Kind == gs.ValueString {
-		action["desc"] = strings.Trim(descValue.Str, "\"")
+		d.effectName = trimQuotes(descValue.Str) // desc overrides name
 	}
-
 	if tagsValue, ok := args["tags"]; ok && tagsValue.Kind == gs.ValueString {
-		action["tags"] = strings.Trim(tagsValue.Str, "\"")
+		d.effectTags = trimQuotes(tagsValue.Str)
 	}
-
-	if typeValue, ok := args["type"]; ok && typeValue.Kind == gs.ValueString {
-		action["type"] = strings.Trim(typeValue.Str, "\"")
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("🔧 Effect: name=%v, tags=%v", action["name"], action["tags"])
-
+	log.Printf("🔧 Effect: name=%s, tags=%s", d.effectName, d.effectTags)
 	return nil
 }
 
 // Slider handles slider() calls - defines a parameter
 func (d *JSFXDSL) Slider(args gs.Args) error {
-	p := d.parser
+	id := 1
+	defaultVal := 0.0
+	minVal := 0.0
+	maxVal := 1.0
+	step := 1.0
+	name := "Parameter"
+	varName := ""
+	hidden := false
 
-	action := map[string]any{
-		"action": "slider",
+	if v, ok := args["id"]; ok && v.Kind == gs.ValueNumber {
+		id = int(v.Num)
+	}
+	if v, ok := args["default"]; ok && v.Kind == gs.ValueNumber {
+		defaultVal = v.Num
+	}
+	if v, ok := args["min"]; ok && v.Kind == gs.ValueNumber {
+		minVal = v.Num
+	}
+	if v, ok := args["max"]; ok && v.Kind == gs.ValueNumber {
+		maxVal = v.Num
+	}
+	if v, ok := args["step"]; ok && v.Kind == gs.ValueNumber {
+		step = v.Num
+	}
+	if v, ok := args["name"]; ok && v.Kind == gs.ValueString {
+		name = trimQuotes(v.Str)
+	}
+	if v, ok := args["var"]; ok && v.Kind == gs.ValueString {
+		varName = trimQuotes(v.Str)
+	}
+	if v, ok := args["hidden"]; ok && v.Kind == gs.ValueBool {
+		hidden = v.Bool
 	}
 
-	if idValue, ok := args["id"]; ok && idValue.Kind == gs.ValueNumber {
-		action["id"] = idValue.Num
+	// Build slider line: slider1:var=0.00<-60.00,12.00,0.1000>-Name
+	hiddenPrefix := ""
+	if hidden {
+		hiddenPrefix = "-"
+	}
+	varPrefix := ""
+	if varName != "" {
+		varPrefix = varName + "="
 	}
 
-	if defaultValue, ok := args["default"]; ok && defaultValue.Kind == gs.ValueNumber {
-		action["default"] = defaultValue.Num
-	}
+	sliderLine := fmt.Sprintf("slider%d:%s%.2f<%.2f,%.2f,%.4f>%s%s",
+		id, varPrefix, defaultVal, minVal, maxVal, step, hiddenPrefix, name)
+	d.sliders = append(d.sliders, sliderLine)
 
-	if minValue, ok := args["min"]; ok && minValue.Kind == gs.ValueNumber {
-		action["min"] = minValue.Num
-	}
-
-	if maxValue, ok := args["max"]; ok && maxValue.Kind == gs.ValueNumber {
-		action["max"] = maxValue.Num
-	}
-
-	if stepValue, ok := args["step"]; ok && stepValue.Kind == gs.ValueNumber {
-		action["step"] = stepValue.Num
-	}
-
-	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
-		action["name"] = strings.Trim(nameValue.Str, "\"")
-	}
-
-	if varValue, ok := args["var"]; ok && varValue.Kind == gs.ValueString {
-		action["var"] = strings.Trim(varValue.Str, "\"")
-	}
-
-	if hiddenValue, ok := args["hidden"]; ok && hiddenValue.Kind == gs.ValueBool {
-		action["hidden"] = hiddenValue.Bool
-	}
-
-	if optionsValue, ok := args["options"]; ok && optionsValue.Kind == gs.ValueString {
-		action["options"] = strings.Trim(optionsValue.Str, "\"")
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("🎚️ Slider: id=%v, name=%v, range=[%v, %v]",
-		action["id"], action["name"], action["min"], action["max"])
-
-	return nil
-}
-
-// InitCode handles init_code() calls - @init section
-func (d *JSFXDSL) InitCode(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "init_code",
-	}
-
-	if codeValue, ok := args["code"]; ok && codeValue.Kind == gs.ValueString {
-		action["code"] = codeValue.Str
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("📝 Init code: %d chars", len(action["code"].(string)))
-
-	return nil
-}
-
-// SliderCode handles slider_code() calls - @slider section
-func (d *JSFXDSL) SliderCode(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "slider_code",
-	}
-
-	if codeValue, ok := args["code"]; ok && codeValue.Kind == gs.ValueString {
-		action["code"] = codeValue.Str
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("📝 Slider code: %d chars", len(action["code"].(string)))
-
-	return nil
-}
-
-// SampleCode handles sample_code() calls - @sample section
-func (d *JSFXDSL) SampleCode(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "sample_code",
-	}
-
-	if codeValue, ok := args["code"]; ok && codeValue.Kind == gs.ValueString {
-		action["code"] = codeValue.Str
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("📝 Sample code: %d chars", len(action["code"].(string)))
-
-	return nil
-}
-
-// BlockCode handles block_code() calls - @block section
-func (d *JSFXDSL) BlockCode(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "block_code",
-	}
-
-	if codeValue, ok := args["code"]; ok && codeValue.Kind == gs.ValueString {
-		action["code"] = codeValue.Str
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("📝 Block code: %d chars", len(action["code"].(string)))
-
-	return nil
-}
-
-// GfxCode handles gfx_code() calls - @gfx section
-func (d *JSFXDSL) GfxCode(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "gfx_code",
-	}
-
-	if codeValue, ok := args["code"]; ok && codeValue.Kind == gs.ValueString {
-		action["code"] = codeValue.Str
-	}
-
-	if widthValue, ok := args["width"]; ok && widthValue.Kind == gs.ValueNumber {
-		action["width"] = widthValue.Num
-	}
-
-	if heightValue, ok := args["height"]; ok && heightValue.Kind == gs.ValueNumber {
-		action["height"] = heightValue.Num
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("📝 GFX code: %d chars", len(action["code"].(string)))
-
+	log.Printf("🎚️ Slider: id=%d, name=%s, range=[%.2f, %.2f]", id, name, minVal, maxVal)
 	return nil
 }
 
 // Pin handles pin() calls - defines audio input/output pins
 func (d *JSFXDSL) Pin(args gs.Args) error {
-	p := d.parser
+	pinType := ""
+	pinName := ""
 
-	action := map[string]any{
-		"action": "pin",
+	if v, ok := args["type"]; ok && v.Kind == gs.ValueString {
+		pinType = trimQuotes(v.Str)
+	}
+	if v, ok := args["name"]; ok && v.Kind == gs.ValueString {
+		pinName = trimQuotes(v.Str)
 	}
 
-	if typeValue, ok := args["type"]; ok && typeValue.Kind == gs.ValueString {
-		action["type"] = strings.Trim(typeValue.Str, "\"")
+	if pinType == "in" {
+		d.inPins = append(d.inPins, pinName)
+	} else if pinType == "out" {
+		d.outPins = append(d.outPins, pinName)
 	}
 
-	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
-		action["name"] = strings.Trim(nameValue.Str, "\"")
-	}
-
-	if channelValue, ok := args["channel"]; ok && channelValue.Kind == gs.ValueNumber {
-		action["channel"] = channelValue.Num
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("📍 Pin: type=%v, name=%v, channel=%v", action["type"], action["name"], action["channel"])
-
+	log.Printf("📍 Pin: type=%s, name=%s", pinType, pinName)
 	return nil
 }
 
 // Import handles import() calls - includes other JSFX files
 func (d *JSFXDSL) Import(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "import",
+	if v, ok := args["file"]; ok && v.Kind == gs.ValueString {
+		d.imports = append(d.imports, trimQuotes(v.Str))
+		log.Printf("📦 Import: %s", trimQuotes(v.Str))
 	}
-
-	if fileValue, ok := args["file"]; ok && fileValue.Kind == gs.ValueString {
-		action["file"] = strings.Trim(fileValue.Str, "\"")
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("📦 Import: file=%v", action["file"])
-
 	return nil
 }
 
 // Option handles option() calls - sets JSFX options
 func (d *JSFXDSL) Option(args gs.Args) error {
-	p := d.parser
+	name := ""
+	value := ""
 
-	action := map[string]any{
-		"action": "option",
+	if v, ok := args["name"]; ok && v.Kind == gs.ValueString {
+		name = trimQuotes(v.Str)
+	}
+	if v, ok := args["value"]; ok && v.Kind == gs.ValueString {
+		value = trimQuotes(v.Str)
 	}
 
-	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
-		action["name"] = strings.Trim(nameValue.Str, "\"")
+	if value != "" {
+		d.options = append(d.options, fmt.Sprintf("%s=%s", name, value))
+	} else {
+		d.options = append(d.options, name)
 	}
 
-	if valueValue, ok := args["value"]; ok && valueValue.Kind == gs.ValueString {
-		action["value"] = strings.Trim(valueValue.Str, "\"")
-	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("⚙️ Option: name=%v, value=%v", action["name"], action["value"])
-
+	log.Printf("⚙️ Option: %s", name)
 	return nil
 }
 
 // Filename handles filename() calls - references external files
 func (d *JSFXDSL) Filename(args gs.Args) error {
-	p := d.parser
+	id := 0
+	path := ""
 
-	action := map[string]any{
-		"action": "filename",
+	if v, ok := args["id"]; ok && v.Kind == gs.ValueNumber {
+		id = int(v.Num)
+	}
+	if v, ok := args["path"]; ok && v.Kind == gs.ValueString {
+		path = trimQuotes(v.Str)
 	}
 
-	if idValue, ok := args["id"]; ok && idValue.Kind == gs.ValueNumber {
-		action["id"] = idValue.Num
+	d.filenames = append(d.filenames, fmt.Sprintf("%d,%s", id, path))
+	log.Printf("📁 Filename: id=%d, path=%s", id, path)
+	return nil
+}
+
+// InitCode handles init_code() calls - @init section
+func (d *JSFXDSL) InitCode(args gs.Args) error {
+	if v, ok := args["code"]; ok && v.Kind == gs.ValueString {
+		d.initCode = v.Str
+		log.Printf("📝 Init code: %d chars", len(v.Str))
 	}
+	return nil
+}
 
-	if pathValue, ok := args["path"]; ok && pathValue.Kind == gs.ValueString {
-		action["path"] = strings.Trim(pathValue.Str, "\"")
+// SliderCode handles slider_code() calls - @slider section
+func (d *JSFXDSL) SliderCode(args gs.Args) error {
+	if v, ok := args["code"]; ok && v.Kind == gs.ValueString {
+		d.sliderCode = v.Str
+		log.Printf("📝 Slider code: %d chars", len(v.Str))
 	}
+	return nil
+}
 
-	if nameValue, ok := args["name"]; ok && nameValue.Kind == gs.ValueString {
-		action["name"] = strings.Trim(nameValue.Str, "\"")
+// BlockCode handles block_code() calls - @block section
+func (d *JSFXDSL) BlockCode(args gs.Args) error {
+	if v, ok := args["code"]; ok && v.Kind == gs.ValueString {
+		d.blockCode = v.Str
+		log.Printf("📝 Block code: %d chars", len(v.Str))
 	}
+	return nil
+}
 
-	p.actions = append(p.actions, action)
-	log.Printf("📁 Filename: id=%v, path=%v", action["id"], action["path"])
-
+// SampleCode handles sample_code() calls - @sample section
+func (d *JSFXDSL) SampleCode(args gs.Args) error {
+	if v, ok := args["code"]; ok && v.Kind == gs.ValueString {
+		d.sampleCode = v.Str
+		log.Printf("📝 Sample code: %d chars", len(v.Str))
+	}
 	return nil
 }
 
 // SerializeCode handles serialize_code() calls - @serialize section
 func (d *JSFXDSL) SerializeCode(args gs.Args) error {
-	p := d.parser
-
-	action := map[string]any{
-		"action": "serialize_code",
+	if v, ok := args["code"]; ok && v.Kind == gs.ValueString {
+		d.serializeCode = v.Str
+		log.Printf("💾 Serialize code: %d chars", len(v.Str))
 	}
+	return nil
+}
 
-	if codeValue, ok := args["code"]; ok && codeValue.Kind == gs.ValueString {
-		action["code"] = codeValue.Str
+// GfxCode handles gfx_code() calls - @gfx section
+func (d *JSFXDSL) GfxCode(args gs.Args) error {
+	if v, ok := args["code"]; ok && v.Kind == gs.ValueString {
+		d.gfxCode = v.Str
+		log.Printf("📝 GFX code: %d chars", len(v.Str))
 	}
-
-	p.actions = append(p.actions, action)
-	log.Printf("💾 Serialize code: %d chars", len(action["code"].(string)))
-
+	if v, ok := args["width"]; ok && v.Kind == gs.ValueNumber {
+		d.gfxWidth = int(v.Num)
+	}
+	if v, ok := args["height"]; ok && v.Kind == gs.ValueNumber {
+		d.gfxHeight = int(v.Num)
+	}
 	return nil
 }

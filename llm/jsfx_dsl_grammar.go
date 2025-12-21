@@ -67,6 +67,31 @@ slider_param: "id" "=" NUMBER
             | "hidden" "=" BOOLEAN
             | "options" "=" STRING  // comma-separated list for dropdown
 
+// ---------- Pin (input/output) definition ----------
+pin_call: "pin" "(" pin_params ")"
+pin_params: pin_param ("," SP pin_param)*
+pin_param: "type" "=" PIN_TYPE
+         | "name" "=" STRING
+         | "channel" "=" NUMBER
+
+PIN_TYPE: "in" | "out"
+
+// ---------- Import statement ----------
+import_call: "import" "(" "file" "=" STRING ")"
+
+// ---------- Option statement ----------
+option_call: "option" "(" option_params ")"
+option_params: option_param ("," SP option_param)*
+option_param: "name" "=" STRING
+            | "value" "=" STRING
+
+// ---------- Filename statement ----------
+filename_call: "filename" "(" filename_params ")"
+filename_params: filename_param ("," SP filename_param)*
+filename_param: "id" "=" NUMBER
+              | "path" "=" STRING
+              | "name" "=" STRING
+
 // ---------- Code sections ----------
 init_code_call: "init_code" "(" "code" "=" STRING ")"
 slider_code_call: "slider_code" "(" "code" "=" STRING ")"
