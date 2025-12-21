@@ -124,7 +124,7 @@ func (a *JSFXAgent) Generate(
 	return result, nil
 }
 
-// cleanJSFXOutput removes markdown code fences and trims whitespace
+// cleanJSFXOutput removes markdown code fences, garbage text, and validates output
 func cleanJSFXOutput(code string) string {
 	code = strings.TrimSpace(code)
 
@@ -142,7 +142,122 @@ func cleanJSFXOutput(code string) string {
 		}
 	}
 
-	return strings.TrimSpace(code)
+	// Validate and clean each line
+	lines := strings.Split(code, "\n")
+	var cleanLines []string
+
+	for _, line := range lines {
+		// Check for non-ASCII characters (Korean, Chinese, etc.)
+		if containsNonASCII(line) {
+			log.Printf("⚠️ JSFX: Removing line with non-ASCII: %s", truncateForLog(line, 50))
+			continue
+		}
+
+		// Check for garbage patterns (LLM commentary leaking through)
+		if isGarbageLine(line) {
+			log.Printf("⚠️ JSFX: Removing garbage line: %s", truncateForLog(line, 50))
+			continue
+		}
+
+		cleanLines = append(cleanLines, line)
+	}
+
+	return strings.TrimSpace(strings.Join(cleanLines, "\n"))
+}
+
+// containsNonASCII checks if a string contains non-ASCII characters
+func containsNonASCII(s string) bool {
+	for _, r := range s {
+		if r > 127 {
+			return true
+		}
+	}
+	return false
+}
+
+// isGarbageLine detects LLM commentary/garbage that leaked into JSFX output
+func isGarbageLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+
+	// Empty lines are fine
+	if trimmed == "" {
+		return false
+	}
+
+	// Comments are fine
+	if strings.HasPrefix(trimmed, "//") {
+		return false
+	}
+
+	// Valid JSFX directives
+	validPrefixes := []string{
+		"desc:", "tags:", "in_pin:", "out_pin:", "slider", "import", "options:", "filename:",
+		"@init", "@slider", "@block", "@sample", "@serialize", "@gfx",
+	}
+	for _, prefix := range validPrefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			return false
+		}
+	}
+
+	// Lines that are clearly code (contain operators, assignments, function calls)
+	// EEL2 code patterns
+	codePatterns := []string{
+		"=", ";", "(", ")", "[", "]", "+", "-", "*", "/", "%", "^", "|", "&",
+		"?", ":", "<", ">", "!", "~",
+	}
+	for _, pattern := range codePatterns {
+		if strings.Contains(trimmed, pattern) {
+			// But check for obvious English sentences
+			if looksLikeSentence(trimmed) {
+				return true
+			}
+			return false
+		}
+	}
+
+	// Single words that could be variable names or EEL2 code
+	if !strings.Contains(trimmed, " ") && len(trimmed) < 50 {
+		return false
+	}
+
+	// If it looks like an English sentence, it's garbage
+	if looksLikeSentence(trimmed) {
+		return true
+	}
+
+	return false
+}
+
+// looksLikeSentence checks if a line looks like English prose rather than code
+func looksLikeSentence(line string) bool {
+	lower := strings.ToLower(line)
+
+	// Common English words that shouldn't appear in JSFX code
+	sentencePatterns := []string{
+		"the ", " the ", " is ", " are ", " was ", " were ",
+		" to ", " for ", " with ", " that ", " this ",
+		" you ", " your ", " make ", " ensure ", " please ",
+		" not ", " don't ", " doesn't ", " can't ", " won't ",
+		"commentary", "comment", "algorithm", "functionality",
+		"include", "optional", "necessary", "needed",
+	}
+
+	for _, pattern := range sentencePatterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+
+	// Starts with capital letter and has multiple spaces = likely prose
+	if len(line) > 20 && line[0] >= 'A' && line[0] <= 'Z' {
+		spaceCount := strings.Count(line, " ")
+		if spaceCount > 3 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // truncateForLog truncates a string for logging
@@ -151,6 +266,37 @@ func truncateForLog(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// JSFXStreamCallback is called for each line of generated JSFX code
+type JSFXStreamCallback func(line string) error
+
+// GenerateStream creates JSFX effect code with progressive line-by-line streaming
+// The LLM call is non-streaming, but the response is streamed back line by line
+func (a *JSFXAgent) GenerateStream(
+	ctx context.Context,
+	model string,
+	inputArray []map[string]any,
+	callback JSFXStreamCallback,
+) (*JSFXResult, error) {
+	// First, generate the full response using the normal method
+	result, err := a.Generate(ctx, model, inputArray)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now stream the response back line by line
+	if callback != nil && result.JSFXCode != "" {
+		lines := strings.Split(result.JSFXCode, "\n")
+		for _, line := range lines {
+			if err := callback(line); err != nil {
+				log.Printf("⚠️ JSFX Stream callback error: %v", err)
+				// Continue anyway - don't fail the whole generation
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // buildJSFXToolDescription creates the tool description for CFG

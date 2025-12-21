@@ -491,6 +491,7 @@ Envelope Follower:
 OUTPUT REQUIREMENTS
 ════════════════════════════════════════════════════════════════════════════════
 
+- Output ONLY valid JSFX code - no explanations, no commentary, no other text
 - Output complete, syntactically correct JSFX
 - Always include desc: line with descriptive effect name
 - Define in_pin/out_pin for stereo (Left/Right) unless mono/multichannel
